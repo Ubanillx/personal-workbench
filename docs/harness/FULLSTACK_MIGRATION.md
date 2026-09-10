@@ -93,6 +93,13 @@
 
 **"Fastify 退役"的口径**：API 层已**不再依赖 Fastify**——48 个端点全部由 RR8 资源路由提供且行为等价。但**物理移除/归档放在 Phase 4**：Phase 3 之前新工程还没有 UI（只有占位首页），此刻切换默认启动会让日常使用失去界面。所以 Phase 2 的"退役"是依赖层面，删除层面归 Phase 4。
 
+**两处真实差异（有意保留，Phase 4 统一时需决策）**
+
+1. **owner 校验文案不同源**：旧 `workbench.ts` 的 owner 拦截是「只有主人可以访问此功能」，而旧 `report.ts` 是「只有主人可以执行此操作」。新实现里 `app/lib/session.server.ts` 的 `requireOwner` 用前者，周报域单独用 `requireOwnerForReports` 用后者——**这是刻意的**，否则 6 条周报用例会因文案不一致失败。Phase 4 若要统一文案，必须同时改 golden（属**有意**行为变更，需重新 capture 并在提交信息里说明）。
+2. **契约 runner 的上传 mimetype**：runner 用无 type 的 Blob，旧 @fastify/multipart 报 `application/octet-stream`，而 Web `FormData` 的 `File.type` 是空串 → 新实现用 `file.type || "application/octet-stream"` 对齐。
+
+**未覆盖边界（已知，未加用例）**：旧实现由 Fastify 的 `files:1 / fields:10 / parts:20` 限制兜底，超限返回 400 `BAD_REQUEST`「上传内容无法解析」；新实现是"取第一个文件、忽略多余部分"。golden 无用例覆盖此路径，因此**两套实现在该边界上可能不同**——已登记 `TODO-13`。
+
 **验收**：`contract:compare` 对**新**实现回放 100% 一致；`lint`、`typecheck`、`test`、`build` 全绿。
 
 **分批策略（每批独立验收，避免一次性重写 1,400 行）**
