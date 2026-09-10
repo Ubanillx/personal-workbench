@@ -1,0 +1,53 @@
+{
+  "key": "daily-order-plan-v1-draft",
+  "name": "新人跟单每日工作计划表",
+  "sourceFile": "新人跟单每日工作计划表-Wennie-2026.8.28.xlsx",
+  "status": "draft-awaiting-owner-confirmation",
+  "sourceFormat": "xlsx",
+  "workbooks": [
+    {
+      "sheet": "Sheet1",
+      "usedRange": "A1:H778",
+      "headerRow": 6,
+      "columns": [
+        { "column": "A", "key": "receivedWorkDate", "label": "接到工作日期", "type": "date", "role": "assistant", "required": true },
+        { "column": "B", "key": "workTime", "label": "时间", "type": "time", "role": "assistant", "required": true },
+        { "column": "C", "key": "relatedBusiness", "label": "相关业务", "type": "text", "role": "assistant", "required": true },
+        { "column": "D", "key": "workContent", "label": "工作内容", "type": "longText", "role": "assistant", "required": true },
+        { "column": "E", "key": "plannedCompletionTime", "label": "计划完成时间", "type": "durationOrTimePending", "role": "assistant", "required": true },
+        { "column": "F", "key": "actualCompletionTime", "label": "实际完成时间", "type": "durationOrTimePending", "role": "assistant", "required": false },
+        { "column": "G", "key": "reworkCount", "label": "返工次数", "type": "integer", "role": "mentor", "required": true, "default": 0 },
+        { "column": "H", "key": "score", "label": "评分（1-5分）", "type": "integer", "role": "mentor", "required": true, "min": 1, "max": 5 }
+      ],
+      "instructions": [
+        "A-F列由新人跟单填写，G-H列由指导老师填写",
+        "每天18:00前新人跟单补充当天工作完成情况并交给指导老师",
+        "已完成的工作整行底色改为浅灰色"
+      ],
+      "repeatableRow": true,
+      "dateGrouping": "vertical-merged-A-cells",
+      "businessGrouping": "vertical-merged-C-cells",
+      "mergedCellPolicy": "pending-confirmation",
+      "completedRowStyle": "pending-confirmation"
+    },
+    { "sheet": "Sheet2", "usedRange": "A1:A1", "empty": true },
+    {
+      "sheet": "Sheet3",
+      "purpose": "reference-data",
+      "headers": ["productCode", "maxBearingWeight", "netWeight", "grossWeight"],
+      "sourceHeaders": ["max bearing weight", "N.W.", "G.W."],
+      "rowsObserved": 5,
+      "useInWebForm": "pending-confirmation"
+    }
+  ],
+  "pendingDecisions": [
+    "Sheet3是否进入网页表单",
+    "计划完成时间和实际完成时间是时长还是时间点",
+    "评分是否只能由指导老师填写",
+    "返工次数的允许范围和默认值",
+    "日期/相关业务合并单元格在网页中的表达方式",
+    "每天18:00是否需要服务端截止校验",
+    "是否保留原Excel全部样式和合并结构",
+    "是否需要导出打印版"
+  ]
+}

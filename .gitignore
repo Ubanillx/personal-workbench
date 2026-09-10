@@ -1,0 +1,24 @@
+# 依赖与构建产物
+node_modules/
+dist-server/
+web/dist/
+*.tsbuildinfo
+coverage/
+
+# 运行时数据（含隐私：任务正文、上传的周报文件、数据库备份）
+/data/
+
+# 归档的旧 Electron 数据：旧 workbench.json 内含明文令牌，只保留在本机磁盘，不纳入版本控制
+_archive/legacy-electron/data/
+
+# 环境变量与日志
+.env
+.env.local
+.env.*.local
+*.log
+
+# 编辑器与系统文件
+.zed/
+.DS_Store
+Thumbs.db
+desktop.ini

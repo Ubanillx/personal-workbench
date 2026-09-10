@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'" />
+  <title>个人工作台</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-logo">台</div>
+        <div class="brand-text">
+          <div class="brand-name">个人工作台</div>
+          <div class="brand-date" id="todayLabel"></div>
+        </div>
+      </div>
+      <nav class="nav" id="nav">
+        <button class="nav-item active" data-view="dashboard"><span class="nav-ico">🏠</span>每日概览</button>
+        <button class="nav-item" data-view="tasks"><span class="nav-ico">📊</span>任务进展</button>
+        <button class="nav-item" data-view="todos"><span class="nav-ico">✅</span>待办清单<span class="nav-badge" id="todoBadge"></span></button>
+        <button class="nav-item" data-view="notes"><span class="nav-ico">📝</span>随手记</button>
+        <button class="nav-item" data-view="inbox"><span class="nav-ico">📮</span>企微收件箱</button>
+        <button class="nav-item" data-view="files"><span class="nav-ico">📁</span>重要文件</button>
+        <button class="nav-item" data-view="assistants"><span class="nav-ico">👥</span>助理协作</button>
+        <button class="nav-item" data-view="review"><span class="nav-ico">📈</span>回顾统计</button>
+      </nav>
+      <button class="quick-btn" id="quickBtn">＋ 快速记录 <span class="quick-kbd">Ctrl+K</span></button>
+    </aside>
+
+    <main class="main" id="main">
+      <!-- 视图由 app.js 渲染 -->
+    </main>
+  </div>
+
+  <!-- 快速记录弹窗 -->
+  <div class="modal-mask" id="quickModal" hidden>
+    <div class="modal">
+      <div class="modal-title">快速记录</div>
+      <div class="seg" id="quickType">
+        <button class="seg-btn active" data-type="note">随手记</button>
+        <button class="seg-btn" data-type="todo">待办</button>
+        <button class="seg-btn" data-type="task">任务</button>
+      </div>
+      <textarea id="quickInput" class="quick-input" placeholder="想到什么写什么…（任务可加 /高 /P0 /明天 等标记）" rows="3"></textarea>
+      <div class="modal-actions">
+        <button class="btn ghost" data-close>取消</button>
+        <button class="btn primary" id="quickSave">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 通用确认弹窗 -->
+  <div class="modal-mask" id="confirmModal" hidden>
+    <div class="modal small">
+      <div class="modal-title" id="confirmText"></div>
+      <div class="modal-actions">
+        <button class="btn ghost" data-close>取消</button>
+        <button class="btn danger" id="confirmYes">确定</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 轻提示 -->
+  <div class="toast" id="toast" hidden></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
