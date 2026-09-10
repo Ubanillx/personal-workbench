@@ -142,6 +142,14 @@ npm run contract:compare -- --serve-npm rr:start --only "auth.,access-info."
 4. **刷新数据用 `useRevalidator()`**，不要自己再维护一份 state 副本。
 5. **认证**：页面用 `requireUserOrRedirect(request)`（未登录重定向 `/access?redirectTo=…`）；API 仍用 `requireAuth/requireOwner`（401/403 JSON）。两者语义不同，不要混用。
 6. **索引路由的表单必须带 `?index`**：RR8 的 `<Form>` 会自动补；手写 fetch 时必须自己加，否则会被父级 layout 路由吞掉并返回 405。
+7. **`react-router` 与 antd 的同名导出必须起别名**：`Layout`（RR8 的文档布局）与 antd 的 `Layout`、`Form`（RR8 的提交表单）与 antd 的 `Form` 都会冲突。已踩两次：`app/root.tsx` 用 `Layout as AntdLayout`；页面里若要用 antd 的表单能力（`Form.Item` / `onFinish` / `initialValues`），必须 `import { Form as AntdForm }`，并用 `useSubmit()` 驱动提交，例如：
+   ```tsx
+   const submit = useSubmit();
+   <AntdForm onFinish={(values) => submit(values, { method: "post" })}>
+     <AntdForm.Item name="title">…</AntdForm.Item>
+   </AntdForm>;
+   ```
+   若不需要 antd 的表单能力，直接用 RR8 的 `<Form method="post">` + 原生 `name` 属性（参考 `app/routes/dashboard.tsx`）。
 
 **接缝**：共享服务只能放在 `app/lib/*.server.ts`（路由文件不得有额外导出）；页面注册在 `app/routes.ts`、导航开关在 `app/root.tsx` 的 `MIGRATED_PATHS`，二者由主线统一维护，页面批次不要改。
 
