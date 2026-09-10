@@ -265,8 +265,8 @@ async function main(): Promise<void> {
     ),
   );
   record(
-    "非管理员必须有组织（NULL 被 CHECK 拒绝）",
-    rejects(
+    "注册路径可用：member + org_id=NULL 必须被允许",
+    !rejects(
       db,
       "INSERT INTO users(id,username,email,name,role,org_id,password_hash,must_change_password,is_active,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
       "probe-member",
@@ -276,7 +276,44 @@ async function main(): Promise<void> {
       "member",
       null,
       "locked$",
+      0,
       1,
+      stamp,
+      stamp,
+    ),
+  );
+  db.prepare("DELETE FROM users WHERE id='probe-member'").run();
+  record(
+    "组织管理者必须有组织（NULL 被 CHECK 拒绝）",
+    rejects(
+      db,
+      "INSERT INTO users(id,username,email,name,role,org_id,password_hash,must_change_password,is_active,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+      "probe-manager",
+      "probe-manager",
+      "probe-manager@local.invalid",
+      "探针",
+      "manager",
+      null,
+      "locked$",
+      0,
+      1,
+      stamp,
+      stamp,
+    ),
+  );
+  record(
+    "管理员不得隶属组织（带 org_id 被 CHECK 拒绝）",
+    rejects(
+      db,
+      "INSERT INTO users(id,username,email,name,role,org_id,password_hash,must_change_password,is_active,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+      "probe-admin",
+      "probe-admin",
+      "probe-admin@local.invalid",
+      "探针",
+      "admin",
+      "org-default",
+      "locked$",
+      0,
       1,
       stamp,
       stamp,

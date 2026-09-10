@@ -3,30 +3,41 @@ import { Form, useActionData, useLoaderData, useNavigate, useNavigation, useReva
 import { Alert, Button, Empty, Flex, Input, Popconfirm, Segmented, Space, Table, Typography, type TableProps } from "antd";
 import { CopyOutlined, DeleteOutlined, PlusOutlined, SearchOutlined } from "@ant-design/icons";
 import { createFileRecord, listFiles } from "../lib/files.server";
-import { requireUserOrRedirect } from "../lib/ui.server";
+import { requireManagerOrRedirect } from "../lib/ui.server";
 
 type FileRow = { id: string; name: string; filePath: string; category: string; lastUsedAt: string | null };
 
-/** 文件页 loader：与 GET /api/files 共用 app/lib/files.server.ts；仅主人可见 */
+/**
+ * 文件页：与 GET /api/files 共用 app/lib/files.server.ts。
+ * 文件库只对管理员与组织管理者开放（§4），普通成员由 requireManagerOrRedirect 送回首页；
+ * 列表按组织过滤，`?org=` 是管理员（D-28）的筛选器接缝：既是列表过滤，也是管理员新增时的目标组织。
+ */
 export async function loader({ request }: { request: Request }) {
-  const user = requireUserOrRedirect(request);
-  if (user.role !== "owner") return { forbidden: true as const, files: [] as FileRow[] };
+  const user = requireManagerOrRedirect(request);
   const query = new URL(request.url).searchParams;
-  const files = listFiles((query.get("search") ?? "").trim(), (query.get("category") ?? "").trim()) as unknown as FileRow[];
-  return { forbidden: false as const, files };
+  // 组织筛选器只对管理员有意义（D-28），与 /tasks 页的写法一致
+  const files = listFiles(
+    user,
+    (query.get("search") ?? "").trim(),
+    (query.get("category") ?? "").trim(),
+    user.role === "admin" ? query.get("org") : null,
+  ) as unknown as FileRow[];
+  return { files };
 }
 
 /** 新增文件索引：表单是 form-urlencoded，因此读 formData 并调用共享服务（不是打收 JSON 的 API） */
 export async function action({ request }: { request: Request }) {
-  const user = requireUserOrRedirect(request);
-  if (user.role !== "owner") return { error: "只有主人可以访问此功能" };
+  const user = requireManagerOrRedirect(request);
   const form = await request.formData();
-  const created = createFileRecord({
+  // 组织归属由 app/lib/files.server.ts 解析：管理者写本组织；
+  // 管理员是全局角色，目标组织先看表单字段，再看页面上的组织筛选器 ?org=（D-28 的接缝）
+  const created = createFileRecord(user, {
     name: String(form.get("name") ?? ""),
     filePath: String(form.get("filePath") ?? ""),
     category: String(form.get("category") ?? ""),
+    orgId: form.get("orgId") || new URL(request.url).searchParams.get("org"),
   });
-  return { error: created ? null : "文件名称和路径不能为空" };
+  return { error: created.ok ? null : created.message };
 }
 
 export default function FilesRoute(): React.ReactElement {
@@ -39,19 +50,6 @@ export default function FilesRoute(): React.ReactElement {
   const search = params.get("search") ?? "";
   const filter = params.get("category") ?? "";
   const busy = navigation.state !== "idle" || revalidator.state !== "idle";
-
-  if (data.forbidden) {
-    return (
-      <Space orientation="vertical" size="large" className="page-stack">
-        <div>
-          <Typography.Title level={3} className="page-title">
-            重要文件
-          </Typography.Title>
-        </div>
-        <Alert type="error" showIcon title="当前账户没有文件库权限" description="文件库仅对主人开放，请使用主人令牌登录。" />
-      </Space>
-    );
-  }
 
   const files = data.files;
   const categories = [...new Set(files.map((file) => file.category).filter(Boolean))];

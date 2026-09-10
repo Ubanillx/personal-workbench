@@ -1,13 +1,13 @@
 import { appConfig } from "../lib/context.server";
 import { fail, ok } from "../lib/http.server";
-import { requireOwner } from "../lib/session.server";
+import { requireManager } from "../lib/session.server";
 import { approveTask } from "../lib/task-service.server";
 
-/** POST /api/tasks/:id/approve —— 逻辑在 app/lib/task-service.server.ts */
+/** POST /api/tasks/:id/approve —— 管理员或组织管理者验收；逻辑在 app/lib/task-service.server.ts */
 export async function action({ request, params }: { request: Request; params: { id?: string } }): Promise<Response> {
-  const auth = requireOwner(request, appConfig().sessionCookieName);
+  const auth = requireManager(request, appConfig().sessionCookieName);
   if (!auth.ok) return auth.response;
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
-  const result = approveTask(auth.user, String(params.id), String(body.note ?? "主人验收通过"));
+  const result = approveTask(auth.user, String(params.id), String(body.note ?? "验收通过"));
   return result.ok ? ok(result.data, result.status) : fail(result.code, result.message, result.status);
 }

@@ -23,13 +23,15 @@ import {
 } from "antd";
 import { DeleteOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
-import { db } from "../lib/db.server";
+import type { UserRole } from "../../shared/types/domain";
+import { db, type User } from "../lib/db.server";
 import { readPayload } from "../lib/form.server";
+import { listAllAccounts, listMembers, listOrganizations } from "../lib/organization.server";
+import { assertOrgAccess } from "../lib/session.server";
 import {
   addComment,
   approveTask,
   archiveTask,
-  assignableMembers,
   createTask,
   deleteTask,
   listActivity,
@@ -41,7 +43,7 @@ import {
   updateTask,
   type ServiceResult,
 } from "../lib/task-service.server";
-import { findTask, notifyOverdueTasks, visible } from "../lib/tasks.server";
+import { canManageTasks, canView, findTaskWithOrg, notifyOverdueTasks, visible } from "../lib/tasks.server";
 import { requireUserOrRedirect } from "../lib/ui.server";
 
 const labels: Record<string, string> = { todo: "待办", in_progress: "进行中", pending_review: "待验收", completed: "已完成" };
@@ -81,6 +83,9 @@ type TaskRowView = {
   ownerName?: string;
   archivedAt: string | null;
   isPrivate: boolean;
+  /** 组织归属（toTaskView 新增字段）：管理员合并视图里显示每行属于哪个组织（D-28） */
+  orgId: string | null;
+  orgName: string | null;
 };
 type ActivityRow = {
   id: string;
@@ -90,24 +95,59 @@ type ActivityRow = {
   progress: number | null;
   createdAt: string;
 };
-type Member = { id: string; name: string; role: string; isActive: number };
-type Me = { id: string; name: string; role: "owner" | "assistant" | "viewer" };
+/** 指派下拉的候选：admin 是全部账号，manager 是本组织成员加全局管理员 */
+type Member = { id: string; name: string; role: UserRole; orgId: string | null; orgName: string | null; isActive: boolean };
+type Me = { id: string; name: string; role: UserRole; orgId: string | null; orgName: string | null };
+type OrgOption = { id: string; name: string; status: string };
+
+function toMember(row: Record<string, unknown>): Member {
+  return {
+    id: String(row.id),
+    name: String(row.name ?? ""),
+    role: String(row.role ?? "member") as UserRole,
+    orgId: row.orgId === null || row.orgId === undefined ? null : String(row.orgId),
+    orgName: row.orgName === null || row.orgName === undefined ? null : String(row.orgName),
+    isActive: Number(row.isActive) === 1,
+  };
+}
+
+/**
+ * 负责人候选（§14.3 指派规则）：
+ * - admin：全部账号（跨组织，界面上按组织筛选，服务端仍要求负责人属于任务所在组织）；
+ * - manager：本组织成员，另加全局管理员（管理员可以当负责人）；
+ * - member：只能建给自己的任务，没有可选名单。
+ */
+function assigneeCandidates(user: User): Member[] {
+  if (user.role === "admin") return listAllAccounts().map(toMember);
+  if (user.role === "manager" && user.orgId) {
+    const admins = listAllAccounts().filter((row) => row.role === "admin");
+    return [...listMembers(user.orgId), ...admins].map(toMember);
+  }
+  return [];
+}
 
 export async function loader({ request }: { request: Request }) {
   const user = requireUserOrRedirect(request);
   const url = new URL(request.url);
   const database = db();
   notifyOverdueTasks(database);
-  const includeArchived = user.role === "owner" && url.searchParams.get("archived") === "1";
+  const canManage = canManageTasks(user);
+  const includeArchived = canManage && url.searchParams.get("archived") === "1";
   const status = url.searchParams.get("status") ?? undefined;
   const assignee = url.searchParams.get("assignee") ?? undefined;
-  const tasks = visible(database, user, includeArchived, status, assignee) as unknown as TaskRowView[];
+  // 组织筛选器只给管理员（D-28）；其他人的组织范围由可见性条件锁死
+  const org = user.role === "admin" ? (url.searchParams.get("org") ?? null) : null;
+  const tasks = visible(database, user, includeArchived, status, assignee, org) as unknown as TaskRowView[];
   const taskId = url.searchParams.get("task");
   let selected: TaskRowView | null = null;
+  let selectedOrgId: string | null = null;
   let activity: ActivityRow[] = [];
   if (taskId) {
-    selected = findTask(database, taskId) as unknown as TaskRowView | null;
-    if (selected) {
+    const located = findTaskWithOrg(database, taskId);
+    // 不存在、跨组织或无权查看：一律当作没这条任务，详情不展开（跨组织不返回 403，§4 不变式 1）
+    if (located && assertOrgAccess(user, located.orgId) === null && canView(located.task, user)) {
+      selected = located.task as unknown as TaskRowView;
+      selectedOrgId = located.orgId;
       const result = listActivity(user, taskId);
       activity = result.ok ? (result.data as unknown as ActivityRow[]) : [];
       // 打开任务即把该任务的通知标记为已读（旧 UI 在打开详情时做同一件事）
@@ -116,13 +156,21 @@ export async function loader({ request }: { request: Request }) {
   }
   return {
     user: user as Me,
+    canManage,
     tasks,
     selected,
+    selectedOrgId,
     activity,
     includeArchived,
     status: status ?? "all",
     assignee: assignee ?? "all",
-    members: (user.role === "owner" ? assignableMembers() : []) as Member[],
+    org: org ?? "",
+    organizations: (user.role === "admin" ? listOrganizations(user) : []).map((item) => ({
+      id: item.id,
+      name: item.name,
+      status: String(item.status),
+    })) as OrgOption[],
+    members: assigneeCandidates(user),
   };
 }
 
@@ -143,9 +191,9 @@ export async function action({ request }: { request: Request }) {
     case "progress":
       return toActionResult(reportProgress(user, taskId, { progress: payload.progress, note: payload.note ?? "" }));
     case "submit-review":
-      return toActionResult(submitReview(user, taskId, String(payload.note ?? "提交主人验收")));
+      return toActionResult(submitReview(user, taskId, String(payload.note ?? "提交验收")));
     case "approve":
-      return toActionResult(approveTask(user, taskId, String(payload.note ?? "主人验收通过")));
+      return toActionResult(approveTask(user, taskId, String(payload.note ?? "验收通过")));
     case "return":
       return toActionResult(returnTask(user, taskId, { note: payload.note }));
     case "archive":
@@ -169,9 +217,16 @@ export default function TasksRoute(): React.ReactElement {
   const [params, setParams] = useSearchParams();
   const error = actionData && "error" in actionData ? actionData.error : "";
   const me = data.user;
-  const isOwner = me.role === "owner";
+  const canManage = data.canManage;
+  const isAdmin = me.role === "admin";
   const busy = navigation.state !== "idle";
   const selected = data.selected;
+  const [createForm] = Form.useForm();
+  /** 管理员建任务要先选组织（管理员不隶属组织），负责人候选按所选组织过滤 */
+  const createOrgId = (Form.useWatch("orgId", createForm) as string | undefined) ?? "";
+  const createAssigneePool = isAdmin
+    ? data.members.filter((member) => member.role === "admin" || member.orgId === createOrgId)
+    : data.members;
 
   const updateParams = (changes: Record<string, string | null>): void => {
     const next = new URLSearchParams(params);
@@ -181,6 +236,8 @@ export default function TasksRoute(): React.ReactElement {
     }
     setParams(next, { replace: true });
   };
+
+  const activeOrganizations = data.organizations.filter((org) => org.status === "active");
 
   return (
     <Space orientation="vertical" size="large" className="page-stack">
@@ -193,14 +250,21 @@ export default function TasksRoute(): React.ReactElement {
       </Space>
 
       <Form
+        form={createForm}
         layout="inline"
         className="quick-add"
-        initialValues={{ priority: "P1", ownerId: "" }}
-        onFinish={(values: { title?: string; priority?: string; ownerId?: string }) => {
+        initialValues={{ priority: "P1", ownerId: "", orgId: activeOrganizations[0]?.id ?? "" }}
+        onFinish={(values: { title?: string; priority?: string; ownerId?: string; orgId?: string }) => {
           const title = values.title?.trim();
           if (!title || busy) return;
           submit(
-            { intent: "create", title, priority: values.priority ?? "P1", ownerId: values.ownerId || "unassigned" },
+            {
+              intent: "create",
+              title,
+              priority: values.priority ?? "P1",
+              ownerId: values.ownerId || "unassigned",
+              ...(isAdmin ? { orgId: values.orgId ?? "" } : {}),
+            },
             { method: "post", encType: "application/json" },
           );
         }}
@@ -211,9 +275,18 @@ export default function TasksRoute(): React.ReactElement {
         <Form.Item name="priority">
           <Select options={priorityOptions} style={{ width: 88 }} />
         </Form.Item>
-        {isOwner && (
+        {isAdmin && (
+          <Form.Item name="orgId">
+            <Select
+              placeholder="选择组织"
+              style={{ width: 160 }}
+              options={activeOrganizations.map((org) => ({ value: org.id, label: org.name }))}
+            />
+          </Form.Item>
+        )}
+        {canManage && (
           <Form.Item name="ownerId">
-            <AssigneeSelect members={data.members} />
+            <AssigneeSelect members={createAssigneePool} />
           </Form.Item>
         )}
         <Form.Item>
@@ -238,12 +311,24 @@ export default function TasksRoute(): React.ReactElement {
             { value: "all", label: "全部负责人" },
             { value: "mine", label: "我的任务" },
             { value: "unassigned", label: "未分配" },
-            ...(isOwner
-              ? data.members.filter((member) => member.role !== "viewer").map((member) => ({ value: member.id, label: member.name }))
-              : []),
+            ...data.members.filter((member) => member.isActive).map((member) => ({ value: member.id, label: memberLabel(member) })),
           ]}
         />
-        {isOwner && (
+        {isAdmin && (
+          <Select
+            value={data.org || "all"}
+            onChange={(value: string) => updateParams({ org: value === "all" ? null : value })}
+            style={{ width: 180 }}
+            options={[
+              { value: "all", label: "全部组织" },
+              ...data.organizations.map((org) => ({
+                value: org.id,
+                label: org.status === "archived" ? `${org.name}（已解散）` : org.name,
+              })),
+            ]}
+          />
+        )}
+        {canManage && (
           <Checkbox checked={data.includeArchived} onChange={(event) => updateParams({ archived: event.target.checked ? "1" : null })}>
             显示归档
           </Checkbox>
@@ -267,7 +352,7 @@ export default function TasksRoute(): React.ReactElement {
         <Listy
           items={data.tasks}
           rowKey="id"
-          itemRender={(task) => <TaskRow task={task} onOpen={() => updateParams({ task: task.id })} />}
+          itemRender={(task) => <TaskRow task={task} showOrg={isAdmin} onOpen={() => updateParams({ task: task.id })} />}
         />
       ) : (
         <Empty
@@ -285,14 +370,21 @@ export default function TasksRoute(): React.ReactElement {
         <TaskDetail
           task={selected}
           activity={data.activity}
-          members={data.members}
+          members={isAdmin ? data.members.filter((member) => member.role === "admin" || member.orgId === data.selectedOrgId) : data.members}
           me={me}
+          canManage={canManage}
+          showOrg={isAdmin}
           busy={busy}
           onClose={() => updateParams({ task: null })}
         />
       )}
     </Space>
   );
+}
+
+/** 多组织时用「组织 · 姓名」区分同名账号（同一组织内只显示姓名） */
+function memberLabel(member: Member): string {
+  return member.orgId ? member.name : `${member.name}（管理员）`;
 }
 
 function AssigneeSelect({
@@ -308,19 +400,17 @@ function AssigneeSelect({
     <Select
       value={value ?? ""}
       onChange={(next: string) => onChange?.(next)}
-      style={{ width: 140 }}
+      style={{ width: 160 }}
       options={[
         { value: "", label: "未分配" },
-        { value: "owner", label: "主人" },
-        ...members
-          .filter((member) => member.role === "assistant" && member.isActive)
-          .map((member) => ({ value: member.id, label: member.name })),
+        ...members.filter((member) => member.isActive).map((member) => ({ value: member.id, label: memberLabel(member) })),
       ]}
     />
   );
 }
 
-function TaskRow({ task, onOpen }: { task: TaskRowView; onOpen: () => void }): React.ReactElement {
+/** 列表行：`showOrg` 只对管理员打开（D-28 的合并视图要能看出每行属于哪个组织） */
+function TaskRow({ task, showOrg, onOpen }: { task: TaskRowView; showOrg: boolean; onOpen: () => void }): React.ReactElement {
   const overdue = Boolean(task.dueDate && task.dueDate < new Date().toISOString().slice(0, 10) && task.status !== "completed");
   return (
     <Space align="center" size="middle" className="list-row">
@@ -331,8 +421,10 @@ function TaskRow({ task, onOpen }: { task: TaskRowView; onOpen: () => void }): R
             <Typography.Text type="secondary">
               {task.ownerName ?? "未分配"} · {task.priority} · {labels[task.status] ?? task.status}
             </Typography.Text>
+            {showOrg && task.orgName && <Tag color="blue">{task.orgName}</Tag>}
             {overdue && <Tag color="red">已逾期</Tag>}
             {task.archivedAt && <Tag>已归档</Tag>}
+            {task.isPrivate && <Tag color="purple">私密</Tag>}
           </Space>
           <Progress percent={task.progress} size="small" showInfo={false} />
         </Space>
@@ -347,6 +439,8 @@ function TaskDetail({
   activity,
   members,
   me,
+  canManage,
+  showOrg,
   busy,
   onClose,
 }: {
@@ -354,6 +448,8 @@ function TaskDetail({
   activity: ActivityRow[];
   members: Member[];
   me: Me;
+  canManage: boolean;
+  showOrg: boolean;
   busy: boolean;
   onClose: () => void;
 }): React.ReactElement {
@@ -361,7 +457,6 @@ function TaskDetail({
   const submit = useSubmit();
   const actionData = useActionData<typeof action>();
   const error = actionData && "error" in actionData ? actionData.error : "";
-  const isOwner = me.role === "owner";
   const canProgress = task.ownerId === me.id && !task.archivedAt && task.status !== "completed" && task.status !== "pending_review";
   const post = (payload: Record<string, unknown>): void => {
     submit(payload as Parameters<typeof submit>[0], { method: "post", encType: "application/json" });
@@ -383,7 +478,7 @@ function TaskDetail({
       <Space orientation="vertical" size="middle" className="page-stack">
         {error && <Alert type="error" showIcon title={error} />}
 
-        {isOwner && !task.archivedAt && (
+        {canManage && !task.archivedAt && (
           <Form
             layout="vertical"
             initialValues={{
@@ -446,10 +541,13 @@ function TaskDetail({
         )}
 
         <Space orientation="vertical" size={2}>
-          <Typography.Text type="secondary">
-            负责人：{task.ownerName ?? "未分配"} · {task.priority} · {labels[task.status] ?? task.status}
-            {task.dueDate ? ` · 截止 ${task.dueDate}` : ""}
-          </Typography.Text>
+          <Space size={4} wrap>
+            {showOrg && task.orgName && <Tag color="blue">{task.orgName}</Tag>}
+            <Typography.Text type="secondary">
+              负责人：{task.ownerName ?? "未分配"} · {task.priority} · {labels[task.status] ?? task.status}
+              {task.dueDate ? ` · 截止 ${task.dueDate}` : ""}
+            </Typography.Text>
+          </Space>
           <Space align="center" size="small">
             <Typography.Text strong>{task.progress}%</Typography.Text>
             <Progress percent={task.progress} size="small" showInfo={false} style={{ width: 240 }} />
@@ -458,7 +556,7 @@ function TaskDetail({
 
         {canProgress && <ProgressForm task={task} busy={busy} onPost={post} />}
 
-        {task.status === "pending_review" && isOwner && (
+        {task.status === "pending_review" && canManage && (
           <Space wrap size="small">
             <Button
               color="primary"
@@ -495,7 +593,7 @@ function TaskDetail({
           </Space>
         )}
 
-        {isOwner && (
+        {canManage && (
           <Space wrap size="small">
             {task.archivedAt ? (
               <>

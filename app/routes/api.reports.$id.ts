@@ -1,17 +1,15 @@
 import { appConfig } from "../lib/context.server";
 import { fail, ok } from "../lib/http.server";
-import { reportRepository, toView } from "../lib/reports.server";
+import { getReport } from "../lib/reports.server";
 import { requireAuth } from "../lib/session.server";
 
-/** GET /api/reports/:id —— 助理只能看自己的，查看者 403 */
+/**
+ * GET /api/reports/:id —— 管理员看全部组织，组织管理者看本组织，普通用户只看自己提交的。
+ * 跨组织、未加入组织或本人看不到的周报一律 404（§4 不变式 1），逻辑在 app/lib/reports.server.ts。
+ */
 export async function loader({ request, params }: { request: Request; params: { id?: string } }): Promise<Response> {
   const auth = requireAuth(request, appConfig().sessionCookieName);
   if (!auth.ok) return auth.response;
-  const user = auth.user;
-  if (user.role === "viewer") return fail("FORBIDDEN", "查看者不能访问周报", 403);
-  const repo = reportRepository();
-  const report = repo.findById(String(params.id));
-  if (!report) return fail("NOT_FOUND", "周报不存在", 404);
-  if (user.role === "assistant" && report.ownerId !== user.id) return fail("FORBIDDEN", "无权查看该周报", 403);
-  return ok(toView(report, repo));
+  const result = getReport(auth.user, String(params.id));
+  return result.ok ? ok(result.data, result.status) : fail(result.code, result.message, result.status);
 }

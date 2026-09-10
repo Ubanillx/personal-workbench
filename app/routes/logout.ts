@@ -7,7 +7,7 @@ export async function action({ request }: { request: Request }): Promise<Respons
   const cookieName = appConfig().sessionCookieName;
   const raw = readCookie(request, cookieName);
   if (raw) revokeSession(raw);
-  const response = redirect("/access");
+  const response = redirect("/login");
   response.headers.append("set-cookie", clearedSessionCookie(cookieName));
   return response;
 }

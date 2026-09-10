@@ -3,10 +3,11 @@ import { useState } from "react";
 import { useLoaderData } from "react-router";
 import { Alert, Button, Checkbox, DatePicker, Flex, Input, Listy, Select, Space, Tag, Typography } from "antd";
 import dayjs from "dayjs";
+import type { UserRole } from "../../shared/types/domain";
+import { listAllAccounts, listMembers, listOrganizations } from "../lib/organization.server";
 import { requireUserOrRedirect } from "../lib/ui.server";
-import { listUsersFor } from "../lib/users.server";
 
-type MemberRow = { id: string; name: string; role: "owner" | "assistant" | "viewer"; isActive: number | boolean };
+type MemberRow = { id: string; name: string; role: UserRole; isActive: number | boolean; orgId?: string | null };
 
 type Draft = {
   id: string;
@@ -27,10 +28,27 @@ const priorityOptions = [
   { value: "P2", label: "P2" },
 ];
 
-/** 收件箱 loader：只提供负责人下拉所需成员（非主人拿不到成员列表，与旧前端降级行为一致） */
+/**
+ * 收件箱 loader：负责人候选与目标组织都按角色收窄（§4 的「企微收件箱导入」一行）——
+ * 管理员看全部有组织的账号（跨组织合并视图），组织管理者看本组织成员，普通成员只能指派给自己。
+ * 管理员是全局角色、不隶属任何组织，导入必须显式选目标组织（与概览页快捷新增的写法一致），
+ * 已解散的组织不能写入，因此不列出来。未加入组织的账号由 requireUserOrRedirect 送回 /join（D-34）。
+ */
 export async function loader({ request }: { request: Request }) {
   const user = requireUserOrRedirect(request);
-  return { role: user.role, members: listUsersFor(user.role) as unknown as MemberRow[] };
+  const members =
+    user.role === "admin"
+      ? (listAllAccounts() as unknown as MemberRow[]).filter((member) => member.role !== "admin" && Boolean(member.orgId))
+      : user.role === "manager" && user.orgId
+        ? (listMembers(user.orgId) as unknown as MemberRow[])
+        : [{ id: user.id, name: user.name, role: user.role, isActive: true }];
+  const orgs =
+    user.role === "admin"
+      ? listOrganizations(user)
+          .filter((org) => org.status === "active")
+          .map((org) => ({ id: org.id, name: org.name }))
+      : [];
+  return { members, selfId: user.id, memberSelfOnly: user.role === "member", orgs };
 }
 
 export default function InboxRoute(): React.ReactElement {
@@ -40,16 +58,14 @@ export default function InboxRoute(): React.ReactElement {
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
+  // 管理员必须选定导入目标组织（后端对 admin 强制要求 orgId）；其他角色的 orgs 为空，用不上
+  const [orgId, setOrgId] = useState(data.orgs[0]?.id ?? "");
+  const needOrg = data.orgs.length > 0 && !orgId;
 
+  // 负责人候选由 loader 按角色收窄；已停用账号不列出来（服务端也会拒绝）
   const ownerOptions = [
     { value: "", label: "未分配" },
-    { value: "owner", label: "主人" },
-    ...data.members
-      .filter((member) => member.role === "assistant" && member.isActive)
-      .map((member) => ({
-        value: member.id,
-        label: member.name,
-      })),
+    ...data.members.filter((member) => Boolean(member.isActive)).map((member) => ({ value: member.id, label: member.name })),
   ];
 
   const parse = (): void => {
@@ -64,7 +80,7 @@ export default function InboxRoute(): React.ReactElement {
       method: "POST",
       credentials: "include",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ drafts: initial }),
+      body: JSON.stringify({ drafts: initial, ...(orgId ? { orgId } : {}) }),
     })
       .then(async (response) => {
         const payload = (await response.json()) as { ok: boolean; data?: Draft[]; error?: { message: string } };
@@ -98,7 +114,7 @@ export default function InboxRoute(): React.ReactElement {
       method: "POST",
       credentials: "include",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ drafts: chosen }),
+      body: JSON.stringify({ drafts: chosen, ...(orgId ? { orgId } : {}) }),
     })
       .then(async (response) => {
         const payload = (await response.json()) as {
@@ -128,16 +144,27 @@ export default function InboxRoute(): React.ReactElement {
           <Typography.Text type="secondary">粘贴聊天记录，逐条编辑标题、负责人、优先级与截止日期。系统会标记疑似重复任务。</Typography.Text>
         </div>
         <Space size="small">
-          <Button color="primary" variant="solid" disabled={!raw.trim() || busy} loading={busy} onClick={parse}>
+          {data.orgs.length > 0 && (
+            <Select
+              value={orgId}
+              options={data.orgs.map((org) => ({ value: org.id, label: org.name }))}
+              onChange={(value: string) => setOrgId(value)}
+              placeholder="导入到组织"
+              style={{ minWidth: 160 }}
+            />
+          )}
+          <Button color="primary" variant="solid" disabled={!raw.trim() || busy || needOrg} loading={busy} onClick={parse}>
             解析消息
           </Button>
           {drafts.length > 0 && (
-            <Button disabled={busy} onClick={submit}>
+            <Button disabled={busy || needOrg} onClick={submit}>
               导入选中任务
             </Button>
           )}
         </Space>
       </Space>
+
+      {needOrg && <Alert type="warning" showIcon title="请先选择导入目标组织（管理员不隶属任何组织）" />}
 
       <Input.TextArea
         rows={5}
@@ -169,8 +196,10 @@ export default function InboxRoute(): React.ReactElement {
               </Flex>
               <Flex gap="small" align="center" wrap>
                 <Select
-                  value={draft.ownerId}
+                  // 普通成员只能把导入的任务建给自己（与任务域一致），这里直接锁死选择
+                  value={data.memberSelfOnly ? data.selfId : draft.ownerId}
                   options={ownerOptions}
+                  disabled={data.memberSelfOnly}
                   onChange={(value: string) => change(draft.id, { ownerId: value })}
                   style={{ minWidth: 140 }}
                 />

@@ -8,6 +8,6 @@ export async function action({ request, params }: { request: Request; params: { 
   const auth = requireAuth(request, appConfig().sessionCookieName);
   if (!auth.ok) return auth.response;
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
-  const result = submitReview(auth.user, String(params.id), String(body.note ?? "提交主人验收"));
+  const result = submitReview(auth.user, String(params.id), String(body.note ?? "提交验收"));
   return result.ok ? ok(result.data, result.status) : fail(result.code, result.message, result.status);
 }

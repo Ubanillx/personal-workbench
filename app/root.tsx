@@ -18,6 +18,7 @@ import {
 } from "antd";
 import zhCN from "antd/locale/zh_CN";
 import {
+  ApartmentOutlined,
   BarChartOutlined,
   BellOutlined,
   CheckSquareOutlined,
@@ -27,6 +28,7 @@ import {
   FolderOpenOutlined,
   InboxOutlined,
   LogoutOutlined,
+  SettingOutlined,
   TeamOutlined,
   UnorderedListOutlined,
 } from "@ant-design/icons";
@@ -47,27 +49,55 @@ const workbenchTheme: ThemeConfig = {
   },
 };
 
-type NavItem = { to: string; label: string; icon: React.ReactNode; roles: Array<"owner" | "assistant" | "viewer"> };
+type NavItem = { to: string; label: string; icon: React.ReactNode; roles: Array<"admin" | "manager" | "member"> };
 
 const NAV: NavItem[] = [
-  { to: "/", label: "每日概览", icon: <DashboardOutlined />, roles: ["owner", "assistant", "viewer"] },
-  { to: "/tasks", label: "任务进展", icon: <CheckSquareOutlined />, roles: ["owner", "assistant", "viewer"] },
-  { to: "/todos", label: "待办清单", icon: <UnorderedListOutlined />, roles: ["owner"] },
-  { to: "/notes", label: "随手记", icon: <EditOutlined />, roles: ["owner"] },
-  { to: "/inbox", label: "企微收件箱", icon: <InboxOutlined />, roles: ["owner", "assistant"] },
-  { to: "/reports", label: "周报/总结", icon: <FileTextOutlined />, roles: ["owner", "assistant"] },
-  { to: "/collaboration", label: "协作管理", icon: <TeamOutlined />, roles: ["owner"] },
-  { to: "/files", label: "重要文件", icon: <FolderOpenOutlined />, roles: ["owner"] },
-  { to: "/review", label: "回顾统计", icon: <BarChartOutlined />, roles: ["owner"] },
+  { to: "/", label: "每日概览", icon: <DashboardOutlined />, roles: ["admin", "manager", "member"] },
+  { to: "/tasks", label: "任务进展", icon: <CheckSquareOutlined />, roles: ["admin", "manager", "member"] },
+  { to: "/todos", label: "待办清单", icon: <UnorderedListOutlined />, roles: ["admin", "manager", "member"] },
+  { to: "/notes", label: "随手记", icon: <EditOutlined />, roles: ["admin", "manager", "member"] },
+  { to: "/inbox", label: "企微收件箱", icon: <InboxOutlined />, roles: ["admin", "manager", "member"] },
+  { to: "/reports", label: "周报/总结", icon: <FileTextOutlined />, roles: ["admin", "manager", "member"] },
+  { to: "/collaboration", label: "协作管理", icon: <TeamOutlined />, roles: ["admin", "manager"] },
+  { to: "/organization", label: "组织管理", icon: <ApartmentOutlined />, roles: ["admin", "manager"] },
+  { to: "/admin", label: "全局管理", icon: <SettingOutlined />, roles: ["admin"] },
+  { to: "/files", label: "重要文件", icon: <FolderOpenOutlined />, roles: ["admin", "manager"] },
+  { to: "/review", label: "回顾统计", icon: <BarChartOutlined />, roles: ["admin", "manager"] },
 ];
 
-/** Phase 3 逐页迁移：只有已迁移的路径出现在导航里，避免点了 404 */
-const MIGRATED_PATHS = new Set(["/", "/tasks", "/todos", "/notes", "/inbox", "/reports", "/collaboration", "/files", "/review"]);
+/** 尚未加入组织的人只能看「组织与申请」页（D-34），导航也只剩这一项 */
+const NAV_JOIN_ONLY: NavItem = { to: "/join", label: "组织与申请", icon: <ApartmentOutlined />, roles: ["admin", "manager", "member"] };
 
-const ROLE_LABEL = { owner: "主人", assistant: "助理", viewer: "查看者" } as const;
-const ROLE_COLOR: Record<"owner" | "assistant" | "viewer", string> = { owner: "blue", assistant: "green", viewer: "default" };
+/** 已实现的路径；未实现的路径不出现在导航里，避免点了 404 */
+const MIGRATED_PATHS = new Set([
+  "/",
+  "/join",
+  "/organization",
+  "/admin",
+  "/tasks",
+  "/todos",
+  "/notes",
+  "/inbox",
+  "/reports",
+  "/collaboration",
+  "/files",
+  "/review",
+]);
 
-type SessionUser = { id: string; name: string; role: "owner" | "assistant" | "viewer"; isActive: boolean };
+const ROLE_LABEL = { admin: "管理员", manager: "组织管理者", member: "普通用户" } as const;
+const ROLE_COLOR: Record<"admin" | "manager" | "member", string> = { admin: "blue", manager: "green", member: "default" };
+
+type SessionUser = {
+  id: string;
+  username: string;
+  email: string;
+  name: string;
+  role: "admin" | "manager" | "member";
+  orgId: string | null;
+  orgName: string | null;
+  isActive: boolean;
+  mustChangePassword: boolean;
+};
 type UnreadNotification = { id: string; taskId: string | null; reportId: string | null; title: string; message: string };
 
 export async function loader({ request }: { request: Request }) {
@@ -114,11 +144,14 @@ function AuthenticatedShell({ user, notifications }: { user: SessionUser; notifi
   const location = useLocation();
   const navigate = useNavigate();
 
-  const items: MenuProps["items"] = NAV.filter((item) => item.roles.includes(user.role) && MIGRATED_PATHS.has(item.to)).map((item) => ({
-    key: item.to,
-    icon: item.icon,
-    label: item.label,
-  }));
+  const navItems = user.role === "admin" || user.orgId ? NAV : [NAV_JOIN_ONLY];
+  const items: MenuProps["items"] = navItems
+    .filter((item) => item.roles.includes(user.role) && MIGRATED_PATHS.has(item.to))
+    .map((item) => ({
+      key: item.to,
+      icon: item.icon,
+      label: item.label,
+    }));
 
   const notificationItems: MenuProps["items"] = notifications.length
     ? notifications.slice(0, 8).map((item) => ({
@@ -189,6 +222,7 @@ function AuthenticatedShell({ user, notifications }: { user: SessionUser; notifi
               </Avatar>
               <Typography.Text>{user.name}</Typography.Text>
               <Tag color={ROLE_COLOR[user.role]}>{ROLE_LABEL[user.role]}</Tag>
+              {user.orgName ? <Tag>{user.orgName}</Tag> : null}
             </Space>
             <form method="post" action="/logout">
               <Button variant="text" icon={<LogoutOutlined />} htmlType="submit">

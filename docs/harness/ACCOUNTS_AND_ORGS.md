@@ -16,25 +16,29 @@
 
 ## 2. 决策记录
 
-| ID   | 决策                                                                                                                          |
-| ---- | ----------------------------------------------------------------------------------------------------------------------------- |
-| D-18 | 引入**多组织**：新增 `organizations` 表，业务数据按组织隔离                                                                   |
-| D-19 | 三个角色：`admin` 管理员、`manager` 组织管理者、`member` 普通用户；**取消**只读的 `viewer`                                    |
-| D-20 | **开放注册**，注册后即为普通用户、可立即登录，但**尚无组织**                                                                  |
-| D-21 | 登录标识为**用户名 + 邮箱 + 密码**（用户名校验登录，邮箱用于唯一性与记录，本期不发信）                                        |
-| D-22 | **旧令牌全部作废**；迁移时给 5 个旧账号分配用户名与初始密码，由本机 CLI 打印一次                                              |
-| D-23 | 忘记密码只能**本机 CLI 重置**（`npm run user:passwd`），不提供网页端重置                                                      |
-| D-24 | 注册后**无组织**：能看到组织列表 → 提交入组申请 → 该组织的组织管理者审批通过后加入                                            |
-| D-25 | **一人只属于一个组织**（`users.org_id` 单值）                                                                                 |
-| D-26 | **管理员是全局角色**，跨所有组织；不隶属任何组织（`org_id` 为 `NULL`）                                                        |
-| D-27 | 组织管理者权限：管理本组织成员、管理与指派本组织全部任务、审批本组织周报、访问本组织验收视图与文件库、改组织信息（改名/解散） |
-| D-28 | 管理员默认看到**全部组织的合并视图 + 组织筛选器**                                                                             |
-| D-29 | 迁移时建立**初始组织**，5 个旧账号与全部现有数据归入该组织；`owner` → 全局管理员，按 `created_at` 最早的助理 → 该组织管理者   |
-| D-30 | 一个人**同时只能有一个待审批申请**                                                                                            |
-| D-31 | 组织管理者可以**直接把一个尚无组织的账号拉进本组织**（无需对方申请），被拉的人收到站内通知                                    |
-| D-32 | **退出组织需要管理者批准**（提交退出申请 → 本组织管理者审批）                                                                 |
-| D-33 | **解散 = 归档**：组织标记为 `archived`，成员全部退回「未加入」状态，数据保留但不可访问，全局管理员可恢复                      |
-| D-34 | 未加入组织的账号登录后**只能**访问「组织列表 + 我的申请」页，其余页面一律重定向回来                                           |
+| ID   | 决策                                                                                                                                       |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| D-18 | 引入**多组织**：新增 `organizations` 表，业务数据按组织隔离                                                                                |
+| D-19 | 三个角色：`admin` 管理员、`manager` 组织管理者、`member` 普通用户；**取消**只读的 `viewer`                                                 |
+| D-20 | **开放注册**，注册后即为普通用户、可立即登录，但**尚无组织**                                                                               |
+| D-21 | 登录标识为**用户名 + 邮箱 + 密码**（用户名校验登录，邮箱用于唯一性与记录，本期不发信）                                                     |
+| D-22 | **旧令牌全部作废**；迁移时给 5 个旧账号分配用户名与初始密码，由本机 CLI 打印一次                                                           |
+| D-23 | 忘记密码只能**本机 CLI 重置**（`npm run user:passwd`），不提供网页端重置                                                                   |
+| D-24 | 注册后**无组织**：能看到组织列表 → 提交入组申请 → 该组织的组织管理者审批通过后加入                                                         |
+| D-25 | **一人只属于一个组织**（`users.org_id` 单值）                                                                                              |
+| D-26 | **管理员是全局角色**，跨所有组织；不隶属任何组织（`org_id` 为 `NULL`）                                                                     |
+| D-27 | 组织管理者权限：管理本组织成员、管理与指派本组织全部任务、审批本组织周报、访问本组织验收视图与文件库、改组织信息（改名/解散）              |
+| D-28 | 管理员默认看到**全部组织的合并视图 + 组织筛选器**                                                                                          |
+| D-29 | 迁移时建立**初始组织**，5 个旧账号与全部现有数据归入该组织；`owner` → 全局管理员，按 `created_at` 最早的助理 → 该组织管理者                |
+| D-30 | 一个人**同时只能有一个待审批申请**                                                                                                         |
+| D-31 | 组织管理者可以**直接把一个尚无组织的账号拉进本组织**（无需对方申请），被拉的人收到站内通知                                                 |
+| D-32 | **退出组织需要管理者批准**（提交退出申请 → 本组织管理者审批）                                                                              |
+| D-33 | **解散 = 归档**：组织标记为 `archived`，成员全部退回「未加入」状态，数据保留但不可访问，全局管理员可恢复                                   |
+| D-34 | 未加入组织的账号登录后**只能**访问「组织列表 + 我的申请」页，其余页面一律重定向回来                                                        |
+| D-35 | 组织边界用 **404**（跨组织按 id 访问一律「未找到该资源」，不泄露存在性）；**同一组织内无可见权仍返回 403**（保留旧契约形状，不扩大改动面） |
+| D-36 | 私密任务的负责人必须是**创建者本人**（只有 admin/manager 能建私密任务；member 传 `isPrivate` 会降级为普通任务）                            |
+| D-37 | 任务**指派范围 = 任务所属组织的成员**；全局管理员例外（admin 不隶属组织，旧模型允许 admin 当负责人）                                       |
+| D-38 | 任务载荷（`toTaskView`）增加 `orgId` / `orgName`，供管理员在合并视图里看出每行属于哪个组织（D-28）                                         |
 
 ## 3. 数据模型
 
@@ -85,16 +89,23 @@ CREATE TABLE users_new (
   email                TEXT NOT NULL UNIQUE,
   name                 TEXT NOT NULL,
   role                 TEXT NOT NULL CHECK (role IN ('admin', 'manager', 'member')),
-  org_id               TEXT REFERENCES organizations(id) ON DELETE SET NULL,
+  org_id               TEXT REFERENCES organizations(id) ON DELETE RESTRICT,
   password_hash        TEXT NOT NULL,
   must_change_password INTEGER NOT NULL DEFAULT 1 CHECK (must_change_password IN (0, 1)),
   is_active            INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
   created_at           TEXT NOT NULL,
   updated_at           TEXT NOT NULL,
-  -- 管理员不隶属组织；组织管理者与普通成员必须有组织
-  CHECK (role = 'admin' OR org_id IS NOT NULL)
+  -- 只有这两条真不变量交给数据库兜住；普通成员允许没有组织
+  CHECK (role <> 'manager' OR org_id IS NOT NULL),
+  CHECK (role <> 'admin' OR org_id IS NULL)
 );
 ```
+
+> **约束为什么是弱化形式而不是「非管理员必须有组织」**：注册（D-20）产生的正是「`member` 且 `org_id` 为 NULL」的账号
+> （D-24：注册后无组织，申请通过才入组）；解散组织（D-33）、被移出组织、同意退出（D-32）也都会把人退回这个状态。
+> 初版写成 `CHECK (role = 'admin' OR org_id IS NOT NULL)`，会让**上面四条路径全部失败**（注册直接 500）——
+> 这是实现时被 `npm run contract:fixture` 撞出来的真实缺陷。
+> 最终的写法两头都要：`manager` 必须有组织、`admin` 不得隶属组织交由数据库保证，`member` 两种形态都合法。
 
 迁移时的确定性回填（`password_hash` 用一个**永不匹配**的占位值，等 CLI 设真实密码）：
 
@@ -295,14 +306,13 @@ npm run user:init   -- --confirm       # 迁移后一次性初始化：给未设
 **迁移文件**：`009_accounts_and_organizations.sql`（新表 + 重建 `users`/`task_comments` + 5 张业务表加 `org_id` + 回填），
 `010_drop_access_tokens.sql`（退役令牌表）。沿用 `004`/`008` 已验证的「建 `_new` → `INSERT…SELECT` → `DROP` → `RENAME`」模式。
 
-### 9.1 暂存目录（为什么迁移先不放进 migrations/）
+### 9.1 暂存目录（A–D 阶段用过，现已启用）
 
-这两个文件放在 `server/src/db/migrations-pending/`，**不会**被服务自动应用。原因是顺序耦合：
-`009` 给 5 张业务表加的是 `NOT NULL org_id`，而旧代码插入这些表时不带 `org_id`——一旦迁移生效，
-应用立刻写不进数据，`npm test` 也会一直红到 B/C 阶段代码落地。所以：
+B/C 开发期间这两个文件曾放在 `server/src/db/migrations-pending/`，**不会**被服务自动应用——因为
+`009` 给 5 张业务表加的是 `NOT NULL org_id`，而旧代码插入这些表时不带 `org_id`，迁移一生效应用立刻写不进数据。
 
-- **A–D 阶段**：迁移留在 `migrations-pending/`，用 `npm run db:rehearse` 在**正式库的副本**上反复验证；
-- **E 阶段**：代码齐了之后 `git mv` 进 `migrations/`，再走下面的正式迁移流程。
+代码（B/C）落地后，它们已经 `git mv` 进 `server/src/db/migrations/` 并在分支上生效；
+`migrations-pending/` 目录现在只剩一份 README 说明这段历史。
 
 ### 9.2 演练工具 `npm run db:rehearse`
 
@@ -318,7 +328,7 @@ npm run db:rehearse -- --source <路径>
 
 ### 9.3 正式迁移流程（E 阶段，正式库只在最后一步动）
 
-1. `npm run db:rehearse` 全绿（当前：**42 项 0 失败**，见 §12）。
+1. `npm run db:rehearse` 全绿（当前：**44 项 0 失败**，见 §12）。
 2. 在保留下来的副本上跑 `npm run user:init -- --confirm`，用契约/冒烟工具打真实 HTTP 确认初始密码能登录。
 3. 副本上跑四件套 + 契约全量回放。
 4. 上述全绿后，才让正式服务加载新版本（`client.ts` 会在应用迁移前自动备份到 `data/backups/`，另有一份手工副本）。
@@ -347,16 +357,18 @@ B（用户名密码登录）和 C（组织隔离）**不能分两次落地**，�
 
 每个阶段独立验收（四件套 + `format:check` + `npx antd lint app` 全绿），上一阶段不绿不进下一阶段。
 
-| 阶段         | 内容                                                                                                    | 验收                                                                                   | 状态          |
-| ------------ | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | ------------- |
-| **A 数据层** | 009/010 迁移、`organizations`/`join_requests`/成员与账号 repository、`password` 工具、`user:init` CLI   | 副本上迁移后行数逐表核对一致；`user:list`/`user:passwd` 可用；`test:db` 全绿           | ✅ 2026-09-10 |
-| **B 认证**   | register/login/password 端点、scrypt、会话、`must_change_password` 门禁；退役令牌登录与 `owner:reset`   | 注册→登录→改密→登录全链路 HTTP 通过；旧令牌一律 401；`test:owner` 改写为密码重置端到端 | 下一步        |
-| **C 隔离**   | 所有业务查询加组织过滤、组织/成员/申请端点、§4 的 6 条不变式                                            | 新增跨组织隔离测试（构造 2 个组织，逐端点验证 404）；契约按新行为重录                  | 待办          |
-| **D 界面**   | `/login`、`/register`、`/password`、`/join`、`/organization`、`/admin` + 8 个页面接入组织上下文与筛选器 | `smoke:ui` 全绿并渲染出真实数据；`antd lint app` 无问题；人工过一遍关键路径            | 待办          |
-| **E 收尾**   | 契约全量重录、夹具改造（2 个组织）、文档回写、正式库迁移与演练                                          | 139 → 约 190 条契约全部一致；正式库迁移前后行数核对；README/harness 六份文档回写       | 待办          |
+| 阶段         | 内容                                                                                                    | 验收                                                                                     | 状态                   |
+| ------------ | ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ---------------------- |
+| **A 数据层** | 009/010 迁移、`organizations`/`join_requests`/成员与账号 repository、`password` 工具、`user:init` CLI   | 副本上迁移后行数逐表核对一致；`user:list`/`user:passwd` 可用；`test:db` 全绿             | ✅ 2026-09-10          |
+| **B 认证**   | register/login/password 端点、scrypt、会话、`must_change_password` 门禁；退役令牌登录与 `owner:reset`   | 注册→登录→改密→登录全链路 HTTP 通过；旧令牌一律 401；`test:auth` 端到端通过              | 分支开发中             |
+| **C 隔离**   | 所有业务查询加组织过滤、组织/成员/申请端点、§4 的 6 条不变式                                            | 新增跨组织隔离测试（构造 2 个组织，逐端点验证 404）；契约按新行为重录                    | 分支开发中             |
+| **D 界面**   | `/login`、`/register`、`/password`、`/join`、`/organization`、`/admin` + 8 个页面接入组织上下文与筛选器 | `smoke:ui` 全绿并渲染出真实数据；`antd lint app` 无问题；人工过一遍关键路径              | 分支开发中             |
+| **E 收尾**   | 契约全量重录、夹具改造（2 个组织）、文档回写、正式库迁移与演练                                          | **305 条**契约全部一致（✅ 已重录）；正式库迁移前后行数核对；README/harness 六份文档回写 | 进行中（差正式库迁移） |
 
 **对现有资产的影响**：`tools/contract/fixture.ts` 要改成「两个组织 + 三角色 + 无组织用户」；
-139 条用例里认证域（12 条）会重写，其余用例要补组织上下文；`test/api/owner-reset.test.ts` 改成密码重置端到端。
+对现有资产的实际影响：`tools/contract/fixture.ts` 已改成「3 个组织（含 1 个已解散）+ 8 个账号（含无组织与待改密）」，
+用例从 139 条扩到 **305 条**（新增 `org.` 88 条、`members.` 6 条、认证域重写为 28 条，其余域补上组织上下文）；
+`test/api/owner-reset.test.ts` 已换成 `test/api/auth.spec.ts`（注册→登录→强制改密门禁→改密）。
 
 ## 12. Phase A 实施记录（2026-09-10）
 
@@ -371,14 +383,14 @@ B（用户名密码登录）和 C（组织隔离）**不能分两次落地**，�
 | `tools/db/rehearse-migration.ts`（`npm run db:rehearse`）            | 副本演练 + 42 项核对                                                                  |
 | `test/db/password.test.ts`                                           | 6 条密码单元测试（含「格式/参数异常一律失败」与「改过参数的哈希仍可校验」）           |
 
-### 在正式库副本上的演练结果（42 项 0 失败）
+### 在正式库副本上的演练结果（当时 42 项 0 失败；加入两条新约束探针后为 44 项）
 
 - 14 张保留表行数**逐表一致**（tasks 7、todos 8、notes 1、weekly_reports 4、users 5、task_comments 2、…）。
 - 账号映射：`owner` → `admin`（全局管理员，`org_id` NULL）；创建最早的助理 `SELENE` → `selene` / `manager`；
   `LEAH`/`MINTY`/`YANIS` → `member`。用户名取「小写名字」（纯 ASCII 合法时），否则回退 `member-<id 前 6 位>`。
 - 全部业务数据挂到 `org-default`；`access_tokens` 已删除；`PRAGMA foreign_key_check` 干净。
-- 约束真的生效（都用探针插入验证过被拒绝）：旧角色 `owner` 被 CHECK 拒、非管理员 `org_id` 为 NULL 被拒、
-  业务表缺 `org_id` 被 NOT NULL 拒、同一用户第二个 `pending` 申请被部分唯一索引拒。
+- 约束真的生效（都用探针插入验证过）：旧角色 `owner` 被 CHECK 拒、业务表缺 `org_id` 被 NOT NULL 拒、
+  同一用户第二个 `pending` 申请被部分唯一索引拒；反过来「`member` + `org_id=NULL`」（注册路径）**必须被允许**。
 
 ### 密码链路验证
 
@@ -408,3 +420,108 @@ B（用户名密码登录）和 C（组织隔离）**不能分两次落地**，�
 | 「入组不需同意、退出需批准」的不对称             | 已记录为有意设计（§6）；invite 会发通知，被拉的人至少知道                                                                   |
 | 契约 golden 大面积重录会掩盖真实回归             | 重录前后对**未受影响的域**（任务、周报、待办）保留逐条比对；只有认证域与新增组织域是重新录制的基线                          |
 | `must_change_password` 门禁写漏 = 弱密码长期存在 | 门禁放在 `requireAuth` 内部（而非逐页判断），并加契约用例证明未改密时业务端点 403                                           |
+
+## 14. B/C/D 实施记录（2026-09-10，分支 `feat/accounts-orgs`）
+
+### 交付物
+
+| 层     | 内容                                                                                                                                                                                                                                                                                                       |
+| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 认证   | `app/lib/session.server.ts` 重写（scrypt 登录/注册/改密、会话、`must_change_password` 门禁写在 `requireAuth` 内部、`requireAdmin`/`requireManager`/`assertOrgAccess`/`assertOrgManage`/`notFound`/`orgFilter`）；4 个认证端点 + `/login`、`/register`、`/password`、`/join` 页面；`/access` → 302 `/login` |
+| 组织   | `app/lib/organization.server.ts`（组织 CRUD/归档恢复、成员管理、入组/退组/被拉入的完整台账、最后一名 manager 保护）；`app/routes.orgs.ts` + 13 个端点；`/organization`、`/admin` 页面；`/collaboration` 改为只读协作概览                                                                                   |
+| 隔离   | 任务域（`visibilityClauses`）、记录域（`recordClauses`）、周报域（`reportVisibilityClauses`）、概览/成员/文件库全部按组织过滤；所有 `INSERT` 显式写 `org_id`；跨组织一律 404                                                                                                                               |
+| 数据层 | `009`/`010` 已启用（17 张表）；`json-migration.ts` 重写为新结构；删除 `owner-token.ts`、4 个死 repository、`api.users*` 3 个路由                                                                                                                                                                           |
+| 工具   | 夹具改为 3 组织 / 8 账号；契约 305 条并重录 golden；`contract:capture` 默认改用 `serve`；`smoke:ui` 覆盖新认证 + `/join` + `/organization` + `/admin` + 越权回弹；`npm test` 增加 `pretest` 自动 build                                                                                                     |
+| CLI    | `user:list` / `user:passwd` / `user:init`；`owner:reset` 随令牌一起退役                                                                                                                                                                                                                                    |
+
+### 有意的行为变更（契约 golden 已按新行为重录）
+
+1. **登录方式**：`POST /api/auth/access`（令牌）删除，改为 `POST /api/auth/login`（用户名 + 密码）；注册 201 且直接建会话。
+2. **强制改密**：`must_change_password=1` 时除「看自己 / 改密 / 登出」外一律 403 `PASSWORD_CHANGE_REQUIRED`（契约有用例盯着）。
+3. **跨组织一律 404**，文案统一为「未找到该资源」——包括任务、评论、时间线、待办、随手记、文件、周报、下载、成员列表。
+4. **同组织内无可见权仍是 403**（保留旧契约形状，D-35）。
+5. **不存在的记录**：`PATCH/DELETE /api/todos|notes/:id`、`DELETE /api/files/:id`、`POST /api/files/:id/use` 由「不存在也回 200」改为与跨组织一致的 404——不这样做，两者可区分，等于泄露资源是否存在。
+6. **待办/随手记**从「主人专属」变为「登录即可、按组织隔离」；文件库与验收视图维持 manager+admin。
+7. **管理员写记录必须指定组织**（`orgId` 或 `?org=`），否则 400「管理员必须指定记录所属组织」；非管理员带 orgId 一律忽略。
+8. **通知收件人修正**：任务/周报通知里写死的伪 id `"owner"`（生产库里根本不存在这个用户，等于没人收到）改为「负责人 + 本组织 manager」。
+9. **角色文案**：403 统一为「只有管理员或组织管理者可以执行此操作」「只有管理员可以访问此功能」；页面里的「主人/助理/查看者」全部替换。
+10. **任务载荷新增 `orgId`/`orgName`**（D-38），供管理员合并视图区分组织。
+
+### 复验证据
+
+| 检查                                        | 结果                                                                                                                                                                            |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm test`                                  | **全绿**：db 16/16 · 契约 305/305 全部一致 · auth 2/2 · ui 72/72                                                                                                                |
+| 组织/隔离 HTTP 探针（主线临时脚本，60+ 项） | **75/75**：可见范围、创建权限、成员越权 404/403、入组申请→审批→重复申请、撤回、退组审批、最后一名 manager 三条路径、拉人入组、角色变更、跨组织成员操作、改名越权、归档/恢复语义 |
+| `npm run db:rehearse`（正式库副本）         | **44/44**：逐表行数一致、账号映射、组织归属、外键完整性、四条约束探针（含 `manager` 必须有组织 / `admin` 不得隶属组织）                                                         |
+| 全新空库 `001–010`                          | 迁移通过，17 张表、0 组织、`access_tokens` 已删、外键干净                                                                                                                       |
+| 各域自验（工作流临时脚本）                  | 任务 64+21 项、记录 28+23 项、周报 73+12 项、概览/访问信息 全部通过                                                                                                             |
+| 静态门禁                                    | lint 0/0 · typecheck 四工程 0 · `antd lint app` 91 文件无问题 · `format:check` 无漂移 · build 通过                                                                              |
+
+### 已知未覆盖 / 后续
+
+- **没有做过浏览器人工走查**（本环境无浏览器自动化）：`Select value=""`、`DatePicker` 中文 locale、组织页交互手感都只经过 SSR 冒烟与静态门禁（`DEBT-16`）。
+- 不变式 6（停用账号立即失去会话）没有契约用例：停用会撤销该账号全部会话，而 runner 按角色缓存会话，会让后续用例全线 401；需要单开账号覆盖。
+- `runCases` 只替换 **path** 里的 `{{变量}}`，body 与 multipart 字段不替换（用例已用 `IDS` 字面量规避）。
+- golden 里会录制登录/改密用例的**明文密码**（与旧 `TOKENS` 同级别暴露面，本机自用可接受）。
+- D-28 的组织筛选器目前只在任务页与记录页/概览页的写入口落地，`/reports` 尚未加（载荷不带 orgId）。
+
+## 15. 代码约定（B/C 阶段所有改动必须遵守）
+
+B/C 是多文件并行的改造，以下约定是并行工作的接缝，**不要各自发明**。
+
+### 14.1 组织上下文的唯一来源
+
+`app/lib/session.server.ts` 导出的这几个函数是所有权限判断的入口，业务代码**不要**自己写 `role ===` 比较：
+
+| 函数                                           | 语义                                                                              |
+| ---------------------------------------------- | --------------------------------------------------------------------------------- |
+| `requireAuth(request, cookieName)`             | 登录即可；**内部已包含强制改密门禁**（未改密返回 403 `PASSWORD_CHANGE_REQUIRED`） |
+| `requireAuth(..., { skipPasswordGate: true })` | 只给「看自己 / 改密 / 登出」三个端点用                                            |
+| `requireAdmin(request, cookieName)`            | 仅全局管理员                                                                      |
+| `requireManager(request, cookieName)`          | 管理员或组织管理者（是否管得着某个组织再用 `assertOrgManage` 判断）               |
+| `orgScope(user)`                               | 管理员返回 `null`（= 所有组织），其他人返回自己的 `orgId`                         |
+| `assertOrgAccess(user, resourceOrgId)`         | 返回 `null` 表示放行，否则返回**404 响应**，直接 `return` 给客户端                |
+| `assertOrgManage(user, orgId)`                 | 同上，但用于「管理」语义（改组织、审批、管成员）                                  |
+| `notFound()`                                   | 统一的 404 响应（跨组织一律用它，**不要用 403**）                                 |
+
+### 14.2 查询与写入
+
+- **读**：凡是有 `org_id` 的表（`tasks`/`todos`/`notes`/`important_files`/`weekly_reports`），SQL 必须带组织条件。
+  **不要**照旧模板写 `const scope = orgScope(user); where = scope ? "AND org_id=?" : ""` ——
+  `orgScope()` 对「管理员」和「未入组的普通用户」**都返回 null**，那样写会把未入组的人当成管理员，直接跨组织泄露。
+  用带兜底的 `orgFilter()`（`app/lib/session.server.ts`）：
+  ```ts
+  import { orgFilter } from "./session.server";
+  const scope = orgFilter(user, "t.org_id"); // admin → ""；已入组 → "t.org_id=?"；未入组 → "1=0"
+  const sql = `SELECT ... FROM tasks t WHERE 1=1 ${scope.clause ? `AND ${scope.clause}` : ""}`;
+  rows(db(), sql, ...scope.params);
+  ```
+  三个域（任务 / 记录 / 周报）当前各自内联了等价的 `1=0` 兜底，语义一致；新代码请直接用 `orgFilter()`。
+- **写**：`INSERT` 必须显式写 `org_id`（迁移里是 `NOT NULL`），取值是**资源所属组织**：
+  普通用户/管理者写自己的 `user.orgId`；管理员写请求里指定的组织或资源已有的组织。
+- **间接表**（`task_comments`/`task_progress_logs`/`task_events`/`report_files`/`notifications`）不加 `org_id`，
+  必须**经父级**（`task_id`/`report_id`/`recipient_id`）关联校验，不能只按 id 取。
+- 按 id 取单条资源时，先取出它的 `org_id`，再用 `assertOrgAccess` 判定，不通过就 `return notFound()`。
+
+### 14.3 角色语义在业务里的映射
+
+| 改造前                               | 改造后                                                            |
+| ------------------------------------ | ----------------------------------------------------------------- |
+| `user.role === "owner"`              | `user.role === "admin"`（全局）                                   |
+| owner 能看全部任务                   | admin 看全部组织；manager 看**本组织**全部；member 只看自己负责的 |
+| owner 才能改任务元信息 / 审批 / 退回 | admin 或**本组织 manager**                                        |
+| 助理看自己的、查看者看助理负责的任务 | member 只看 `owner_id = 自己` 的任务                              |
+| 私密任务只有 owner 可见              | admin 全可见；manager 只见**自己创建的**私密任务；member 不可见   |
+
+### 14.4 不要改动的东西
+
+- 响应信封 `{ok:true,data}` 与 `{ok:false,error:{code,message}}`（`app/lib/http.server.ts`）；
+- CSP / `content-type` 等安全头；
+- 已有端点的**路径**与**成功状态码**，除非本文 §7 明确要求改；
+- 任何 `.js` 文件（仓库只允许 TypeScript）。
+
+### 14.5 并行改动的文件归属
+
+同一时间只允许一个工作流改同一个文件。公共文件（`app/routes.ts`、`app/root.tsx`、
+`app/lib/{db,session,organization}.server.ts`、`tools/contract/runner.ts`）由主线统一维护，工作流不要改。

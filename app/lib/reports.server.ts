@@ -1,17 +1,445 @@
 import { randomUUID } from "node:crypto";
 import { promises as fsp } from "node:fs";
 import path from "node:path";
-import type { DatabaseSync } from "node:sqlite";
-import { ReportRepository, type ReportDocType, type ReportRecord } from "../../server/src/db/repositories/report-repository";
+import type { Report, ReportDocType, ReportFile, ReportStatus } from "../../shared/types/domain";
 import { appConfig } from "./context.server";
-import { db, now, one, rows, run, type User } from "./db.server";
+import { date, db, now, one, rows, run, USER_SELECT, toUser, type User } from "./db.server";
 import { fail } from "./http.server";
-import { requireAuth } from "./session.server";
+import { assertOrgAccess, assertOrgManage, orgScope } from "./session.server";
 
 /**
- * 周报域共享逻辑：逐条对应旧 server/src/routes/report.ts 的实现，
- * 包括状态码、错误码与中文文案。契约快照会逐字校验这些字符串，不要"顺手优化"。
+ * 周报域：列表 / 详情 / 建单 / 重传 / 审批 / 退回与文件下载的**唯一实现**，
+ * API 资源路由与页面 loader 共用同一份（与任务域 app/lib/task-service.server.ts 同一结构）。
+ * 状态码、错误码与中文文案沿用旧 server/src/routes/report.ts 的实现，不要"顺手优化"。
+ *
+ * 组织隔离（docs/harness/ACCOUNTS_AND_ORGS.md §4、§14.2）全部收敛在本文件：
+ * - 读列表：`reportVisibilityClauses(user)` 产出组织条件，绝不散落在各个查询里；
+ * - 读单条：`findReportWithOrg` 先取出周报与它的 `org_id`，再用 `assertOrgAccess` 判定，
+ *   「不存在 / 跨组织 / 看不到」返回同样的 404（§4 不变式 1，不泄露资源是否存在）；
+ * - 写入：`INSERT` 显式写 `weekly_reports.org_id`（迁移 009 起是 NOT NULL）；
+ * - `report_files` 没有 `org_id`，一律经 `report_id` 先过周报的组织边界（§14.2 的间接表规则）。
  */
+
+/* ------------------------------------------------------------------ 结果与载荷 */
+
+/** 与任务域 task-service.server.ts 的 ServiceResult 同形：路由用 ok/fail 直接落响应信封 */
+export type ServiceResult<T> = { ok: true; data: T; status: number } | { ok: false; code: string; message: string; status: number };
+
+const done = <T>(data: T, status = 200): ServiceResult<T> => ({ ok: true, data, status });
+const failed = (code: string, message: string, status: number): ServiceResult<never> => ({ ok: false, code, message, status });
+
+/** 与 session.notFound() 同一信封：跨组织与「不存在」必须给出完全一样的响应 */
+const notFoundResult = (): ServiceResult<never> => failed("NOT_FOUND", "未找到该资源", 404);
+
+/** 周报载荷：与旧 shared/types/domain.ts 的 Report 同形（`org_id` 不进载荷） */
+export type ReportView = Report;
+
+/** 周报 + 它所属的组织（组织只用于隔离判定，不对外暴露） */
+export type ScopedReport = { report: ReportView; orgId: string };
+
+/** 旧 report-repository 的列清单，仅补 `r.org_id AS orgId`（排在最后，不进载荷） */
+const SELECT_REPORT = `SELECT r.id,r.owner_id AS ownerId,u.name AS ownerName,r.period_start AS periodStart,r.period_end AS periodEnd,r.doc_type AS docType,r.note,r.status,r.current_version AS currentVersion,r.uploaded_by AS uploadedBy,r.review_note AS reviewNote,r.created_at AS createdAt,r.updated_at AS updatedAt,r.submitted_at AS submittedAt,r.reviewed_at AS reviewedAt,r.returned_at AS returnedAt,r.org_id AS orgId FROM weekly_reports r LEFT JOIN users u ON u.id=r.owner_id`;
+
+const SELECT_REPORT_FILE = `SELECT id,report_id AS reportId,version,original_name AS originalName,stored_name AS storedName,size_bytes AS sizeBytes,ext,mime_type AS mimeType,uploaded_by AS uploadedBy,uploaded_at AS uploadedAt FROM report_files`;
+
+/** 旧实现的字段别名与 undefined/null 行为逐字保留 */
+function toReportView(row: Record<string, unknown>): ReportView {
+  return {
+    id: String(row.id),
+    ownerId: String(row.ownerId),
+    ownerName: row.ownerName == null ? null : String(row.ownerName),
+    periodStart: String(row.periodStart),
+    periodEnd: String(row.periodEnd),
+    docType: String(row.docType) as ReportDocType,
+    note: String(row.note ?? ""),
+    status: String(row.status) as ReportStatus,
+    currentVersion: Number(row.currentVersion),
+    uploadedBy: String(row.uploadedBy),
+    reviewNote: row.reviewNote == null ? null : String(row.reviewNote),
+    createdAt: String(row.createdAt),
+    updatedAt: String(row.updatedAt),
+    submittedAt: String(row.submittedAt),
+    reviewedAt: row.reviewedAt == null ? null : String(row.reviewedAt),
+    returnedAt: row.returnedAt == null ? null : String(row.returnedAt),
+    files: listReportFiles(String(row.id)),
+  };
+}
+
+/** 某份周报的全部文件版本（按版本号升序，与旧实现一致） */
+function listReportFiles(reportId: string): ReportFile[] {
+  return rows<ReportFile>(db(), `${SELECT_REPORT_FILE} WHERE report_id=? ORDER BY version`, reportId);
+}
+
+function findReportFile(reportId: string, version: number): ReportFile | null {
+  return one<ReportFile>(db(), `${SELECT_REPORT_FILE} WHERE report_id=? AND version=?`, reportId, version);
+}
+
+function addReportFile(input: ReportFile): void {
+  run(
+    db(),
+    "INSERT INTO report_files(id,report_id,version,original_name,stored_name,size_bytes,ext,mime_type,uploaded_by,uploaded_at) VALUES(?,?,?,?,?,?,?,?,?,?)",
+    input.id,
+    input.reportId,
+    input.version,
+    input.originalName,
+    input.storedName,
+    input.sizeBytes,
+    input.ext,
+    input.mimeType,
+    input.uploadedBy,
+    input.uploadedAt,
+  );
+}
+
+/* ------------------------------------------------------------------ 读：组织范围 */
+
+/**
+ * 可见性 SQL 条件（§14.3）。调用方把 clauses 用 AND 拼进自己的 WHERE，参数按顺序拼进 params，
+ * 这样"漏加组织过滤"只可能发生在这一处，而不是散落在每个查询里。
+ * - admin：全部组织（D-28 的合并视图）；
+ * - manager：本组织全部；
+ * - member：本组织内**只有自己提交的**（原实现是「助理只看自己的」）；
+ * - 未加入组织的账号（orgId 为 NULL，D-24）：不落在任何组织范围内，一条都看不到。
+ */
+export function reportVisibilityClauses(user: User): { clauses: string[]; params: string[] } {
+  const clauses: string[] = [];
+  const params: string[] = [];
+  const scope = orgScope(user);
+  if (scope) {
+    clauses.push("r.org_id=?");
+    params.push(scope);
+  } else if (user.role !== "admin") {
+    clauses.push("1=0");
+  }
+  if (user.role === "member") {
+    clauses.push("r.owner_id=?");
+    params.push(user.id);
+  }
+  return { clauses, params };
+}
+
+/** 周报列表：页面 loader 与 GET /api/reports 共用 */
+export function listReportsFor(user: User): ReportView[] {
+  const { clauses, params } = reportVisibilityClauses(user);
+  const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+  return rows(db(), `${SELECT_REPORT} ${where} ORDER BY r.updated_at DESC`, ...params).map(toReportView);
+}
+
+/** 取周报及其所属组织：跨组织判定必须先拿到 `org_id`（§14.2） */
+export function findReportWithOrg(id: string): ScopedReport | null {
+  const row = one<Record<string, unknown>>(db(), `${SELECT_REPORT} WHERE r.id=?`, id);
+  if (!row) return null;
+  return { report: toReportView(row), orgId: String(row.orgId) };
+}
+
+/**
+ * 单条周报对某人是否可见（组织边界由调用方先用 assertOrgAccess 判定，§14.2）：
+ * - admin 全可见；manager 本组织全部；member 只看自己提交的。
+ */
+export function canViewReport(report: ReportView, user: User): boolean {
+  if (user.role === "admin" || user.role === "manager") return true;
+  return report.ownerId === user.id;
+}
+
+/**
+ * 存在性 + 组织边界 + 可见性：不存在、跨组织、未加入组织、以及「本组织里看不到的周报」
+ * 都返回 null，调用方一律回 404（§14.2 / §4 不变式 1）。
+ */
+function locateReport(user: User, id: string): ScopedReport | null {
+  const found = findReportWithOrg(id);
+  if (!found) return null;
+  if (assertOrgAccess(user, found.orgId)) return null;
+  if (!canViewReport(found.report, user)) return null;
+  return found;
+}
+
+/** GET /api/reports/:id：跨组织与本人看不到的周报一律 404 */
+export function getReport(user: User, id: string): ServiceResult<ReportView> {
+  const found = locateReport(user, id);
+  return found ? done(found.report) : notFoundResult();
+}
+
+/**
+ * 下载前的定位（GET /api/reports/:id/file/:version）：先过周报的组织边界，再取指定版本。
+ * `report_files` 没有 `org_id`，只能经 `report_id` 关联校验，不能只按 id 取。
+ */
+export function getReportFile(user: User, id: string, version: number): ServiceResult<ReportFile> {
+  const found = locateReport(user, id);
+  if (!found) return notFoundResult();
+  const file = Number.isInteger(version) && version > 0 ? findReportFile(found.report.id, version) : null;
+  if (!file) return failed("NOT_FOUND", "文件版本不存在", 404);
+  return done(file);
+}
+
+/* ------------------------------------------------------------------ 写：归属人 */
+
+export type OwnerCheck = { valid: true; id: string; name: string; orgId: string } | { valid: false; message: string };
+
+/**
+ * 校验周报归属人（与任务域 `validateOwner` 同一口径）：
+ * 账号必须启用、必须已加入组织（周报的 `org_id` 由归属人决定），
+ * 且非管理员指派时必须是**本组织**的人。member / manager / admin 都可以是归属人。
+ * `options.orgId` 省略时不校验组织（管理员跨组织指派）。
+ */
+export function validateReportOwner(id: string | null, options: { orgId?: string | null } = {}): OwnerCheck {
+  if (!id) return { valid: false, message: "请选择归属人" };
+  const row = one<Record<string, unknown>>(db(), `${USER_SELECT} WHERE u.id=?`, id);
+  if (!row) return { valid: false, message: "归属人不存在" };
+  const owner = toUser(row);
+  if (!owner.isActive) return { valid: false, message: "归属人已停用" };
+  if (!owner.orgId) return { valid: false, message: "归属人必须属于某个组织" };
+  if (options.orgId && owner.orgId !== options.orgId) return { valid: false, message: "归属人必须属于本组织" };
+  return { valid: true, id: owner.id, name: owner.name, orgId: owner.orgId };
+}
+
+/** 上传表单「归属人」下拉的数据源：范围内的启用成员（admin 为全部组织，manager 为本组织） */
+export function listReportOwnersFor(user: User): Array<{ id: string; name: string; orgName: string | null }> {
+  const scope = orgScope(user);
+  if (!scope && user.role !== "admin") return [];
+  return rows<{ id: string; name: string; orgName: string | null }>(
+    db(),
+    `SELECT u.id AS id,u.name AS name,o.name AS orgName
+       FROM users u LEFT JOIN organizations o ON o.id = u.org_id
+      WHERE u.is_active=1 AND u.org_id IS NOT NULL ${scope ? "AND u.org_id=?" : ""}
+      ORDER BY o.name, u.name`,
+    ...(scope ? [scope] : []),
+  );
+}
+
+/* ------------------------------------------------------------------ 写：建单 / 重传 / 审批 / 退回 */
+
+/**
+ * POST /api/reports：字段校验 → 归属人（决定 `org_id`）→ 落盘 → 写库 → 通知本组织管理者。
+ * 组织归属遵循 §14.2：普通用户 / 组织管理者写自己的组织，管理员是全局角色（不隶属组织），
+ * 由归属人所属组织决定。
+ */
+export async function createReport(user: User, upload: Upload): Promise<ServiceResult<ReportView>> {
+  const fields = upload.fields;
+  const periodStart = date(fields.periodStart);
+  const periodEnd = date(fields.periodEnd);
+  if (!periodStart || !periodEnd) return failed("VALIDATION_ERROR", "请填写周期开始和结束日期", 400);
+  if (periodStart > periodEnd) return failed("VALIDATION_ERROR", "周期开始日期不能晚于结束日期", 400);
+  const docType = normalizeDocType(fields.docType);
+  if (!docType) return failed("VALIDATION_ERROR", "请选择文档类型", 400);
+  const ext = extensionOf(upload.file.filename);
+  if (!isAllowedExt(ext)) return failed("VALIDATION_ERROR", "仅支持 .xlsx / .xls / .docx / .doc 文件", 400);
+
+  // 未加入组织的账号（D-24）没有可写入的组织；组织管理者与普通用户只能写自己的组织。
+  // 管理员是全局角色、不隶属组织，周报的组织由归属人所属组织决定（§14.2）。
+  const orgId = user.role === "admin" ? null : user.orgId;
+  if (user.role !== "admin" && !orgId) return failed("FORBIDDEN", "你还没有加入组织，无法提交周报", 403);
+  // 普通用户只能提交自己的；管理员与组织管理者可以代传本组织的成员（§14.3）
+  const owner = validateReportOwner(user.role === "member" ? user.id : resolveOwnerId(fields.ownerId), { orgId });
+  if (!owner.valid) return failed("VALIDATION_ERROR", owner.message, 400);
+
+  const id = randomUUID();
+  const stamp = now();
+  const note = String(fields.note ?? "")
+    .trim()
+    .slice(0, 2000);
+  const file = await persistFile(appConfig().uploadsDir, id, 1, upload, ext);
+  run(
+    db(),
+    `INSERT INTO weekly_reports(id,org_id,owner_id,period_start,period_end,doc_type,note,status,current_version,
+                                uploaded_by,review_note,created_at,updated_at,submitted_at,reviewed_at,returned_at)
+     VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    id,
+    owner.orgId,
+    owner.id,
+    periodStart,
+    periodEnd,
+    docType,
+    note,
+    "submitted",
+    1,
+    user.id,
+    null,
+    stamp,
+    stamp,
+    stamp,
+    null,
+    null,
+  );
+  addReportFile({
+    id: randomUUID(),
+    reportId: id,
+    version: 1,
+    originalName: sanitizeName(upload.file.filename),
+    storedName: file.storedName,
+    sizeBytes: file.size,
+    ext,
+    mimeType: upload.file.mimetype || null,
+    uploadedBy: user.id,
+    uploadedAt: stamp,
+  });
+  if (user.role === "member") {
+    notifyOrgManagers(owner.orgId, user.id, id, "report_submitted", "收到新周报", `${user.name} 提交了 ${periodStart}~${periodEnd} 的周报`);
+  }
+  const created = findReportWithOrg(id);
+  if (!created) return failed("INTERNAL", "创建周报失败", 500);
+  return done(created.report, 201);
+}
+
+/**
+ * POST /api/reports/:id/approve —— 管理员或**本组织**组织管理者，仅"已提交"状态。
+ * 谁有权审批由路由的 requireManager 把门，组织边界与状态在这里判定。
+ */
+export function approveReport(user: User, id: string, body: Record<string, unknown>): ServiceResult<ReportView> {
+  const found = locateReport(user, id);
+  if (!found) return notFoundResult();
+  const report = found.report;
+  if (report.status !== "submitted") return failed("INVALID_STATE", "只有已提交的周报才能通过", 400);
+
+  const note = String(body.note ?? "")
+    .trim()
+    .slice(0, 2000);
+  const stamp = now();
+  run(
+    db(),
+    "UPDATE weekly_reports SET status='approved',review_note=?,reviewed_at=?,updated_at=? WHERE id=?",
+    note || null,
+    stamp,
+    stamp,
+    report.id,
+  );
+  notifyReport(
+    report.ownerId,
+    user.id,
+    report.id,
+    "report_approved",
+    "周报已通过",
+    `你的周报（${report.periodStart}~${report.periodEnd}）已通过`,
+  );
+  const updated = findReportWithOrg(report.id);
+  if (!updated) return failed("INTERNAL", "周报更新失败", 500);
+  return done(updated.report);
+}
+
+/** POST /api/reports/:id/return —— 管理员或**本组织**组织管理者，仅"已提交"状态，必须填写原因 */
+export function returnReport(user: User, id: string, body: Record<string, unknown>): ServiceResult<ReportView> {
+  const found = locateReport(user, id);
+  if (!found) return notFoundResult();
+  const report = found.report;
+  if (report.status !== "submitted") return failed("INVALID_STATE", "只有已提交的周报才能退回", 400);
+
+  const note = String(body.note ?? "").trim();
+  if (!note) return failed("VALIDATION_ERROR", "退回时请填写原因", 400);
+
+  const stamp = now();
+  run(
+    db(),
+    "UPDATE weekly_reports SET status='returned',review_note=?,returned_at=?,updated_at=? WHERE id=?",
+    note.slice(0, 2000),
+    stamp,
+    stamp,
+    report.id,
+  );
+  notifyReport(
+    report.ownerId,
+    user.id,
+    report.id,
+    "report_returned",
+    "周报已退回",
+    `你的周报（${report.periodStart}~${report.periodEnd}）已退回：${note.slice(0, 2000)}`,
+  );
+  const updated = findReportWithOrg(report.id);
+  if (!updated) return failed("INTERNAL", "周报更新失败", 500);
+  return done(updated.report);
+}
+
+/**
+ * POST /api/reports/:id/file 的前置校验：可见性 → 权限 → 状态。
+ * 刻意与落盘分开：旧实现"状态不符时不解析 multipart"，所以这三步必须在读上传体之前跑完。
+ * 上传新版本的权限是「管理员 / 本组织管理者 / 这份周报的归属人本人」（§4 权限矩阵）。
+ */
+export function reuploadTarget(user: User, id: string): ServiceResult<ScopedReport> {
+  const found = locateReport(user, id);
+  if (!found) return notFoundResult();
+  const manages = assertOrgManage(user, found.orgId) === null;
+  if (!manages && found.report.ownerId !== user.id) return notFoundResult();
+  if (found.report.status !== "returned") return failed("INVALID_STATE", "只有被退回的周报才能重新上传", 400);
+  return done(found);
+}
+
+/**
+ * POST /api/reports/:id/file 的落库部分：落盘 → 记新版本（经 `report_id` 关联）→ 通知本组织管理者。
+ * `target` 由 `reuploadTarget` 产出，已经过组织边界、权限与状态校验。
+ */
+export async function reuploadReport(user: User, target: ScopedReport, upload: Upload): Promise<ServiceResult<ReportView>> {
+  const report = target.report;
+  const ext = extensionOf(upload.file.filename);
+  if (!isAllowedExt(ext)) return failed("VALIDATION_ERROR", "仅支持 .xlsx / .xls / .docx / .doc 文件", 400);
+
+  const version = report.currentVersion + 1;
+  const stamp = now();
+  const file = await persistFile(appConfig().uploadsDir, report.id, version, upload, ext);
+  run(
+    db(),
+    `UPDATE weekly_reports SET status='submitted',current_version=?,review_note=NULL,submitted_at=?,returned_at=NULL,reviewed_at=NULL,updated_at=?
+      WHERE id=?`,
+    version,
+    stamp,
+    stamp,
+    report.id,
+  );
+  addReportFile({
+    id: randomUUID(),
+    reportId: report.id,
+    version,
+    originalName: sanitizeName(upload.file.filename),
+    storedName: file.storedName,
+    sizeBytes: file.size,
+    ext,
+    mimeType: upload.file.mimetype || null,
+    uploadedBy: user.id,
+    uploadedAt: stamp,
+  });
+  if (user.role === "member") {
+    notifyOrgManagers(
+      target.orgId,
+      user.id,
+      report.id,
+      "report_submitted",
+      "周报已重新提交",
+      `${user.name} 重新提交了 ${report.periodStart}~${report.periodEnd} 的周报`,
+    );
+  }
+  const updated = findReportWithOrg(report.id);
+  if (!updated) return failed("INTERNAL", "周报更新失败", 500);
+  return done(updated.report, 201);
+}
+
+/* ------------------------------------------------------------------ 通知 */
+
+function notifyReport(recipientId: string, actorId: string, reportId: string, type: string, title: string, message: string): void {
+  if (!recipientId || recipientId === actorId) return;
+  run(
+    db(),
+    "INSERT INTO notifications(id,recipient_id,actor_id,task_id,report_id,event_type,title,message,is_read,created_at,read_at) VALUES(?,?,?,NULL,?,?,?,?,0,?,NULL)",
+    randomUUID(),
+    recipientId,
+    actorId,
+    reportId,
+    type,
+    title,
+    message,
+    now(),
+  );
+}
+
+/**
+ * 提交 / 重交后通知**本组织的组织管理者**（审批权在他们手里）。
+ * 旧实现把收件人写死成 "owner" 这个并不存在的用户 id，等于没人收得到；
+ * 角色改造后按「manager 审批本组织周报」的语义改为按周报组织查询启用中的 manager。
+ */
+function notifyOrgManagers(orgId: string, actorId: string, reportId: string, type: string, title: string, message: string): void {
+  const managers = rows<{ id: string }>(db(), "SELECT id FROM users WHERE org_id=? AND role='manager' AND is_active=1", orgId);
+  for (const manager of managers) {
+    notifyReport(String(manager.id), actorId, reportId, type, title, message);
+  }
+}
+
+/* ------------------------------------------------------------------ 上传与文件 */
 
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
 const ALLOWED_EXTS = new Set([".xlsx", ".xls", ".docx", ".doc"]);
@@ -31,29 +459,6 @@ export class UploadError extends Error {
   public toResponse(): Response {
     return fail(this.code, this.message, this.status);
   }
-}
-
-export function reportRepository(): ReportRepository {
-  return new ReportRepository(db());
-}
-
-export function toView(report: ReportRecord, repo: ReportRepository): Record<string, unknown> {
-  return { ...report, files: repo.listFiles(report.id) };
-}
-
-/**
- * 周报列表：主人看全部，助理只看自己的。
- * 页面 loader 与 GET /api/reports 共用这一份实现（调用方负责各自的 viewer 处理）。
- */
-export function listReportsFor(user: User): Record<string, unknown>[] {
-  const repo = reportRepository();
-  const reports = user.role === "owner" ? repo.findAll() : repo.findByOwner(user.id);
-  return reports.map((report) => toView(report, repo));
-}
-
-/** 上传表单里"归属人"下拉的数据源：启用中的助理（与旧 UI 过滤 getUsers() 的结果一致） */
-export function listActiveAssistants(): Array<{ id: string; name: string }> {
-  return rows<{ id: string; name: string }>(db(), "SELECT id,name FROM users WHERE role='assistant' AND is_active=1 ORDER BY name");
 }
 
 /**
@@ -90,7 +495,7 @@ export function handleUploadError(error: unknown): Response {
   return fail("BAD_REQUEST", "上传内容无法解析", 400);
 }
 
-export async function persistFile(
+async function persistFile(
   uploadsDir: string,
   reportId: string,
   version: number,
@@ -108,41 +513,29 @@ export async function persistFile(
   return { storedName, size: upload.file.buffer.length };
 }
 
-export function validateAssistant(
-  database: DatabaseSync,
-  id: string | null,
-): { valid: true; id: string; name: string } | { valid: false; message: string } {
-  if (!id) return { valid: false, message: "请选择归属人" };
-  const row = one(database, "SELECT id,name,role,is_active AS isActive FROM users WHERE id=?", id);
-  if (!row) return { valid: false, message: "归属人不存在" };
-  if (Number(row.isActive) !== 1) return { valid: false, message: "归属人已停用" };
-  if (row.role !== "assistant") return { valid: false, message: "周报只能归属助理" };
-  return { valid: true, id: String(row.id), name: String(row.name) };
-}
-
-export function resolveOwnerId(value: string | undefined): string | null {
-  const trimmed = (value ?? "").trim();
-  return trimmed || null;
-}
-
-export function normalizeDocType(value: string | undefined): ReportDocType | null {
+function normalizeDocType(value: string | undefined): ReportDocType | null {
   return value === "weekly_report" || value === "summary" || value === "other" ? value : null;
 }
 
-export function isAllowedExt(ext: string): boolean {
+function isAllowedExt(ext: string): boolean {
   return ALLOWED_EXTS.has(ext);
 }
 
-export function extensionOf(filename: string): string {
+function extensionOf(filename: string): string {
   const base = path.basename(filename ?? "");
   const index = base.lastIndexOf(".");
   return index > 0 ? base.slice(index).toLowerCase() : "";
 }
 
+function resolveOwnerId(value: string | undefined): string | null {
+  const trimmed = (value ?? "").trim();
+  return trimmed || null;
+}
+
 // 文件名来自外部上传，必须剔除控制字符与路径分隔符，因此这里刻意匹配控制字符
 // oxlint-disable-next-line no-control-regex
 const CONTROL_CHARS = /[\u0000-\u001f/\\]/gu;
-export function sanitizeName(filename: string): string {
+function sanitizeName(filename: string): string {
   return (
     path
       .basename(filename ?? "")
@@ -163,40 +556,4 @@ export function mimeFor(ext: string): string {
     ".doc": "application/msword",
   };
   return map[ext] ?? "application/octet-stream";
-}
-
-export function notifyReport(
-  database: DatabaseSync,
-  recipientId: string,
-  actorId: string,
-  reportId: string,
-  type: string,
-  title: string,
-  message: string,
-): void {
-  if (!recipientId || recipientId === actorId) return;
-  run(
-    database,
-    "INSERT INTO notifications(id,recipient_id,actor_id,task_id,report_id,event_type,title,message,is_read,created_at,read_at) VALUES(?,?,?,NULL,?,?,?,?,0,?,NULL)",
-    randomUUID(),
-    recipientId,
-    actorId,
-    reportId,
-    type,
-    title,
-    message,
-    now(),
-  );
-}
-
-/**
- * 注意：旧 report.ts 的 owner 文案是"只有主人可以执行此操作"，
- * 与 app/lib/session.server.ts 的 requireOwner（"只有主人可以访问此功能"）不同，
- * 因此这里不能复用后者，否则周报域用例会因文案不一致而失败。
- */
-export function requireOwnerForReports(request: Request): { ok: true; user: User } | { ok: false; response: Response } {
-  const auth = requireAuth(request, appConfig().sessionCookieName);
-  if (!auth.ok) return auth;
-  if (auth.user.role !== "owner") return { ok: false, response: fail("FORBIDDEN", "只有主人可以执行此操作", 403) };
-  return { ok: true, user: auth.user };
 }

@@ -4,7 +4,14 @@ import { CASES } from "./cases";
 import { createFixture, removeFixture } from "./fixture";
 import { findFreePort, runCases, startServer, type GoldenFile } from "./runner";
 
-const DEFAULT_ENTRY = "server/src/index.ts";
+/**
+ * 录制契约 baseline（golden）。
+ *
+ * Phase 4 之后只有一套实现（React Router 8 单进程），默认用 `npm run serve` 拉起
+ * ——注意 `build/server/index.js` 只导出请求处理器、不监听端口，必须由 react-router-serve 起。
+ * `--entry` 只在需要跑别的入口时使用（例如复现某个历史实现）。
+ */
+const DEFAULT_SERVE_NPM = "serve";
 const DEFAULT_OUT = "test/contract/golden/contract.golden.json";
 
 function argValue(name: string, fallback: string): string {
@@ -13,15 +20,21 @@ function argValue(name: string, fallback: string): string {
 }
 
 async function main(): Promise<void> {
-  const entry = argValue("--entry", DEFAULT_ENTRY);
+  const entry = argValue("--entry", "");
+  const serveNpm = argValue("--serve-npm", entry ? "" : DEFAULT_SERVE_NPM);
   const outFile = path.resolve(process.cwd(), argValue("--out", DEFAULT_OUT));
   const fixture = createFixture();
   const port = await findFreePort();
-  const server = await startServer({ entry, fixture, port });
+  const server = await startServer({ entry, serveNpm, fixture, port });
   try {
     const responses = await runCases({ baseUrl: `http://127.0.0.1:${port}`, fixture, port, cases: CASES });
     const golden: GoldenFile = {
-      meta: { generatedAt: new Date().toISOString(), entry, node: process.versions.node, caseCount: responses.length },
+      meta: {
+        generatedAt: new Date().toISOString(),
+        entry: entry || `npm run ${serveNpm}`,
+        node: process.versions.node,
+        caseCount: responses.length,
+      },
       responses,
     };
     fs.mkdirSync(path.dirname(outFile), { recursive: true });
