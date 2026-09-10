@@ -128,9 +128,13 @@ npm run contract:compare -- --serve-npm rr:start --only "auth.,access-info."
 
 **工具侧已修的坑**：`build/server/index.js` 只导出请求处理器、单独运行会立即退出（exit 0），必须由 `react-router-serve` 监听端口 → 新增 `--serve-npm <脚本名>`；Windows 下 spawn `.cmd` 需要 `shell:true`，于是 `stop()` 改用 `taskkill /T` 杀整棵进程树，否则孙进程会继续占用夹具 SQLite 导致清理失败。
 
-### Phase 3 · 前端迁移（进行中）
+### Phase 3 · 前端迁移（已完成 2026-09-10）
 
-8 个页面从 `web/src/pages`（antd v6 版）搬进 `app/routes/`，用 loader/action 取代 `apiClient`，并重写测试。
+8 个页面已从 `web/src/pages`（antd v6 版）搬进 `app/routes/`，用 loader/action + 共享服务取代 `apiClient`，测试体系同步重写。
+
+**完成证据**：`smoke:ui --require-migrated` **8/8 页面**「已完成迁移」且**逐页渲染出夹具数据**（/tasks 逾期任务、/todos 跟进报价、/notes 会议要点、/inbox 粘贴聊天记录、/reports 第八周、/collaboration 长期令牌、/files 报价单模板、/review 任务明细），共 38 项 0 失败；`npm test`（db 7 + 契约 139/139 + 冒烟 38）全过；oxlint 0/0、typecheck（5 个 tsconfig）0 错误、format:check 无漂移；契约对**新旧两套实现**各 139/139。
+
+**页面实测补充**（批次 C 自带，契约覆盖不到 UI）：周报页角色化渲染 27 项、写链路 8/8（建单 → 退回 → 重新上传版本 +1 → 通过 → 下载正文逐字节一致）。
 
 **参考实现已完成（2026-09-10）**：`app/root.tsx`（antd 外壳 + 导航 + 通知 + 退出）、`app/routes/access.tsx`（登录）、`app/routes/logout.ts`、`app/routes/dashboard.tsx`（概览）。验收工具 `npm run smoke:ui` **14/14 通过**：SSR 渲染登录页、登录下发会话、会话对 API 与页面同时生效、外壳含导航与数据、页面 action 新增待办、退出后会话失效。
 

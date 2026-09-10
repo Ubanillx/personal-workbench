@@ -32,8 +32,8 @@
 | MIG-01  | Phase 0 契约快照                  | 139 条用例录制完成；对当前实现回放 100% 一致；篡改 golden 能被抓出                                                                                             | 已完成（2026-09-10） |
 | MIG-02  | Phase 1 数据/安全层搬迁           | 新工程用临时库启动，`/api/health`、`/api/ping` 通过 golden 比对（`/api/auth/*` 归入 Phase 2）                                                                  | 已完成（2026-09-10） |
 | MIG-03  | Phase 2 迁移 48 端点              | 新旧实现各自 139/139 契约一致；API 层不再依赖 Fastify（物理归档归 Phase 4）                                                                                    | 已完成（2026-09-10） |
-| MIG-04  | Phase 3 前端迁移与测试重写        | 8 个页面功能等价（`smoke:ui --require-migrated` 全过且渲染出夹具数据）；测试体系已重写（`test:db` 7 + `test:api` 139 + `test:ui`，`DEBT-14` 已修复）           | 进行中（1/8 页面）   |
-| MIG-05  | Phase 4 切换与归档                | `npm start` 单进程可用；`data/workbench.sqlite` SHA-256 不变；旧实现归档可回退                                                                                 | 待办                 |
+| MIG-04  | Phase 3 前端迁移与测试重写        | 8 个页面等价（`smoke:ui --require-migrated` 8/8 且逐页渲染出数据）；测试体系重写（db 7 + 契约 139 + 冒烟 38，`DEBT-14` 已修复）                                | 已完成（2026-09-10） |
+| MIG-05  | Phase 4 切换与归档                | `npm start` 单进程可用；`data/workbench.sqlite` SHA-256 不变；旧实现归档可回退                                                                                 | 下一步               |
 | TODO-11 | 收敛前端 effect 依赖（`DEBT-12`） | 先补前端测试，再开启 `react-hooks/exhaustive-deps` 与 `react/set-state-in-effect` 并修完 9 处命中；`npm run lint` 仍为 0/0                                     | 待办                 |
 | TODO-12 | 补前端运行时冒烟测试（`DEBT-16`） | 引入 jsdom 或 Playwright，至少覆盖：应用能挂载出内容、登录页可提交、任务列表能渲染；并确认 `Select value=""`（「未分配」）的显示                               | 待办                 |
 | TODO-13 | 补齐 multipart 边界的契约用例     | 为「多文件 / 字段 >10 / 分片 >20 / 无文件」补 golden 用例；确认新实现是否要对齐旧 Fastify 的 `files:1,fields:10,parts:20` 限制（当前未覆盖，两套实现可能不同） | 待办                 |
