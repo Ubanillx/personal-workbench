@@ -4,7 +4,7 @@ import { findFreePort, startServer } from "./runner";
 /**
  * SSR 冒烟测试：不开浏览器也能验证"登录 → 外壳 → 各页面数据"整条链路。
  *
- *   npm run smoke:ui                                   # 默认自己拉起 rr:start + 注入夹具库
+ *   npm run smoke:ui                                   # 默认自己拉起 npm run serve + 注入夹具库
  *   npm run smoke:ui -- --base-url http://127.0.0.1:18995
  *   npm run smoke:ui -- --paths /tasks,/todos --require-migrated
  *
@@ -43,7 +43,7 @@ const DEFAULT_PAGES = "/tasks,/todos,/notes,/inbox,/reports,/collaboration,/file
 
 async function main(): Promise<void> {
   const baseUrlArg = argValue("--base-url", "");
-  const serveNpm = argValue("--serve-npm", baseUrlArg ? "" : "rr:start");
+  const serveNpm = argValue("--serve-npm", baseUrlArg ? "" : "serve");
   const pagePaths = argValue("--paths", DEFAULT_PAGES)
     .split(",")
     .map((item) => item.trim())

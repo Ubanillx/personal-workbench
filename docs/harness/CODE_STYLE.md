@@ -5,17 +5,21 @@
 | 项       | 规定                                                                                                                         |
 | -------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | 源码后缀 | 只允许 `.ts`、`.tsx`、`.mts`；**禁止新增 `.js` / `.jsx` / `.cjs`**                                                           |
-| 例外     | 构建产物（`dist-server/`、`web/dist/`）与归档（`_archive/`）不参与检查，`node_modules` 同理                                  |
-| 强制手段 | `server/tsconfig.json` 与 `web/tsconfig.json` 均 `allowJs: false`；lint 范围只覆盖 `server/`、`web/src/`、`shared/`、`test/` |
+| 例外     | 构建产物（`build/`、`.react-router/`）与归档（`_archive/`）不参与检查，`node_modules` 同理                                   |
+| 强制手段 | 四个 tsconfig 均 `allowJs` 未开启；lint 覆盖 `app/`、`server/`、`tools/`、`test/`、`shared/`（`npm run lint` 实测 106 文件） |
 | 现状     | 2026-09-10 核查：源码中已无任何 `.js` 文件（`_archive/` 内为已归档的旧实现）                                                 |
 
 ## 2. 类型严格度
 
-两个 tsconfig 都开启了 `strict`、`noImplicitAny`、`noUncheckedIndexedAccess`、`exactOptionalPropertyTypes`。此外：
+四个 tsconfig 都开启了 `strict`、`noImplicitAny`、`noUncheckedIndexedAccess`、`exactOptionalPropertyTypes`。此外：
 
-- `server/tsconfig.json`：`target: ES2022` + `lib: ["ES2023"]`（需要 `Array#toSorted`）。
-- `web/tsconfig.json`：`allowJs: false`、`isolatedModules: true`、`jsx: react-jsx`。
-- 类型检查由 `npm run typecheck` 承担（本机 TypeScript 7.0.2 原生编译器，见第 6 节）。
+- `server/tsconfig.json`：`target: ES2022` + `lib: ["ES2023"]`（需要 `Array#toSorted`）、`noEmit: true`、`module: NodeNext`。
+- `tsconfig.json`（根，覆盖 `app/`）：`jsx: react-jsx`、bundler 解析，与 Vite/RR8 构建对齐。
+- `tools/tsconfig.json`、`test/tsconfig.test.json`：NodeNext + `types: ["node"]`。
+- 类型检查由 `npm run typecheck` 承担（四个工程串行，本机 TypeScript 7.0.2 原生编译器，见第 6 节）。
+
+> `server/` 是 `module: NodeNext`：**相对导入不要写 `.js` 扩展名**，否则与现行配置不符；反过来，若将来给 `package.json`
+> 加 `"type": "module"`，13 处导入会立刻报 `TS2835` 要求补 `.js`（这也是 D-16 不加该字段的原因）。
 
 **不要**为了过编译而放宽以上开关；确有需要时先改本节并说明原因。
 
@@ -112,7 +116,7 @@ npm run build         # 前端 + 后端产物
 
 ## 10. UI 组件规范（antd v6）
 
-前端统一使用 **antd v6**（`antd@6.6.3` + `@ant-design/icons@6.3.4`），品牌色沿用旧版手写样式的 `#185fa5`，在 `web/src/main.tsx` 的 `ConfigProvider` 里集中配置。
+UI 统一使用 **antd v6**（`antd@6.6.3` + `@ant-design/icons@6.3.4`），品牌色沿用旧版手写样式的 `#185fa5`，在 `app/root.tsx` 的 `ConfigProvider` 里集中配置（`locale=zh_CN` + `theme.token.colorPrimary`），反馈组件一律走 `AntdApp.useApp()`。
 
 ### 10.1 先查再写（强制）
 
@@ -123,9 +127,9 @@ npm run build         # 前端 + 后端产物
 | `npx antd info <组件>`          | 查 props、类型、默认值、引入版本           |
 | `npx antd demo <组件> <示例名>` | 取可直接改用的官方示例源码                 |
 | `npx antd doc <组件>`           | 完整 markdown 文档                         |
-| `npx antd lint web/src`         | **提交前必跑**：废弃用法 / a11y / 性能     |
+| `npx antd lint app`             | **提交前必跑**：废弃用法 / a11y / 性能     |
 | `npx antd doctor`               | 诊断项目级配置（版本冲突、重复安装、主题） |
-| `npx antd usage web/src`        | 统计组件使用情况                           |
+| `npx antd usage app`            | 统计组件使用情况                           |
 | `npx antd migrate 5 6`          | 版本迁移清单                               |
 
 ### 10.2 v6 与 v5 的关键差异（已核实清单）
@@ -156,7 +160,7 @@ import { App as AntdApp } from "antd";
 const { message, modal, notification } = AntdApp.useApp();
 ```
 
-**禁止**使用 `message.success()` 这类静态方法：静态方法拿不到 `ConfigProvider` 的主题与 locale。`main.tsx` 已用 `<AntdApp>` 包裹整棵树。
+**禁止**使用 `message.success()` 这类静态方法：静态方法拿不到 `ConfigProvider` 的主题与 locale。`app/root.tsx` 已用 `<AntdApp>` 包裹整棵树。
 
 ### 10.4 严格模式下的可选 prop
 
@@ -172,14 +176,14 @@ const { message, modal, notification } = AntdApp.useApp();
 ### 10.5 布局与样式
 
 - 布局优先用 antd 的 `Flex` / `Space` / `Row`+`Col` / `Layout`，**不要为新页面写 CSS**。
-- 结构性辅助类集中在 `web/src/styles/layout.css`（`page-stack`、`page-head`、`status-card`、`fill-card`、`list-block`、`list-row` 等）。
-- 历史包袱 `web/src/styles/global.css` 是早期手写样式，随页面逐个 antd 化而收缩；**新代码不要往里加规则**。
+- 结构性辅助类集中在 `app/styles/layout.css`（`page-stack`、`page-head`、`status-card`、`fill-card`、`list-block`、`list-row` 等）。
+- 早期手写样式（`web/src/styles/global.css`，840 行）已随旧前端归档，**不要再引入手写全局样式**。
 - 视觉调整优先用 Design Token（`ConfigProvider` 的 `theme.token` / `theme.components`），而不是覆盖 antd 内部类名。
 
 ### 10.6 交付前新增一项门禁
 
 ```bash
-npx antd lint web/src     # 必须 No issues found
+npx antd lint app         # 必须 No issues found（当前 73 文件全过）
 ```
 
 它不替代 `npm run lint`（oxlint），两者都要过。

@@ -63,7 +63,10 @@ export async function findFreePort(): Promise<number> {
   });
 }
 
-export async function startServer(options: { entry?: string; serveNpm?: string; fixture: Fixture; port: number }): Promise<{
+/** 启动被测服务只需要这两个字段：允许调用方传入自定义库（例如"重置主人令牌后"的场景库） */
+export type ServerFixture = Pick<Fixture, "databasePath" | "uploadsDir">;
+
+export async function startServer(options: { entry?: string; serveNpm?: string; fixture: ServerFixture; port: number }): Promise<{
   stop: () => Promise<void>;
   output: () => string;
 }> {
@@ -75,7 +78,7 @@ export async function startServer(options: { entry?: string; serveNpm?: string; 
     DATABASE_PATH: options.fixture.databasePath,
     UPLOADS_DIR: options.fixture.uploadsDir,
   };
-  // serveNpm：被测实现用一个 npm script 启动（例如 React Router 8 的 rr:start —— 由 react-router-serve
+  // serveNpm：被测实现用一个 npm script 启动（当前实现是 `npm run serve` —— 由 react-router-serve
   // 适配器监听端口，而 build/server/index.js 本身只导出请求处理器、不会监听）。
   // 只接受脚本名，不接受整条命令行：npm 在 Windows 下会把带空格的参数拆开。
   const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";

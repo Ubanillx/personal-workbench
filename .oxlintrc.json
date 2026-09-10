@@ -4,7 +4,7 @@
   "categories": {
     "correctness": "error"
   },
-  "ignorePatterns": ["node_modules/**", "dist-server/**", "web/dist/**", "build/**", ".react-router/**", "_archive/**", "data/**"],
+  "ignorePatterns": ["node_modules/**", "build/**", ".react-router/**", "_archive/**", "data/**"],
   "rules": {
     "no-console": "off",
     "typescript/no-explicit-any": "off",
@@ -23,7 +23,7 @@
       "env": { "node": true, "es2024": true }
     },
     {
-      "files": ["web/src/**/*.ts", "web/src/**/*.tsx"],
+      "files": ["app/**/*.ts", "app/**/*.tsx"],
       "env": { "browser": true, "es2024": true }
     }
   ]

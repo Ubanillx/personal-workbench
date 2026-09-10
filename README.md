@@ -1,15 +1,17 @@
 # 个人工作台 (Personal Workbench)
 
-个人工作台是本地 Web 应用。所有数据默认保留在主人电脑，正式服务使用 Node.js 22+、Fastify、TypeScript 和 SQLite。
+个人工作台是本地 Web 应用。所有数据默认保留在主人电脑，正式服务使用 Node.js 22+、React Router 8（framework mode）、TypeScript 和 SQLite。
 
 > 项目操作台（待办 / 计划 / 技术债 / 目录架构 / 数据模型 / 命令速查）在 [`docs/harness/`](docs/harness/README.md)。
 
 ## 当前状态
 
-- 新 Web 工程使用 React 19 + Vite、**antd v6**、Node.js + Fastify、TypeScript 和 SQLite。
-- Web 服务启动时会自动执行 SQLite migrations，并通过 HttpOnly Cookie 建立会话。
+- 全栈由**单进程**提供：React Router 8 framework mode 同时负责 SSR 页面与 `/api/*` 资源路由，不再需要「后端 + 前端」两个进程。
+- UI 使用 React 19 + **antd v6**；样式与主题见 `app/root.tsx`（`#185fa5` + `zh_CN`）。
+- 服务启动时会自动执行 SQLite migrations，并通过 HttpOnly Cookie 建立会话。
 - 正式数据库为 `data/workbench.sqlite`；每次主人令牌重置会先在 `data/backups/` 创建备份。
-- 日常使用正式地址 `http://127.0.0.1:17500`，不要使用 `5173` 开发预览地址。
+- 日常使用正式地址 `http://127.0.0.1:17500`。开发模式默认在 `5173`，只绑定本机。
+- 迁移前的 Fastify + Vite SPA 双进程实现在 [`_archive/legacy-fastify/`](_archive/legacy-fastify/ARCHIVE_NOTE.md)，当前实现不依赖它。
 
 ## Node Runtime
 
@@ -29,51 +31,41 @@ Node 20 会被正式服务明确拒绝，避免在没有 `node:sqlite` 支持时
 
 ## 启动方式
 
-### Web 开发模式
-
-先在一个终端启动 API：
-
-```bash
-npm run dev:server
-```
-
-再在另一个终端启动前端：
-
-```bash
-npm run dev:web
-```
-
-也可以同时启动：
+### 开发模式
 
 ```bash
 npm run dev
 ```
 
-- 前端开发地址：`http://127.0.0.1:5173`
-- API 默认地址：`http://127.0.0.1:17500`
-- 健康检查：`http://127.0.0.1:17500/api/health`
+`react-router dev` 一个命令同时提供页面与 API（Vite 开发服务器，默认 `http://127.0.0.1:5173`），改代码即时热更新，不需要再单独启动后端。
 
 开发模式仅用于本机调试。不要在 `5173` 创建成员、分配正式任务或作为助理入口。
 
-### Web 生产构建与启动
+### 生产构建与启动
 
 ```bash
-npm run build
 npm start
 ```
 
-构建后 Node 服务会托管 `web/dist`，默认访问地址为 `http://127.0.0.1:17500`。
+`npm start` 等价于「构建 + 以生产模式启动」：先跑 `npm run build`（`react-router build`，同时产出客户端与 SSR 产物到 `build/`），再设置 `NODE_ENV=production`、`HOST=127.0.0.1`、`PORT=17500` 并运行 `npm run serve`（`react-router-serve build/server/index.js`）。
+
+只重启、不重新构建时可以直接：
+
+```bash
+npm run serve
+```
+
+> 注意：`react-router-serve` 在**没有** `PORT` 时会默认监听 `3000`，并且当 `3000` 被占用时会**静默**换一个随机端口；在没有 `HOST` 时会绑定**所有网卡**。因此 `npm start` 固定了 `HOST` 与 `PORT`，请优先使用它，而不是直接调用 `react-router-serve`。
 
 需要让同一局域网内的助理访问时，使用受限局域网启动方式：
 
 ```bash
-npm run build
 npm run start:lan
 ```
 
-服务启动日志会显示检测到的局域网地址，例如 `http://192.168.2.176:17500`。地址不会携带令牌。
+它与 `npm start` 的唯一区别是 `HOST=0.0.0.0`。服务启动日志会显示检测到的局域网地址，例如 `http://192.168.2.176:17500`。地址不会携带令牌。
 
-启动后保持该正式服务终端运行。若提示端口被占用，先关闭 `npm run dev`、`dev:server`、`dev:web` 或旧的 `start:lan` 进程，再重新启动。
+启动后保持该正式服务终端运行。若提示端口被占用（`EADDRINUSE`），先用 `Get-NetTCPConnection -LocalPort 17500 -State Listen` 找到占用进程并关闭，再重新启动。
 
 ## 局域网访问
 
@@ -112,13 +104,13 @@ NODE_ENV=development
 HOST=127.0.0.1
 PORT=17500
 DATABASE_PATH=data/workbench.sqlite
-WEB_DIST_PATH=web/dist
 SESSION_COOKIE_NAME=workbench_session
 UPLOADS_DIR=data/uploads/reports
-API_PROXY_TARGET=http://127.0.0.1:17500
 ```
 
-`API_PROXY_TARGET` 只被 `npm run dev:web` 的 Vite 代理读取，其余变量由正式服务读取。
+`HOST` / `PORT` 直接由 `npm run serve` 的适配器读取，其余变量由 `server/src/config/env.ts` 读取。
+
+> 现状：服务只从**进程环境变量**取值，不会自动加载 `.env` 文件。要临时覆盖，请在启动命令前设置环境变量，例如 `$env:PORT=18000; npm run serve`。（见 `docs/harness/TECH_DEBT.md` 的 DEBT-02。）
 
 不要将真实 token、`.env`、数据库备份或隐私数据提交到代码仓库或写入日志。
 
@@ -127,21 +119,28 @@ API_PROXY_TARGET=http://127.0.0.1:17500
 - `data/workbench.sqlite`：正式服务的数据源。
 - `data/backups/`：正式 SQLite 备份目录，执行 `npm run db:backup` 手动生成备份；主人令牌重置和数据库结构迁移前也会自动备份。
 - `data/uploads/reports/`：周报上传文件目录。
-- 旧的 JSON 数据源和 Electron 相关代码已移入 `_archive/legacy-electron/`，正式服务不再读取。
+- 旧的 JSON 数据源和 Electron 相关代码已移入 `_archive/legacy-electron/`；迁移前的 Fastify + Vite SPA 实现已移入 `_archive/legacy-fastify/`。当前实现不读取、不依赖这两处。
 
 ## 代码规范与验证命令
 
-源码只写 TypeScript（`.ts`/`.tsx`/`.mts`，禁用 `.js`）；前端 UI 统一用 antd v6，规范细则见 [`docs/harness/CODE_STYLE.md`](docs/harness/CODE_STYLE.md)。仓库根 `AGENTS.md` 与 `.agents/skills/antd/` 是官方 Ant Design CLI skill，写 antd 代码前先用 `npx antd info/demo/doc` 查权威 API。
+源码只写 TypeScript（`.ts`/`.tsx`/`.mts`，禁用 `.js`）；UI 统一用 antd v6，规范细则见 [`docs/harness/CODE_STYLE.md`](docs/harness/CODE_STYLE.md)。仓库根 `AGENTS.md` 与 `.agents/skills/antd/` 是官方 Ant Design CLI skill，写 antd 代码前先用 `npx antd info/demo/doc` 查权威 API。
 
 ```bash
 npm run lint          # oxlint，门禁 0 warning / 0 error
-npx antd lint web/src # antd 官方检查：必须 No issues found
-npm run typecheck     # server + web + tools
-npm test              # 依次 test:api → test:web → test:db
-npm run build         # 前端 + 后端产物
+npx antd lint app     # antd 官方检查：必须 No issues found
+npm run typecheck     # server + tools + app + test 四个工程
+npm run build         # 客户端 + SSR 产物（build/）
+npm test              # 依次 test:db → test:api → test:owner → test:ui
 npm run format:check  # 确认没有 Prettier 格式漂移
 ```
 
-`npm test` 依次执行 `test:api`、`test:web`、`test:db`；也可单独运行其中任意一个。
+`npm test` 的四个环节：
 
-测试使用临时数据库，不会访问或修改正式数据。
+| 脚本         | 内容                                                                       | 当前基线       |
+| ------------ | -------------------------------------------------------------------------- | -------------- |
+| `test:db`    | SQLite 备份 / JSON 迁移 / 迁移前备份 / 主人令牌重置（数据层）              | 7 项           |
+| `test:api`   | 139 条 HTTP 契约用例，逐条对比 `test/contract/golden/contract.golden.json` | 139 条全部一致 |
+| `test:owner` | 端到端：重置主人令牌后旧令牌/旧会话在 HTTP 层被拒绝                        | 1 项           |
+| `test:ui`    | SSR 冒烟：登录 → 外壳 → 8 个页面是否渲染出真实数据                         | 38 项检查      |
+
+除 `test:db` 外都需要先 `npm run build`（它们通过 `npm run serve` 拉起真实服务）。测试使用临时数据库与临时上传目录，不会访问或修改正式数据。

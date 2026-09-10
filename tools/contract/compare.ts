@@ -5,7 +5,7 @@ import { CASES } from "./cases";
 import { createFixture, removeFixture } from "./fixture";
 import { findFreePort, runCases, startServer, type GoldenFile, type RecordedResponse } from "./runner";
 
-const DEFAULT_ENTRY = "server/src/index.ts";
+const DEFAULT_SERVE_NPM = "serve";
 const DEFAULT_GOLDEN = "test/contract/golden/contract.golden.json";
 
 function argValue(name: string, fallback: string): string {
@@ -38,9 +38,10 @@ function diffResponse(expected: RecordedResponse, actual: RecordedResponse): str
 }
 
 async function main(): Promise<void> {
-  const entry = argValue("--entry", DEFAULT_ENTRY);
-  const serveNpm = argValue("--serve-npm", "");
   const baseUrlArg = argValue("--base-url", "");
+  // Phase 4 之后只剩一套实现：默认用 npm run serve 拉起它（--entry 仅用于特殊入口）
+  const entry = argValue("--entry", "");
+  const serveNpm = argValue("--serve-npm", baseUrlArg ? "" : DEFAULT_SERVE_NPM);
   const goldenFile = path.resolve(process.cwd(), argValue("--golden", DEFAULT_GOLDEN));
   /** 只比对指定前缀的用例（逗号分隔），便于按阶段分批验收 */
   const only = argValue("--only", "")

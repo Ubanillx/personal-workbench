@@ -4,13 +4,18 @@ import { mkdtemp, rm, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { buildApp } from "../../server/src/app";
-import { loadConfig } from "../../server/src/config/env";
 import { createDatabaseClient, type DatabaseClient } from "../../server/src/db/client";
 import { resetOwnerAccess } from "../../server/src/security/owner-token";
 
 const migrationsDirectory = path.resolve(process.cwd(), "server/src/db/migrations");
 
+type TokenRow = { token_hash: string; revoked_at: string | null };
+type SessionRow = { session_hash: string; revoked_at: string | null };
+
+/**
+ * 数据层验证：只依赖 server/src（框架无关），不启动 HTTP 服务。
+ * HTTP 层"旧令牌/旧会话真的被拒绝"的端到端验证在 test/api/owner-reset.test.ts。
+ */
 test("主人令牌重置会备份数据库、撤销旧主人访问并保留助理访问", async (t) => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "workbench-owner-reset-"));
   const databasePath = path.join(directory, "workbench.sqlite");
@@ -22,23 +27,53 @@ test("主人令牌重置会备份数据库、撤销旧主人访问并保留助�
   const result = await resetOwnerAccess({ databasePath, backupDirectory });
   await stat(result.backupPath);
 
-  const app = await buildApp({ config: loadConfig({ NODE_ENV: "test", DATABASE_PATH: databasePath }, process.cwd()) });
+  // 备份必须发生在撤销之前：备份库里旧主人令牌仍然有效
+  const backup = createDatabaseClient({ databasePath: result.backupPath, readOnly: true });
+  const after = createDatabaseClient({ databasePath, readOnly: true });
+  // 注册顺序 = 执行顺序：先关连接再删目录（Windows 下文件被占用会 EBUSY）
   t.after(async () => {
-    await app.close();
+    await backup.close();
+    await after.close();
     await rm(directory, { recursive: true, force: true });
   });
-  assert.equal((await app.inject({ method: "POST", url: "/api/auth/access", payload: { token: "old-owner-token" } })).statusCode, 401);
-  assert.equal((await app.inject({ method: "POST", url: "/api/auth/access", payload: { token: result.token } })).statusCode, 200);
-  assert.equal((await app.inject({ method: "POST", url: "/api/auth/access", payload: { token: "assistant-token" } })).statusCode, 200);
-  assert.equal(
-    (await app.inject({ method: "GET", url: "/api/auth/me", headers: { cookie: "workbench_session=old-owner-session" } })).statusCode,
-    401,
-  );
-  assert.equal(
-    (await app.inject({ method: "GET", url: "/api/auth/me", headers: { cookie: "workbench_session=assistant-session" } })).statusCode,
-    200,
-  );
+
+  assert.equal(activeToken(backup, "owner", "old-owner-token"), true, "备份库应保留重置前的旧主人令牌");
+  assert.equal(activeSession(backup, "owner", "old-owner-session"), true, "备份库应保留重置前的旧主人会话");
+
+  // 旧主人令牌与会话被撤销，新令牌可用
+  assert.equal(activeToken(after, "owner", "old-owner-token"), false, "旧主人令牌应被撤销");
+  assert.equal(activeSession(after, "owner", "old-owner-session"), false, "旧主人会话应被撤销");
+  assert.equal(activeToken(after, "owner", result.token), true, "新主人令牌应处于可用状态");
+  assert.equal(countActiveOwnerTokens(after), 1, "主人名下应只剩一个可用令牌");
+
+  // 助理访问不受影响
+  assert.equal(activeToken(after, "assistant", "assistant-token"), true, "助理令牌不应被撤销");
+  assert.equal(activeSession(after, "assistant", "assistant-session"), true, "助理会话不应被撤销");
 });
+
+function activeToken(database: DatabaseClient, userId: string, token: string): boolean {
+  const row = database
+    .getDatabase()
+    .prepare("SELECT token_hash, revoked_at FROM access_tokens WHERE user_id=? AND token_hash=?")
+    .get(userId, hash(token)) as TokenRow | undefined;
+  return row !== undefined && row.revoked_at === null;
+}
+
+function activeSession(database: DatabaseClient, userId: string, session: string): boolean {
+  const row = database
+    .getDatabase()
+    .prepare("SELECT session_hash, revoked_at FROM access_sessions WHERE user_id=? AND session_hash=?")
+    .get(userId, hash(session)) as SessionRow | undefined;
+  return row !== undefined && row.revoked_at === null;
+}
+
+function countActiveOwnerTokens(database: DatabaseClient): number {
+  const row = database
+    .getDatabase()
+    .prepare("SELECT COUNT(*) AS total FROM access_tokens WHERE user_id='owner' AND revoked_at IS NULL")
+    .get() as { total: number };
+  return row.total;
+}
 
 function seed(database: DatabaseClient): void {
   const db = database.getDatabase();

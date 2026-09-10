@@ -1,7 +1,5 @@
 # 依赖与构建产物
 node_modules/
-dist-server/
-web/dist/
 build/
 .react-router/
 *.tsbuildinfo

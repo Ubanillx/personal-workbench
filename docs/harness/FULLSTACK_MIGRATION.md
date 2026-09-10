@@ -1,6 +1,8 @@
 # 全栈迁移计划：Fastify SPA+API → React Router 8 framework mode
 
-状态：**进行中**（2026-09-10 立项）。目标是把项目变成名副其实的 Node.js 全栈单进程应用：统一路由、服务端取数、一套类型契约、一个启动命令。
+状态：**已完成**（2026-09-10 立项，2026-09-10 Phase 0–4 全部完成）。项目现在是名副其实的 Node.js 全栈单进程应用：统一路由、服务端取数、一套类型契约、一个启动命令。
+
+> Phase 4 收尾后，旧实现已归档到 `_archive/legacy-fastify/`（含 `ARCHIVE_NOTE.md` 与一键回退步骤），本文保留全过程记录。
 
 ## 已定决策
 
@@ -46,7 +48,7 @@
 
 迁移期间的门禁：任何触及端点或数据层的提交都必须让 `contract:compare` 保持 100% 一致。
 
-### Phase 1 · 数据与安全层搬迁（预计 0.5 天）← 下一步
+### Phase 1 · 数据与安全层搬迁（已完成 2026-09-10）
 
 把 1,247 行原样复用代码搬进新工程结构，先跑通「迁移器 + 认证 + health」。
 
@@ -104,18 +106,18 @@
 
 **分批策略（每批独立验收，避免一次性重写 1,400 行）**
 
-| 批次 | 范围                                                   | 用例前缀                                                                 | 状态                                  |
-| ---- | ------------------------------------------------------ | ------------------------------------------------------------------------ | ------------------------------------- |
-| A    | 认证 + 访问信息（4 端点）                              | `auth.` `access-info.`                                                   | ✅ 12/12 一致（2026-09-10）           |
-| B    | dashboard + 任务全流程 + 评论/时间线 + 通知 + 验收视图 | `dashboard.` `tasks.` `comments.` `activity.` `notifications.` `review.` | 进行中                                |
-| C    | users / todos / notes / files / inbox                  | `users.` `todos.` `notes.` `files.` `inbox.`                             | 待开始（依赖 B 抽出的任务域辅助函数） |
-| D    | reports（multipart 上传 + 文件下载）                   | `reports.`                                                               | 进行中                                |
+| 批次 | 范围                                                   | 用例前缀                                                                 | 状态                        |
+| ---- | ------------------------------------------------------ | ------------------------------------------------------------------------ | --------------------------- |
+| A    | 认证 + 访问信息（4 端点）                              | `auth.` `access-info.`                                                   | ✅ 12/12 一致（2026-09-10） |
+| B    | dashboard + 任务全流程 + 评论/时间线 + 通知 + 验收视图 | `dashboard.` `tasks.` `comments.` `activity.` `notifications.` `review.` | ✅ 完成（2026-09-10）       |
+| C    | users / todos / notes / files / inbox                  | `users.` `todos.` `notes.` `files.` `inbox.`                             | ✅ 完成（2026-09-10）       |
+| D    | reports（multipart 上传 + 文件下载）                   | `reports.`                                                               | ✅ 完成（2026-09-10）       |
 
 **验收命令**（契约工具自己拉起被测实现并注入夹具库，无需手工准备数据库）：
 
 ```bash
-npm run rr:build
-npm run contract:compare -- --serve-npm rr:start --only "auth.,access-info."
+npm run build
+npm run contract:compare -- --serve-npm serve --only "auth.,access-info."
 ```
 
 **路由组织**：各批次只改自己的片段文件（`app/routes.tasks.ts` / `routes.people.ts` / `routes.reports.ts`），由 `app/routes.ts` 统一展开——并行迁移不会争抢同一文件。共享辅助函数在 `app/lib/{http,session,db,tasks}.server.ts`。
@@ -138,7 +140,7 @@ npm run contract:compare -- --serve-npm rr:start --only "auth.,access-info."
 
 **参考实现已完成（2026-09-10）**：`app/root.tsx`（antd 外壳 + 导航 + 通知 + 退出）、`app/routes/access.tsx`（登录）、`app/routes/logout.ts`、`app/routes/dashboard.tsx`（概览）。验收工具 `npm run smoke:ui` **14/14 通过**：SSR 渲染登录页、登录下发会话、会话对 API 与页面同时生效、外壳含导航与数据、页面 action 新增待办、退出后会话失效。
 
-**Phase 3 的六条约定（后续页面必须照此实现）**
+**Phase 3 的七条约定（后续页面必须照此实现）**
 
 1. **页面路由**：`app/routes/<page>.tsx`，导出 `loader`（取数）、可选 `action`（表单提交）、默认导出的 antd 组件。
 2. **取数不绕 HTTP**：loader 直接调用共享服务（`app/lib/<域>.server.ts`），**不要**在前端 fetch 自己的 API；页面与资源路由共用同一份实现，从根上杜绝两套逻辑漂移（参考 `app/lib/dashboard.server.ts`）。
@@ -159,23 +161,78 @@ npm run contract:compare -- --serve-npm rr:start --only "auth.,access-info."
 
 **验收**：页面功能与旧版一致（人工逐页走查）；测试重写完成。
 
-### Phase 4 · 切换与归档（预计 0.5 天）
+### Phase 4 · 切换与归档（已完成 2026-09-10）
 
-`npm start` 指向新实现；旧 Fastify 实现移入 `_archive/`；README、harness 各文档回写。
+`npm start` 指向新实现；旧 Fastify + Vite SPA 实现移入 `_archive/legacy-fastify/`；README 与 harness 各文档回写。
 
-**验收**：`npm start` 单进程可用；`data/workbench.sqlite` 的 SHA-256 全程不变；旧实现可一键回退。
+**归档与清理**
+
+| 动作 | 内容                                                                                                                                                                                                                                                                                                                            |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 归档 | `git mv` 到 `_archive/legacy-fastify/`：`server/src/{app.ts,index.ts,routes/}`（5 文件）、`web/`（11 文件）、`shared/{constants/index.ts,types/api.ts,types/auth.ts}`（3 文件），共 **20 文件**                                                                                                                                 |
+| 删除 | `dist-server/`（旧 tsc 产物）、`web/dist/`（旧 Vite 产物）——两者都是可重新生成的构建产物，不归档                                                                                                                                                                                                                                |
+| 依赖 | 删除 `fastify`、`@fastify/{cookie,cors,helmet,multipart,static}`、`concurrently` → `npm install` 移除 **84 个包**                                                                                                                                                                                                               |
+| 脚本 | 删除 `dev:server`、`dev:web`、`build:web`、`build:server`、`typecheck:web`、`rr:dev`、`rr:build`、`rr:start`                                                                                                                                                                                                                    |
+| 配置 | `server/src/config/env.ts` 去掉 `webDistPath`/`WEB_DIST_PATH`；`server/tsconfig.json` 去掉 `rootDir`/`outDir` 改 `noEmit: true`；`.env.example` 去掉 `WEB_DIST_PATH`/`API_PROXY_TARGET`；`.gitignore`/`.prettierignore`/`.oxlintrc.json` 去掉 `dist-server/`、`web/dist/`，oxlint 浏览器 override 由 `web/src/**` 改为 `app/**` |
+
+**测试替换（旧测试依赖 Fastify `app.inject()`，必须改写）**
+
+| 测试                           | 处置                                                                                                                                                                                                              |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `test/db/owner-token.test.ts`  | 改为**纯数据层**断言：备份库仍是重置前状态（证明备份发生在撤销之前）、旧令牌/旧会话被撤销、主人名下只剩 1 个可用令牌、助理令牌与会话不受影响                                                                      |
+| `test/api/owner-reset.test.ts` | **新增**（脚本 `test:owner`）：端到端验证重置后 HTTP 层真的拒绝旧令牌/旧会话。为此把 `tools/contract/runner.ts` 的 `startServer` 夹具参数放宽为 `Pick<Fixture, "databasePath" \| "uploadsDir">`，可直接吃自定义库 |
+| `tools/contract/smoke-ui.ts`   | 默认 `--serve-npm` 由已删除的 `rr:start` 改为 `serve`                                                                                                                                                             |
+
+**过程中发现并修掉的真实缺陷（`npm start`）**
+
+首次按文档跑 `npm start` 时服务起在 **3000** 端口，且可被局域网访问。查 `@react-router/serve` 源码确认两件事：
+
+- `let port = parseNumber(process.env.PORT) ?? await getAvailablePort(3000, process.env.HOST)` —— **没有 `PORT` 时默认 3000；3000 被占用时静默改用随机空闲端口**，不会报错。
+- `process.env.HOST ? app.listen(port, HOST) : app.listen(port)` —— **没有 `HOST` 时绑定所有网卡**，不是本机回环。
+
+这与旧实现"默认 `127.0.0.1:17500`"的语义不同。修法是在 `npm start` / `start:lan` 里显式固定：
+
+```text
+start     : NODE_ENV=production HOST=127.0.0.1 PORT=17500 npm run serve
+start:lan : NODE_ENV=production HOST=0.0.0.0   PORT=17500 npm run serve
+```
+
+README 已就此加了显式警告：**不要直接调用 `react-router-serve`**。
+
+**试过但放弃的改动**：为消除启动日志里的 `[MODULE_TYPELESS_PACKAGE_JSON]` 警告，试过给 `package.json` 加 `"type": "module"`。结果是 `server/` 在 `module: NodeNext` 下转为 ESM 语义，13 处相对导入立刻要求显式 `.js` 扩展名（`error TS2835`）。为一个只在启动时重复解析一次的性能提示去改遍服务端导入路径不划算，**已回退**，并把警告登记为 `TECH_DEBT.md` 的 DEBT-17。
+
+**验收（全部完成 2026-09-10）**
+
+| 检查          | 结果                                                                                                                                                                |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Lint          | `npm run lint` → **0 warning / 0 error**（106 文件）                                                                                                                |
+| antd 官方检查 | `npx antd lint app` → Scanned 73 files. **No issues found.**                                                                                                        |
+| 类型检查      | `npm run typecheck` → server + tools + app + test 四个工程 **0 错误**                                                                                               |
+| 数据库测试    | `npm run test:db` → **7/7**                                                                                                                                         |
+| 契约回放      | `npm run test:api` → **139 条全部一致**（现在回放的是唯一的实现）                                                                                                   |
+| 重置端到端    | `npm run test:owner` → **1/1**（旧令牌 401、旧会话 401、新令牌 200、助理不受影响）                                                                                  |
+| SSR 冒烟      | `npm run test:ui` → **38 项 0 失败**，8/8 页面渲染出真实数据                                                                                                        |
+| 构建          | `npm run build` 通过（客户端 98 资产 / 1.43 MB，SSR bundle 229 KB）                                                                                                 |
+| 格式化        | `npm run format:check` → 无漂移                                                                                                                                     |
+| 正式库安全    | 停旧服务后 `data/workbench.sqlite` = 262144 B / mtime `2026-09-07 17:26:21` / SHA-256 `017B3467…48F403`；新服务启动并处理请求后三项**完全一致**，`data/` 无新增文件 |
+| 单进程可用    | `npm start` 后监听 **127.0.0.1:17500**（LAN 地址 `192.168.1.230:17500` 确认不可达）；`/api/health` 返回 `db ready`；未登录 `/` → 302，`/access` → 200               |
+| 一键回退      | 见 `_archive/legacy-fastify/ARCHIVE_NOTE.md`「恢复方式」                                                                                                            |
 
 ## 风险与对策
 
-| 风险                             | 对策                                                                    |
-| -------------------------------- | ----------------------------------------------------------------------- |
-| 行为静默偏移                     | Phase 0 的 golden 回放是硬门禁，Phase 2 结束前不允许进 Phase 3          |
-| 迁移期无法日常使用               | 旧实现保留在 `main` 上直到 Phase 4；新实现在独立分支/目录推进           |
-| SSR 引入后 cookie/CSRF 语义变化  | 保持同源 + `SameSite=Lax` + `HttpOnly`；Cookie 逻辑原样复用 `security/` |
-| `node:sqlite` 在框架运行时不兼容 | 强制 Node runtime（不用 edge）；Phase 1 就先验证                        |
-| 测试重写期间失去保护             | golden 回放 + 现有 16 条测试在新实现上逐步等价替换，不一次性删除        |
-| 前端 2,110 行搬出 UI 回归        | 逐页走查清单；不趁机改设计，保持"等价迁移"                              |
+| 风险                               | 对策                                                                    |
+| ---------------------------------- | ----------------------------------------------------------------------- |
+| 行为静默偏移                       | Phase 0 的 golden 回放是硬门禁，Phase 2 结束前不允许进 Phase 3          |
+| 迁移期无法日常使用                 | 旧实现保留到 Phase 4 才归档；归档后仍可按 `ARCHIVE_NOTE.md` 一键回退    |
+| SSR 引入后 cookie/CSRF 语义变化    | 保持同源 + `SameSite=Lax` + `HttpOnly`；Cookie 逻辑原样复用 `security/` |
+| `node:sqlite` 在框架运行时不兼容   | 强制 Node runtime（不用 edge）；Phase 1 就先验证                        |
+| 测试重写期间失去保护               | golden 回放 + 原有 16 条测试在新实现上等价替换，不一次性删除            |
+| 前端 2,110 行搬出 UI 回归          | 逐页走查清单；不趁机改设计，保持"等价迁移"                              |
+| 服务绑定与端口语义被框架默认值改变 | 已在 npm scripts 中显式固定 `HOST`/`PORT`，并在 README 写明原因与后果   |
 
 ## 回退方案
 
-Phase 4 之前，`main` 分支始终是可用的 Fastify 实现；新实现独立推进。若迁移失败或中止，删除新目录即可，`data/` 与线上使用方式不受影响。
+旧实现已归档在 `_archive/legacy-fastify/`（20 文件 + `ARCHIVE_NOTE.md`）。需要临时回退时，按该说明把文件拷回原路径并还原
+`package.json` 的 fastify 依赖与脚本、`env.ts` 的 `webDistPath`，再 `npm install` + `npm run build:server`。
+
+正式数据库格式未变（`data/workbench.sqlite`，migrations 001–008），两套实现读写同一份库，回退不会丢数据。
