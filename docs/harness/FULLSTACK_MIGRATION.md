@@ -91,6 +91,26 @@
 
 **验收**：`contract:compare` 对**新**实现回放 100% 一致；`lint`、`typecheck`、`test`、`build` 全绿。
 
+**分批策略（每批独立验收，避免一次性重写 1,400 行）**
+
+| 批次 | 范围                                                   | 用例前缀                                                                 | 状态                                  |
+| ---- | ------------------------------------------------------ | ------------------------------------------------------------------------ | ------------------------------------- |
+| A    | 认证 + 访问信息（4 端点）                              | `auth.` `access-info.`                                                   | ✅ 12/12 一致（2026-09-10）           |
+| B    | dashboard + 任务全流程 + 评论/时间线 + 通知 + 验收视图 | `dashboard.` `tasks.` `comments.` `activity.` `notifications.` `review.` | 进行中                                |
+| C    | users / todos / notes / files / inbox                  | `users.` `todos.` `notes.` `files.` `inbox.`                             | 待开始（依赖 B 抽出的任务域辅助函数） |
+| D    | reports（multipart 上传 + 文件下载）                   | `reports.`                                                               | 进行中                                |
+
+**验收命令**（契约工具自己拉起被测实现并注入夹具库，无需手工准备数据库）：
+
+```bash
+npm run rr:build
+npm run contract:compare -- --serve-npm rr:start --only "auth.,access-info."
+```
+
+**路由组织**：各批次只改自己的片段文件（`app/routes.tasks.ts` / `routes.people.ts` / `routes.reports.ts`），由 `app/routes.ts` 统一展开——并行迁移不会争抢同一文件。共享辅助函数在 `app/lib/{http,session,db,tasks}.server.ts`。
+
+**工具侧已修的坑**：`build/server/index.js` 只导出请求处理器、单独运行会立即退出（exit 0），必须由 `react-router-serve` 监听端口 → 新增 `--serve-npm <脚本名>`；Windows 下 spawn `.cmd` 需要 `shell:true`，于是 `stop()` 改用 `taskkill /T` 杀整棵进程树，否则孙进程会继续占用夹具 SQLite 导致清理失败。
+
 ### Phase 3 · 前端迁移（预计 1.5–2 天）
 
 8 个页面搬到文件路由；`apiClient` 的职责拆给 loader/action；表单改 action 提交；保留现有 UI 与交互。
