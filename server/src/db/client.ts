@@ -43,7 +43,9 @@ export class SqliteDatabaseClient implements DatabaseClient {
         backupBeforeMigration(resolvedDatabasePath);
       }
       new SqliteMigrationRunner(this.database, options.migrationsDirectory).migrate();
-      this.database.exec("CREATE TABLE IF NOT EXISTS access_sessions (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, session_hash TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL, expires_at TEXT NOT NULL, revoked_at TEXT); CREATE INDEX IF NOT EXISTS idx_access_sessions_hash ON access_sessions(session_hash); CREATE INDEX IF NOT EXISTS idx_access_sessions_user_id ON access_sessions(user_id);");
+      this.database.exec(
+        "CREATE TABLE IF NOT EXISTS access_sessions (id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, session_hash TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL, expires_at TEXT NOT NULL, revoked_at TEXT); CREATE INDEX IF NOT EXISTS idx_access_sessions_hash ON access_sessions(session_hash); CREATE INDEX IF NOT EXISTS idx_access_sessions_user_id ON access_sessions(user_id);",
+      );
     }
   }
 
@@ -75,7 +77,9 @@ function hasPendingMigrations(database: DatabaseSyncType, migrationsDirectory: s
   const files = fs.readdirSync(migrationsDirectory).filter((file) => file.endsWith(".sql"));
   if (!files.length) return false;
   try {
-    const applied = new Set((database.prepare("SELECT version FROM schema_migrations").all() as Array<{ version: string }>).map((row) => row.version));
+    const applied = new Set(
+      (database.prepare("SELECT version FROM schema_migrations").all() as Array<{ version: string }>).map((row) => row.version),
+    );
     return files.some((file) => !applied.has(file.replace(/\.sql$/u, "")));
   } catch {
     return true;

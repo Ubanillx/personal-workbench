@@ -28,6 +28,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, cwd = process.c
     databasePath: path.resolve(cwd, env.DATABASE_PATH ?? "data/workbench.sqlite"),
     webDistPath: path.resolve(cwd, env.WEB_DIST_PATH ?? "web/dist"),
     sessionCookieName: env.SESSION_COOKIE_NAME ?? "workbench_session",
-    uploadsDir: path.resolve(cwd, env.UPLOADS_DIR ?? "data/uploads/reports")
+    uploadsDir: path.resolve(cwd, env.UPLOADS_DIR ?? "data/uploads/reports"),
   };
 }

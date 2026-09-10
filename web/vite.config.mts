@@ -10,12 +10,12 @@ export default defineConfig({
     proxy: {
       "/api": {
         target: process.env.API_PROXY_TARGET ?? "http://127.0.0.1:17500",
-        changeOrigin: true
-      }
-    }
+        changeOrigin: true,
+      },
+    },
   },
   build: {
     outDir: "dist",
-    emptyOutDir: true
-  }
+    emptyOutDir: true,
+  },
 });

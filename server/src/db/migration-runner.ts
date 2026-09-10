@@ -5,13 +5,18 @@ import type { DatabaseSync } from "node:sqlite";
 export type MigrationResult = { applied: string[]; currentVersion: string };
 
 export class SqliteMigrationRunner {
-  public constructor(private readonly database: DatabaseSync, private readonly migrationsDirectory: string) {}
+  public constructor(
+    private readonly database: DatabaseSync,
+    private readonly migrationsDirectory: string,
+  ) {}
 
   public migrate(): MigrationResult {
     this.database.exec("CREATE TABLE IF NOT EXISTS schema_migrations (version TEXT PRIMARY KEY, applied_at TEXT NOT NULL)");
     const appliedRows = this.database.prepare("SELECT version FROM schema_migrations ORDER BY version").all() as Array<{ version: string }>;
     const applied = new Set(appliedRows.map((row) => row.version));
-    const files = readdirSync(this.migrationsDirectory).filter((file) => file.endsWith(".sql")).toSorted();
+    const files = readdirSync(this.migrationsDirectory)
+      .filter((file) => file.endsWith(".sql"))
+      .toSorted();
     const appliedNow: string[] = [];
     // Some migrations rebuild tables that are referenced by foreign keys.
     // SQLite only allows toggling foreign-key enforcement outside a transaction.

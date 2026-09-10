@@ -46,17 +46,41 @@ export class ReportRepository {
   }
 
   public findByOwner(ownerId: string): ReportRecord[] {
-    return (this.database.prepare(`${SELECT_REPORT} WHERE r.owner_id = ? ORDER BY r.updated_at DESC`).all(ownerId) as Array<Record<string, unknown>>).map(toReportRecord);
+    return (
+      this.database.prepare(`${SELECT_REPORT} WHERE r.owner_id = ? ORDER BY r.updated_at DESC`).all(ownerId) as Array<
+        Record<string, unknown>
+      >
+    ).map(toReportRecord);
   }
 
   public findAll(): ReportRecord[] {
-    return (this.database.prepare(`${SELECT_REPORT} ORDER BY r.updated_at DESC`).all() as Array<Record<string, unknown>>).map(toReportRecord);
+    return (this.database.prepare(`${SELECT_REPORT} ORDER BY r.updated_at DESC`).all() as Array<Record<string, unknown>>).map(
+      toReportRecord,
+    );
   }
 
   public create(input: ReportRecord): ReportRecord {
-    this.database.prepare("INSERT INTO weekly_reports(id, owner_id, period_start, period_end, doc_type, note, status, current_version, uploaded_by, review_note, created_at, updated_at, submitted_at, reviewed_at, returned_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
-      input.id, input.ownerId, input.periodStart, input.periodEnd, input.docType, input.note, input.status, input.currentVersion, input.uploadedBy, input.reviewNote, input.createdAt, input.updatedAt, input.submittedAt, input.reviewedAt, input.returnedAt
-    );
+    this.database
+      .prepare(
+        "INSERT INTO weekly_reports(id, owner_id, period_start, period_end, doc_type, note, status, current_version, uploaded_by, review_note, created_at, updated_at, submitted_at, reviewed_at, returned_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      )
+      .run(
+        input.id,
+        input.ownerId,
+        input.periodStart,
+        input.periodEnd,
+        input.docType,
+        input.note,
+        input.status,
+        input.currentVersion,
+        input.uploadedBy,
+        input.reviewNote,
+        input.createdAt,
+        input.updatedAt,
+        input.submittedAt,
+        input.reviewedAt,
+        input.returnedAt,
+      );
     const result = this.findById(input.id);
     if (!result) throw new Error("Report insertion failed");
     return result;
@@ -66,25 +90,66 @@ export class ReportRepository {
     const current = this.findById(id);
     if (!current) throw new Error("Report not found");
     const next = { ...current, ...input, updatedAt: input.updatedAt ?? new Date().toISOString() };
-    this.database.prepare("UPDATE weekly_reports SET owner_id = ?, period_start = ?, period_end = ?, doc_type = ?, note = ?, status = ?, current_version = ?, uploaded_by = ?, review_note = ?, created_at = ?, updated_at = ?, submitted_at = ?, reviewed_at = ?, returned_at = ? WHERE id = ?").run(
-      next.ownerId, next.periodStart, next.periodEnd, next.docType, next.note, next.status, next.currentVersion, next.uploadedBy, next.reviewNote, next.createdAt, next.updatedAt, next.submittedAt, next.reviewedAt, next.returnedAt, id
-    );
+    this.database
+      .prepare(
+        "UPDATE weekly_reports SET owner_id = ?, period_start = ?, period_end = ?, doc_type = ?, note = ?, status = ?, current_version = ?, uploaded_by = ?, review_note = ?, created_at = ?, updated_at = ?, submitted_at = ?, reviewed_at = ?, returned_at = ? WHERE id = ?",
+      )
+      .run(
+        next.ownerId,
+        next.periodStart,
+        next.periodEnd,
+        next.docType,
+        next.note,
+        next.status,
+        next.currentVersion,
+        next.uploadedBy,
+        next.reviewNote,
+        next.createdAt,
+        next.updatedAt,
+        next.submittedAt,
+        next.reviewedAt,
+        next.returnedAt,
+        id,
+      );
     return next;
   }
 
   public listFiles(reportId: string): ReportFileRecord[] {
-    return (this.database.prepare("SELECT id, report_id AS reportId, version, original_name AS originalName, stored_name AS storedName, size_bytes AS sizeBytes, ext, mime_type AS mimeType, uploaded_by AS uploadedBy, uploaded_at AS uploadedAt FROM report_files WHERE report_id = ? ORDER BY version").all(reportId) as Array<Record<string, unknown>>).map(toFileRecord);
+    return (
+      this.database
+        .prepare(
+          "SELECT id, report_id AS reportId, version, original_name AS originalName, stored_name AS storedName, size_bytes AS sizeBytes, ext, mime_type AS mimeType, uploaded_by AS uploadedBy, uploaded_at AS uploadedAt FROM report_files WHERE report_id = ? ORDER BY version",
+        )
+        .all(reportId) as Array<Record<string, unknown>>
+    ).map(toFileRecord);
   }
 
   public findFile(reportId: string, version: number): ReportFileRecord | null {
-    const row = this.database.prepare("SELECT id, report_id AS reportId, version, original_name AS originalName, stored_name AS storedName, size_bytes AS sizeBytes, ext, mime_type AS mimeType, uploaded_by AS uploadedBy, uploaded_at AS uploadedAt FROM report_files WHERE report_id = ? AND version = ?").get(reportId, version) as Record<string, unknown> | undefined;
+    const row = this.database
+      .prepare(
+        "SELECT id, report_id AS reportId, version, original_name AS originalName, stored_name AS storedName, size_bytes AS sizeBytes, ext, mime_type AS mimeType, uploaded_by AS uploadedBy, uploaded_at AS uploadedAt FROM report_files WHERE report_id = ? AND version = ?",
+      )
+      .get(reportId, version) as Record<string, unknown> | undefined;
     return row ? toFileRecord(row) : null;
   }
 
   public addFile(input: ReportFileRecord): void {
-    this.database.prepare("INSERT INTO report_files(id, report_id, version, original_name, stored_name, size_bytes, ext, mime_type, uploaded_by, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(
-      input.id, input.reportId, input.version, input.originalName, input.storedName, input.sizeBytes, input.ext, input.mimeType, input.uploadedBy, input.uploadedAt
-    );
+    this.database
+      .prepare(
+        "INSERT INTO report_files(id, report_id, version, original_name, stored_name, size_bytes, ext, mime_type, uploaded_by, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      )
+      .run(
+        input.id,
+        input.reportId,
+        input.version,
+        input.originalName,
+        input.storedName,
+        input.sizeBytes,
+        input.ext,
+        input.mimeType,
+        input.uploadedBy,
+        input.uploadedAt,
+      );
   }
 }
 
@@ -105,7 +170,7 @@ function toReportRecord(row: Record<string, unknown>): ReportRecord {
     updatedAt: String(row.updatedAt),
     submittedAt: String(row.submittedAt),
     reviewedAt: row.reviewedAt == null ? null : String(row.reviewedAt),
-    returnedAt: row.returnedAt == null ? null : String(row.returnedAt)
+    returnedAt: row.returnedAt == null ? null : String(row.returnedAt),
   };
 }
 
@@ -120,6 +185,6 @@ function toFileRecord(row: Record<string, unknown>): ReportFileRecord {
     ext: String(row.ext),
     mimeType: row.mimeType == null ? null : String(row.mimeType),
     uploadedBy: String(row.uploadedBy),
-    uploadedAt: String(row.uploadedAt)
+    uploadedAt: String(row.uploadedAt),
   };
 }

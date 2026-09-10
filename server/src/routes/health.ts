@@ -15,7 +15,7 @@ export async function registerHealthRoutes(app: FastifyInstance, options: Health
     version: "1.0.0",
     runtime: "node",
     database: await databaseHealth(options.database),
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
   });
 
   app.get("/api/ping", async (_request, reply) => reply.send({ ok: true, data: await payload() }));

@@ -70,7 +70,10 @@ test("生产服务只对页面路径执行 SPA 回退", async (t) => {
   await writeFile(path.join(assets, "entry.css"), "body{color:black}");
   const config = loadConfig({ NODE_ENV: "production", WEB_DIST_PATH: directory, DATABASE_PATH: "missing.sqlite" }, process.cwd());
   const app = await buildApp({ config, enableDatabase: false });
-  t.after(async () => { await app.close(); await rm(directory, { recursive: true, force: true }); });
+  t.after(async () => {
+    await app.close();
+    await rm(directory, { recursive: true, force: true });
+  });
 
   const home = await app.inject({ method: "GET", url: "/" });
   const page = await app.inject({ method: "GET", url: "/tasks" });

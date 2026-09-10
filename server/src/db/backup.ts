@@ -3,7 +3,11 @@ import path from "node:path";
 import { backup as sqliteBackup, type DatabaseSync } from "node:sqlite";
 
 export async function backupSqlite(sourcePath: string, backupDirectory: string, keep = 5): Promise<string | null> {
-  try { await stat(sourcePath); } catch { return null; }
+  try {
+    await stat(sourcePath);
+  } catch {
+    return null;
+  }
   await mkdir(backupDirectory, { recursive: true });
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
   const targetPath = path.join(backupDirectory, `workbench-${stamp}.sqlite.bak`);

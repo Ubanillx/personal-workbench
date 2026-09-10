@@ -31,13 +31,16 @@ async function main(): Promise<void> {
     console.log(`运行时: ${runtimeLabel()}`);
     if (config.host === "0.0.0.0") {
       const lanAddresses = getLanIPv4Addresses();
-      console.log(`局域网访问地址: ${lanAddresses.length ? lanAddresses.map((ip) => `http://${ip}:${config.port}`).join(", ") : "未检测到局域网 IPv4 地址"}`);
+      console.log(
+        `局域网访问地址: ${lanAddresses.length ? lanAddresses.map((ip) => `http://${ip}:${config.port}`).join(", ") : "未检测到局域网 IPv4 地址"}`,
+      );
       console.log("已显式开启局域网访问，请确认 Windows 防火墙仅允许本地子网");
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : "未知启动错误";
     const code = error instanceof Error && "code" in error ? String(error.code) : "";
-    const hint = code === "EADDRINUSE" ? "端口已被其他进程占用。请关闭开发服务或旧正式服务后重试。" : "请检查 Node.js 版本、数据库、端口或监听地址。";
+    const hint =
+      code === "EADDRINUSE" ? "端口已被其他进程占用。请关闭开发服务或旧正式服务后重试。" : "请检查 Node.js 版本、数据库、端口或监听地址。";
     console.error(`Web 服务启动失败：${message}。${hint}`);
     await app?.close();
     process.exitCode = 1;

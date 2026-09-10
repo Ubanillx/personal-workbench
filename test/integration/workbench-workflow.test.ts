@@ -15,7 +15,11 @@ test("协作工作流会执行角色、验收、通知、归档和令牌权限",
   const databasePath = path.join(directory, "workbench.sqlite");
   const database = createDatabaseClient({ databasePath, migrationsDirectory });
   const app = await buildApp({ config: loadConfig({ NODE_ENV: "test", DATABASE_PATH: databasePath }, process.cwd()), database });
-  t.after(async () => { await app.close(); await database.close(); await rm(directory, { recursive: true, force: true }); });
+  t.after(async () => {
+    await app.close();
+    await database.close();
+    await rm(directory, { recursive: true, force: true });
+  });
   seed(database);
 
   const ping = await app.inject({ method: "GET", url: "/api/ping" });
@@ -48,9 +52,15 @@ test("协作工作流会执行角色、验收、通知、归档和令牌权限",
   assert.equal(created.json().data.ownerId, "assistant-a");
 
   const assistantTasks = await request(app, assistant, "GET", "/api/tasks");
-  assert.deepEqual(assistantTasks.json().data.map((task: { id: string }) => task.id), [taskId]);
+  assert.deepEqual(
+    assistantTasks.json().data.map((task: { id: string }) => task.id),
+    [taskId],
+  );
   const viewerTasks = await request(app, viewer, "GET", "/api/tasks");
-  assert.deepEqual(viewerTasks.json().data.map((task: { id: string }) => task.id), [taskId]);
+  assert.deepEqual(
+    viewerTasks.json().data.map((task: { id: string }) => task.id),
+    [taskId],
+  );
   assert.equal((await request(app, assistant, "PATCH", `/api/tasks/${taskId}`, { title: "越权修改" })).statusCode, 403);
   assert.equal((await request(app, viewer, "POST", `/api/tasks/${taskId}/progress`, { progress: 20 })).statusCode, 403);
   assert.equal((await request(app, viewer, "GET", "/api/todos")).statusCode, 403);
@@ -59,16 +69,29 @@ test("协作工作流会执行角色、验收、通知、归档和令牌权限",
   assert.equal(submitted.statusCode, 200);
   assert.equal(submitted.json().data.status, "pending_review");
   const ownerNotifications = await request(app, owner, "GET", "/api/notifications?unread=1");
-  assert.ok(ownerNotifications.json().data.some((item: { taskId: string; eventType: string }) => item.taskId === taskId && item.eventType === "task_submitted"));
+  assert.ok(
+    ownerNotifications
+      .json()
+      .data.some((item: { taskId: string; eventType: string }) => item.taskId === taskId && item.eventType === "task_submitted"),
+  );
   const activity = await request(app, owner, "GET", `/api/tasks/${taskId}/activity`);
   assert.ok(activity.json().data.some((item: { kind: string }) => item.kind === "task_submitted"));
 
   const approved = await request(app, owner, "POST", `/api/tasks/${taskId}/approve`, { note: "验收通过" });
   assert.equal(approved.json().data.status, "completed");
   const assistantNotifications = await request(app, assistant, "GET", "/api/notifications?unread=1");
-  assert.ok(assistantNotifications.json().data.some((item: { taskId: string; eventType: string }) => item.taskId === taskId && item.eventType === "task_approved"));
+  assert.ok(
+    assistantNotifications
+      .json()
+      .data.some((item: { taskId: string; eventType: string }) => item.taskId === taskId && item.eventType === "task_approved"),
+  );
   await request(app, owner, "POST", "/api/notifications/read", { taskId });
-  assert.equal((await request(app, owner, "GET", "/api/notifications?unread=1")).json().data.some((item: { taskId: string }) => item.taskId === taskId), false);
+  assert.equal(
+    (await request(app, owner, "GET", "/api/notifications?unread=1"))
+      .json()
+      .data.some((item: { taskId: string }) => item.taskId === taskId),
+    false,
+  );
 
   const returnedTask = await request(app, owner, "POST", "/api/tasks", { title: "需要返工", ownerId: "assistant-a" });
   const returnedId = returnedTask.json().data.id as string;
@@ -78,18 +101,33 @@ test("协作工作流会执行角色、验收、通知、归档和令牌权限",
   assert.equal(returned.json().data.progress, 99);
   const comment = await request(app, viewer, "POST", `/api/tasks/${returnedId}/comments`, { content: "请补充反馈" });
   assert.equal(comment.statusCode, 201);
-  assert.ok((await request(app, owner, "GET", `/api/tasks/${returnedId}/activity`)).json().data.some((item: { kind: string; content: string }) => item.kind === "comment" && item.content === "请补充反馈"));
+  assert.ok(
+    (await request(app, owner, "GET", `/api/tasks/${returnedId}/activity`))
+      .json()
+      .data.some((item: { kind: string; content: string }) => item.kind === "comment" && item.content === "请补充反馈"),
+  );
 
   const reassigned = await request(app, owner, "PATCH", `/api/tasks/${returnedId}`, { ownerId: "assistant-b", title: "需要返工" });
   assert.equal(reassigned.json().data.ownerId, "assistant-b");
-  assert.ok((await request(app, owner, "GET", `/api/tasks/${returnedId}/activity`)).json().data.some((item: { kind: string }) => item.kind === "task_reassigned"));
+  assert.ok(
+    (await request(app, owner, "GET", `/api/tasks/${returnedId}/activity`))
+      .json()
+      .data.some((item: { kind: string }) => item.kind === "task_reassigned"),
+  );
   await request(app, owner, "POST", `/api/tasks/${returnedId}/archive`);
   assert.equal((await request(app, owner, "DELETE", `/api/tasks/${returnedId}`)).statusCode, 200);
-  assert.equal((await request(app, owner, "GET", "/api/tasks?includeArchived=1")).json().data.some((task: { id: string }) => task.id === returnedId), false);
+  assert.equal(
+    (await request(app, owner, "GET", "/api/tasks?includeArchived=1")).json().data.some((task: { id: string }) => task.id === returnedId),
+    false,
+  );
 
-  const firstImport = await request(app, owner, "POST", "/api/inbox/import", { drafts: [{ title: "企微任务", ownerId: "assistant-b", fingerprint: "wecom-fixture" }] });
+  const firstImport = await request(app, owner, "POST", "/api/inbox/import", {
+    drafts: [{ title: "企微任务", ownerId: "assistant-b", fingerprint: "wecom-fixture" }],
+  });
   assert.equal(firstImport.json().data.created.length, 1);
-  const secondImport = await request(app, owner, "POST", "/api/inbox/import", { drafts: [{ title: "企微任务", ownerId: "assistant-b", fingerprint: "wecom-fixture" }] });
+  const secondImport = await request(app, owner, "POST", "/api/inbox/import", {
+    drafts: [{ title: "企微任务", ownerId: "assistant-b", fingerprint: "wecom-fixture" }],
+  });
   assert.equal(secondImport.json().data.skipped.length, 1);
 
   assert.equal((await request(app, owner, "PATCH", "/api/users/assistant-a", { isActive: false })).statusCode, 200);
@@ -102,14 +140,42 @@ test("协作工作流会执行角色、验收、通知、归档和令牌权限",
 });
 
 function seed(database: DatabaseClient): void {
-  const db = database.getDatabase(); const stamp = new Date().toISOString();
-  for (const [id, name, role, token] of [["owner", "主人", "owner", "owner-token"], ["assistant-a", "助理 A", "assistant", "assistant-a-token"], ["assistant-b", "助理 B", "assistant", "assistant-b-token"], ["viewer-a", "查看者", "viewer", "viewer-token"]] as const) {
+  const db = database.getDatabase();
+  const stamp = new Date().toISOString();
+  for (const [id, name, role, token] of [
+    ["owner", "主人", "owner", "owner-token"],
+    ["assistant-a", "助理 A", "assistant", "assistant-a-token"],
+    ["assistant-b", "助理 B", "assistant", "assistant-b-token"],
+    ["viewer-a", "查看者", "viewer", "viewer-token"],
+  ] as const) {
     db.prepare("INSERT INTO users(id,name,role,is_active,created_at,updated_at) VALUES(?,?,?,?,?,?)").run(id, name, role, 1, stamp, stamp);
-    db.prepare("INSERT INTO access_tokens(id,user_id,token_hash,created_at,expires_at,revoked_at) VALUES(?,?,?,?,NULL,NULL)").run(`token-${id}`, id, hash(token), stamp);
+    db.prepare("INSERT INTO access_tokens(id,user_id,token_hash,created_at,expires_at,revoked_at) VALUES(?,?,?,?,NULL,NULL)").run(
+      `token-${id}`,
+      id,
+      hash(token),
+      stamp,
+    );
   }
 }
 
-async function login(app: Awaited<ReturnType<typeof buildApp>>, token: string): Promise<string> { const response = await rawLogin(app, token); assert.equal(response.statusCode, 200); const cookie = response.headers["set-cookie"]; return Array.isArray(cookie) ? cookie[0]!.split(";")[0]! : String(cookie).split(";")[0]!; }
-function rawLogin(app: Awaited<ReturnType<typeof buildApp>>, token: string) { return app.inject({ method: "POST", url: "/api/auth/access", payload: { token } }); }
-function request(app: Awaited<ReturnType<typeof buildApp>>, cookie: string, method: "GET" | "POST" | "PATCH" | "DELETE", url: string, payload?: Record<string, unknown>) { return app.inject({ method, url, headers: { cookie }, payload }); }
-function hash(value: string): string { return createHash("sha256").update(value).digest("hex"); }
+async function login(app: Awaited<ReturnType<typeof buildApp>>, token: string): Promise<string> {
+  const response = await rawLogin(app, token);
+  assert.equal(response.statusCode, 200);
+  const cookie = response.headers["set-cookie"];
+  return Array.isArray(cookie) ? cookie[0]!.split(";")[0]! : String(cookie).split(";")[0]!;
+}
+function rawLogin(app: Awaited<ReturnType<typeof buildApp>>, token: string) {
+  return app.inject({ method: "POST", url: "/api/auth/access", payload: { token } });
+}
+function request(
+  app: Awaited<ReturnType<typeof buildApp>>,
+  cookie: string,
+  method: "GET" | "POST" | "PATCH" | "DELETE",
+  url: string,
+  payload?: Record<string, unknown>,
+) {
+  return app.inject({ method, url, headers: { cookie }, payload });
+}
+function hash(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
+}

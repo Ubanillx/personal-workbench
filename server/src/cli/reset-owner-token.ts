@@ -14,7 +14,7 @@ async function main(): Promise<void> {
     const { resetOwnerAccess } = await import("../security/owner-token.js");
     const result = await resetOwnerAccess({
       databasePath: path.resolve(process.cwd(), "data/workbench.sqlite"),
-      backupDirectory: path.resolve(process.cwd(), "data/backups")
+      backupDirectory: path.resolve(process.cwd(), "data/backups"),
     });
     console.log(`已创建 SQLite 备份：${result.backupPath}`);
     console.log("新的主人访问令牌（仅在本终端显示一次，请立即安全保存）：");

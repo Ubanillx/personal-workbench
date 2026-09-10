@@ -64,7 +64,18 @@ export type MigrationStatistics = {
 };
 
 export function createEmptyStatistics(): MigrationStatistics {
-  return { tasks: 0, todos: 0, notes: 0, assistants: 0, viewers: 0, logs: 0, comments: 0, files: 0, correctedStatuses: 0, fallbackCreators: 0 };
+  return {
+    tasks: 0,
+    todos: 0,
+    notes: 0,
+    assistants: 0,
+    viewers: 0,
+    logs: 0,
+    comments: 0,
+    files: 0,
+    correctedStatuses: 0,
+    fallbackCreators: 0,
+  };
 }
 
 export function sha256(value: string): string {
@@ -95,8 +106,8 @@ export function normalizeLegacyWorkbench(value: unknown): LegacyWorkbench {
       ownerToken: typeof settings.ownerToken === "string" ? settings.ownerToken : undefined,
       shareToken: typeof settings.shareToken === "string" ? settings.shareToken : undefined,
       assistants: Array.isArray(settings.assistants) ? settings.assistants : [],
-      viewers: Array.isArray(settings.viewers) ? settings.viewers : []
-    }
+      viewers: Array.isArray(settings.viewers) ? settings.viewers : [],
+    },
   };
 }
 

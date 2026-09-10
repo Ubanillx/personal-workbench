@@ -12,7 +12,8 @@ test("现有 SQLite 在执行待应用迁移前会自动备份", async (t) => {
   const sourceMigrations = path.resolve(process.cwd(), "server/src/db/migrations");
   const legacyMigrations = path.join(directory, "legacy-migrations");
   await mkdir(legacyMigrations);
-  for (const file of ["001_initial_schema.sql", "002_indexes.sql", "003_sessions.sql"]) await copyFile(path.join(sourceMigrations, file), path.join(legacyMigrations, file));
+  for (const file of ["001_initial_schema.sql", "002_indexes.sql", "003_sessions.sql"])
+    await copyFile(path.join(sourceMigrations, file), path.join(legacyMigrations, file));
   const first = createDatabaseClient({ databasePath, migrationsDirectory: legacyMigrations });
   await first.close();
   const client = createDatabaseClient({ databasePath, migrationsDirectory: sourceMigrations });

@@ -28,7 +28,9 @@ export async function resetOwnerAccess(options: ResetOwnerAccessOptions): Promis
     try {
       database.prepare("UPDATE access_sessions SET revoked_at=? WHERE user_id=? AND revoked_at IS NULL").run(stamp, owner.id);
       database.prepare("UPDATE access_tokens SET revoked_at=? WHERE user_id=? AND revoked_at IS NULL").run(stamp, owner.id);
-      database.prepare("INSERT INTO access_tokens(id,user_id,token_hash,created_at,expires_at,revoked_at) VALUES(?,?,?,?,NULL,NULL)").run(randomUUID(), owner.id, hash(token), stamp);
+      database
+        .prepare("INSERT INTO access_tokens(id,user_id,token_hash,created_at,expires_at,revoked_at) VALUES(?,?,?,?,NULL,NULL)")
+        .run(randomUUID(), owner.id, hash(token), stamp);
       database.exec("COMMIT");
       return { backupPath, token };
     } catch (error) {

@@ -34,12 +34,12 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     // HSTS and COOP are only meaningful over HTTPS; they are ignored (HSTS) or
     // produce noisy console warnings (COOP) on a plain-HTTP LAN service.
     strictTransportSecurity: false,
-    crossOriginOpenerPolicy: false
+    crossOriginOpenerPolicy: false,
   });
   await app.register(cookie);
   await app.register(multipart, {
     limits: { fileSize: 20 * 1024 * 1024, files: 1, fields: 10, parts: 20 },
-    throwFileSizeLimit: true
+    throwFileSizeLimit: true,
   });
   if (config.nodeEnv !== "production") {
     await app.register(cors, { origin: true, credentials: true });
@@ -61,7 +61,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
     await app.register(fastifyStatic, {
       root: config.webDistPath,
       wildcard: true,
-      index: false
+      index: false,
     });
     // fastify-static treats the dist root as a directory; serve the SPA entry explicitly.
     app.get("/", async (_request, reply) => sendSpaIndex(reply));
@@ -98,7 +98,7 @@ function createDatabaseIfPresent(config: AppConfig): DatabaseClient | undefined 
     return createDatabaseClient({
       databasePath: config.databasePath,
       readOnly: false,
-      migrationsDirectory: path.resolve(process.cwd(), "server/src/db/migrations")
+      migrationsDirectory: path.resolve(process.cwd(), "server/src/db/migrations"),
     });
   } catch (error) {
     if (config.nodeEnv === "production") throw error;

@@ -62,15 +62,41 @@ export async function registerReportRoutes(app: FastifyInstance, options: Option
     const id = randomUUID();
     const stamp = now();
     const report: ReportRecord = {
-      id, ownerId: owner.id!, ownerName: owner.name!, periodStart, periodEnd, docType,
-      note: String(fields.note ?? "").trim().slice(0, 2000),
-      status: "submitted", currentVersion: 1, uploadedBy: user.id, reviewNote: null,
-      createdAt: stamp, updatedAt: stamp, submittedAt: stamp, reviewedAt: null, returnedAt: null
+      id,
+      ownerId: owner.id!,
+      ownerName: owner.name!,
+      periodStart,
+      periodEnd,
+      docType,
+      note: String(fields.note ?? "")
+        .trim()
+        .slice(0, 2000),
+      status: "submitted",
+      currentVersion: 1,
+      uploadedBy: user.id,
+      reviewNote: null,
+      createdAt: stamp,
+      updatedAt: stamp,
+      submittedAt: stamp,
+      reviewedAt: null,
+      returnedAt: null,
     };
     const file = await persistFile(options.uploadsDir, id, 1, upload, ext);
     repo.create(report);
-    repo.addFile({ id: randomUUID(), reportId: id, version: 1, originalName: sanitizeName(upload.file.filename), storedName: file.storedName, sizeBytes: file.size, ext, mimeType: upload.file.mimetype || null, uploadedBy: user.id, uploadedAt: stamp });
-    if (user.role === "assistant") notifyReport(db, "owner", user.id, id, "report_submitted", "收到新周报", `${user.name} 提交了 ${periodStart}~${periodEnd} 的周报`);
+    repo.addFile({
+      id: randomUUID(),
+      reportId: id,
+      version: 1,
+      originalName: sanitizeName(upload.file.filename),
+      storedName: file.storedName,
+      sizeBytes: file.size,
+      ext,
+      mimeType: upload.file.mimetype || null,
+      uploadedBy: user.id,
+      uploadedAt: stamp,
+    });
+    if (user.role === "assistant")
+      notifyReport(db, "owner", user.id, id, "report_submitted", "收到新周报", `${user.name} 提交了 ${periodStart}~${periodEnd} 的周报`);
     return reply.code(201).send(ok(toView(repo.findById(id)!, repo)));
   });
 
@@ -93,9 +119,36 @@ export async function registerReportRoutes(app: FastifyInstance, options: Option
     const version = report.currentVersion + 1;
     const stamp = now();
     const file = await persistFile(options.uploadsDir, report.id, version, upload, ext);
-    repo.update(report.id, { status: "submitted", currentVersion: version, reviewNote: null, submittedAt: stamp, returnedAt: null, reviewedAt: null });
-    repo.addFile({ id: randomUUID(), reportId: report.id, version, originalName: sanitizeName(upload.file.filename), storedName: file.storedName, sizeBytes: file.size, ext, mimeType: upload.file.mimetype || null, uploadedBy: user.id, uploadedAt: stamp });
-    if (user.role === "assistant") notifyReport(db, "owner", user.id, report.id, "report_submitted", "周报已重新提交", `${user.name} 重新提交了 ${report.periodStart}~${report.periodEnd} 的周报`);
+    repo.update(report.id, {
+      status: "submitted",
+      currentVersion: version,
+      reviewNote: null,
+      submittedAt: stamp,
+      returnedAt: null,
+      reviewedAt: null,
+    });
+    repo.addFile({
+      id: randomUUID(),
+      reportId: report.id,
+      version,
+      originalName: sanitizeName(upload.file.filename),
+      storedName: file.storedName,
+      sizeBytes: file.size,
+      ext,
+      mimeType: upload.file.mimetype || null,
+      uploadedBy: user.id,
+      uploadedAt: stamp,
+    });
+    if (user.role === "assistant")
+      notifyReport(
+        db,
+        "owner",
+        user.id,
+        report.id,
+        "report_submitted",
+        "周报已重新提交",
+        `${user.name} 重新提交了 ${report.periodStart}~${report.periodEnd} 的周报`,
+      );
     return reply.code(201).send(ok(toView(repo.findById(report.id)!, repo)));
   });
 
@@ -106,10 +159,20 @@ export async function registerReportRoutes(app: FastifyInstance, options: Option
     if (!report) return reply.code(404).send(fail("NOT_FOUND", "周报不存在"));
     if (report.status !== "submitted") return reply.code(400).send(fail("INVALID_STATE", "只有已提交的周报才能通过"));
     const body = (request.body ?? {}) as Record<string, unknown>;
-    const note = String(body.note ?? "").trim().slice(0, 2000);
+    const note = String(body.note ?? "")
+      .trim()
+      .slice(0, 2000);
     const stamp = now();
     repo.update(report.id, { status: "approved", reviewNote: note || null, reviewedAt: stamp });
-    notifyReport(db, report.ownerId, user.id, report.id, "report_approved", "周报已通过", `你的周报（${report.periodStart}~${report.periodEnd}）已通过`);
+    notifyReport(
+      db,
+      report.ownerId,
+      user.id,
+      report.id,
+      "report_approved",
+      "周报已通过",
+      `你的周报（${report.periodStart}~${report.periodEnd}）已通过`,
+    );
     return reply.send(ok(toView(repo.findById(report.id)!, repo)));
   });
 
@@ -124,7 +187,15 @@ export async function registerReportRoutes(app: FastifyInstance, options: Option
     if (!note) return reply.code(400).send(fail("VALIDATION_ERROR", "退回时请填写原因"));
     const stamp = now();
     repo.update(report.id, { status: "returned", reviewNote: note.slice(0, 2000), returnedAt: stamp });
-    notifyReport(db, report.ownerId, user.id, report.id, "report_returned", "周报已退回", `你的周报（${report.periodStart}~${report.periodEnd}）已退回：${note.slice(0, 2000)}`);
+    notifyReport(
+      db,
+      report.ownerId,
+      user.id,
+      report.id,
+      "report_returned",
+      "周报已退回",
+      `你的周报（${report.periodStart}~${report.periodEnd}）已退回：${note.slice(0, 2000)}`,
+    );
     return reply.send(ok(toView(repo.findById(report.id)!, repo)));
   });
 
@@ -178,7 +249,13 @@ async function readUpload(request: FastifyRequest): Promise<Upload> {
 
 class UploadError extends Error {}
 
-async function persistFile(uploadsDir: string, reportId: string, version: number, upload: Upload, ext: string): Promise<{ storedName: string; size: number }> {
+async function persistFile(
+  uploadsDir: string,
+  reportId: string,
+  version: number,
+  upload: Upload,
+  ext: string,
+): Promise<{ storedName: string; size: number }> {
   const dir = path.join(uploadsDir, reportId);
   await fsp.mkdir(dir, { recursive: true });
   const storedName = `v${version}${ext}`;
@@ -220,18 +297,29 @@ function resolveOwnerId(db: Db, value: string | undefined): string | null {
 function auth(request: FastifyRequest, db: Db, cookie: string): User | null {
   const raw = request.cookies[cookie];
   if (!raw) return null;
-  const row = one(db, "SELECT u.id,u.name,u.role,u.is_active AS isActive FROM access_sessions s JOIN users u ON u.id=s.user_id WHERE s.session_hash=? AND s.revoked_at IS NULL AND s.expires_at>? AND u.is_active=1", hash(raw), now());
+  const row = one(
+    db,
+    "SELECT u.id,u.name,u.role,u.is_active AS isActive FROM access_sessions s JOIN users u ON u.id=s.user_id WHERE s.session_hash=? AND s.revoked_at IS NULL AND s.expires_at>? AND u.is_active=1",
+    hash(raw),
+    now(),
+  );
   return row ? toUser(row) : null;
 }
 function requireAuth(request: FastifyRequest, reply: FastifyReply, db: Db, cookie: string): User | null {
   const user = auth(request, db, cookie);
-  if (!user) { void reply.code(401).send(fail("UNAUTHENTICATED", "请先完成访问验证")); return null; }
+  if (!user) {
+    void reply.code(401).send(fail("UNAUTHENTICATED", "请先完成访问验证"));
+    return null;
+  }
   return user;
 }
 function requireOwner(request: FastifyRequest, reply: FastifyReply, db: Db, cookie: string): User | null {
   const user = requireAuth(request, reply, db, cookie);
   if (!user) return null;
-  if (user.role !== "owner") { void reply.code(403).send(fail("FORBIDDEN", "只有主人可以执行此操作")); return null; }
+  if (user.role !== "owner") {
+    void reply.code(403).send(fail("FORBIDDEN", "只有主人可以执行此操作"));
+    return null;
+  }
   return user;
 }
 
@@ -246,26 +334,65 @@ function extensionOf(filename: string): string {
   const idx = base.lastIndexOf(".");
   return idx > 0 ? base.slice(idx).toLowerCase() : "";
 }
+// 文件名来自外部上传，必须剔除控制字符与路径分隔符，因此这里刻意匹配控制字符
+// oxlint-disable-next-line no-control-regex
+const CONTROL_CHARS = /[\u0000-\u001f/\\]/gu;
 function sanitizeName(filename: string): string {
-  // oxlint-disable-next-line no-control-regex -- 需要剔除文件名里的控制字符与路径分隔符
-  return path.basename(filename ?? "").replace(/[\u0000-\u001f/\\]/gu, "").slice(0, 200) || "未命名文件";
+  return path.basename(filename ?? "").replace(CONTROL_CHARS, "").slice(0, 200) || "未命名文件";
 }
 function extFromStoredName(storedName: string): string {
   return path.extname(storedName).toLowerCase();
 }
 function mimeFor(ext: string): string {
-  const map: Record<string, string> = { ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", ".xls": "application/vnd.ms-excel", ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document", ".doc": "application/msword" };
+  const map: Record<string, string> = {
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".xls": "application/vnd.ms-excel",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".doc": "application/msword",
+  };
   return map[ext] ?? "application/octet-stream";
 }
-function idOf(request: FastifyRequest): string { return String((request.params as { id: string }).id); }
-function toUser(row: Record<string, unknown>): User { return { id: String(row.id), name: String(row.name), role: String(row.role) as User["role"], isActive: Number(row.isActive ?? row.is_active) === 1 }; }
-function now(): string { return new Date().toISOString(); }
-function hash(value: string): string { return createHash("sha256").update(value).digest("hex"); }
-function one(db: Db, sql: string, ...params: unknown[]): any { return db.prepare(sql).get(...params) ?? null; }
-function run(db: Db, sql: string, ...params: unknown[]): any { return db.prepare(sql).run(...params); }
+function idOf(request: FastifyRequest): string {
+  return String((request.params as { id: string }).id);
+}
+function toUser(row: Record<string, unknown>): User {
+  return {
+    id: String(row.id),
+    name: String(row.name),
+    role: String(row.role) as User["role"],
+    isActive: Number(row.isActive ?? row.is_active) === 1,
+  };
+}
+function now(): string {
+  return new Date().toISOString();
+}
+function hash(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
+}
+function one(db: Db, sql: string, ...params: unknown[]): any {
+  return db.prepare(sql).get(...params) ?? null;
+}
+function run(db: Db, sql: string, ...params: unknown[]): any {
+  return db.prepare(sql).run(...params);
+}
 function notifyReport(db: Db, recipientId: string, actorId: string, reportId: string, type: string, title: string, message: string): void {
   if (!recipientId || recipientId === actorId) return;
-  run(db, "INSERT INTO notifications(id,recipient_id,actor_id,task_id,report_id,event_type,title,message,is_read,created_at,read_at) VALUES(?,?,?,NULL,?,?,?,?,0,?,NULL)", randomUUID(), recipientId, actorId, reportId, type, title, message, now());
+  run(
+    db,
+    "INSERT INTO notifications(id,recipient_id,actor_id,task_id,report_id,event_type,title,message,is_read,created_at,read_at) VALUES(?,?,?,NULL,?,?,?,?,0,?,NULL)",
+    randomUUID(),
+    recipientId,
+    actorId,
+    reportId,
+    type,
+    title,
+    message,
+    now(),
+  );
 }
-function ok<T>(data: T): { ok: true; data: T } { return { ok: true, data }; }
-function fail(code: string, message: string): { ok: false; error: { code: string; message: string } } { return { ok: false, error: { code, message } }; }
+function ok<T>(data: T): { ok: true; data: T } {
+  return { ok: true, data };
+}
+function fail(code: string, message: string): { ok: false; error: { code: string; message: string } } {
+  return { ok: false, error: { code, message } };
+}
