@@ -79,7 +79,6 @@ export default function LoginRoute(): React.ReactElement {
             <Typography.Title level={4} className="access-title">
               登录个人工作台
             </Typography.Title>
-            <Typography.Text type="secondary">用用户名与密码登录</Typography.Text>
           </Space>
 
           {error && <Alert type="error" showIcon title={error} />}
@@ -111,7 +110,7 @@ export default function LoginRoute(): React.ReactElement {
             </Typography.Text>
           </div>
           <Typography.Text type="secondary" className="access-brand">
-            忘记密码只能在本机运行 <Typography.Text code>npm run user:passwd</Typography.Text> 重置。
+            忘记密码？请联系工作台维护人员重置。
           </Typography.Text>
         </Space>
       </Card>

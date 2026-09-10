@@ -134,7 +134,7 @@ export default function PasswordRoute(): React.ReactElement {
 
           <div className="access-brand">
             <form method="post" action="/logout">
-              <Button variant="text" htmlType="submit">
+              <Button color="default" variant="text" htmlType="submit">
                 退出登录
               </Button>
             </form>

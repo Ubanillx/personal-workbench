@@ -95,7 +95,7 @@ export default function RegisterRoute(): React.ReactElement {
                 { pattern: USERNAME_PATTERN, message: "用户名需为 3-32 位字母、数字、下划线或短横线" },
               ]}
             >
-              <Input autoFocus prefix={<UserOutlined />} placeholder="登录用，例如 zhangsan" autoComplete="username" />
+              <Input autoFocus prefix={<UserOutlined />} placeholder="3–32 位字母、数字、下划线或短横线" autoComplete="username" />
             </Form.Item>
             <Form.Item
               name="email"
@@ -105,7 +105,7 @@ export default function RegisterRoute(): React.ReactElement {
                 { type: "email", message: "邮箱格式不正确" },
               ]}
             >
-              <Input prefix={<MailOutlined />} placeholder="用于唯一性记录，本期不发信" autoComplete="email" />
+              <Input prefix={<MailOutlined />} placeholder="请输入邮箱" autoComplete="email" />
             </Form.Item>
             <Form.Item name="name" label="显示名" extra="不填则直接用用户名">
               <Input prefix={<IdcardOutlined />} placeholder="显示名（可选）" autoComplete="name" />
