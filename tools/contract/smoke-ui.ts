@@ -24,6 +24,21 @@ function check(name: string, ok: boolean, detail?: string): void {
   checks.push(detail === undefined ? { name, ok } : { name, ok, detail });
 }
 
+/**
+ * 每个页面在夹具库下必然渲染出的**页面正文**特征串：用来验证 loader 真的取到数据并渲染，
+ * 而不是只返回 200 空壳。注意不能用导航标签（外壳里也有），要用页面正文或夹具数据里的独有内容。
+ */
+const PAGE_MARKERS: Record<string, string[]> = {
+  "/tasks": ["逾期任务", "待验收任务"],
+  "/todos": ["跟进报价"],
+  "/notes": ["会议要点"],
+  "/inbox": ["粘贴聊天记录"],
+  "/reports": ["第八周", "上传周报"],
+  "/collaboration": ["长期令牌"],
+  "/files": ["报价单模板"],
+  "/review": ["任务明细"],
+};
+
 const DEFAULT_PAGES = "/tasks,/todos,/notes,/inbox,/reports,/collaboration,/files,/review";
 
 async function main(): Promise<void> {
@@ -95,7 +110,7 @@ async function main(): Promise<void> {
     const after = await fetch(`${base}/`, { headers: { cookie } });
     check("新增后首页出现该待办", (await after.text()).includes(marker));
 
-    // 6) 逐页检查：状态码 + 是否仍为占位页
+    // 6) 逐页检查：状态码 + 是否仍为占位页 + 是否渲染出夹具数据
     for (const path of pagePaths) {
       const response = await fetch(`${base}${path}`, { headers: { cookie }, redirect: "manual" });
       const html = response.status === 200 ? await response.text() : "";
@@ -103,6 +118,15 @@ async function main(): Promise<void> {
       pages.push({ path, status: response.status, migrated });
       check(`GET ${path} 返回 200`, response.status === 200, `status=${response.status}`);
       if (requireMigrated) check(`${path} 已完成迁移（非占位页）`, migrated);
+      if (migrated) {
+        const markers = PAGE_MARKERS[path] ?? [];
+        const missing = markers.filter((needle) => !html.includes(needle));
+        check(
+          `${path} 渲染出页面数据（${markers.join("/") || "无标记"}）`,
+          missing.length === 0,
+          missing.length ? `缺少 ${missing.join(", ")}` : undefined,
+        );
+      }
     }
 
     // 7) 退出登录并确认会话失效

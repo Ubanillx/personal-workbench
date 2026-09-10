@@ -29,27 +29,29 @@
 
 ## 命令速查
 
-| 场景             | 命令                                        | 说明                                               |
-| ---------------- | ------------------------------------------- | -------------------------------------------------- |
-| 日常使用（本机） | `npm start`                                 | 构建前端+后端后在 17500 前台启动                   |
-| 局域网共享       | `npm run start:lan`                         | 同上，但绑定 `0.0.0.0`                             |
-| 开发（双进程）   | `npm run dev`                               | `concurrently` 同时起 API(17500) 与 Vite(5173)     |
-| 只起 API         | `npm run dev:server`                        | `--watch` + tsx 热重启                             |
-| 只起前端预览     | `npm run dev:web`                           | Vite，`/api` 代理到 17500                          |
-| 类型检查         | `npm run typecheck`                         | server + web + tools 三个 tsconfig                 |
-| Lint             | `npm run lint` / `npm run lint:fix`         | oxlint，门禁 0 warning / 0 error                   |
-| 格式化           | `npm run format` / `npm run format:check`   | Prettier，全量或只检查漂移                         |
-| 契约快照录制     | `npm run contract:capture`                  | 黑盒跑 139 条用例，写入 `test/contract/golden/`    |
-| 契约回放比对     | `npm run contract:compare`                  | 对任意实现回放并逐条比对，迁移期间的硬门禁         |
-| antd 用法检查    | `npx antd lint web/src`                     | **提交前必跑**：废弃用法 / a11y / 性能             |
-| antd API 查询    | `npx antd info` / `demo` / `doc <组件>`     | 写 antd 代码前先查，禁止凭记忆写 v6 API            |
-| antd 项目诊断    | `npx antd doctor`                           | 版本冲突、重复安装、主题配置                       |
-| 新工程（RR8）    | `npm run rr:dev` / `rr:build` / `rr:start`  | framework mode 开发、构建、启动（产物在 `build/`） |
-| 全部测试         | `npm test`                                  | 依次跑 `test:api` → `test:web` → `test:db`         |
-| 单项测试         | `npm run test:api` / `test:web` / `test:db` | 契约 / 前端基础 / 数据库                           |
-| 手动备份         | `npm run db:backup`                         | 写入 `data/backups/`，保留最近 5 份                |
-| 重置主人令牌     | `npm run owner:reset -- --confirm`          | 先自动备份，再撤销旧令牌与会话                     |
-| 局域网放行端口   | 见根 README「局域网访问」                   | 管理员 PowerShell 执行 `New-NetFirewallRule`       |
+| 场景             | 命令                                       | 说明                                                                |
+| ---------------- | ------------------------------------------ | ------------------------------------------------------------------- |
+| 日常使用（本机） | `npm start`                                | 构建前端+后端后在 17500 前台启动                                    |
+| 局域网共享       | `npm run start:lan`                        | 同上，但绑定 `0.0.0.0`                                              |
+| 开发（双进程）   | `npm run dev`                              | `concurrently` 同时起 API(17500) 与 Vite(5173)                      |
+| 只起 API         | `npm run dev:server`                       | `--watch` + tsx 热重启                                              |
+| 只起前端预览     | `npm run dev:web`                          | Vite，`/api` 代理到 17500                                           |
+| 类型检查         | `npm run typecheck`                        | server + web + tools 三个 tsconfig                                  |
+| Lint             | `npm run lint` / `npm run lint:fix`        | oxlint，门禁 0 warning / 0 error                                    |
+| 格式化           | `npm run format` / `npm run format:check`  | Prettier，全量或只检查漂移                                          |
+| 契约快照录制     | `npm run contract:capture`                 | 黑盒跑 139 条用例，写入 `test/contract/golden/`                     |
+| 契约回放比对     | `npm run contract:compare`                 | 对任意实现回放并逐条比对，迁移期间的硬门禁                          |
+| antd 用法检查    | `npx antd lint web/src`                    | **提交前必跑**：废弃用法 / a11y / 性能                              |
+| antd API 查询    | `npx antd info` / `demo` / `doc <组件>`    | 写 antd 代码前先查，禁止凭记忆写 v6 API                             |
+| antd 项目诊断    | `npx antd doctor`                          | 版本冲突、重复安装、主题配置                                        |
+| 新工程（RR8）    | `npm run rr:dev` / `rr:build` / `rr:start` | framework mode 开发、构建、启动（产物在 `build/`）                  |
+| 全部测试         | `npm test`                                 | 依次跑 `test:db` → `test:api` → `test:ui`                           |
+| 单项测试         | `npm run test:db` / `test:api` / `test:ui` | 数据库单测 / 139 条契约回放 / SSR 冒烟                              |
+| 生成夹具库       | `npm run contract:fixture`                 | 输出可直接用作 `DATABASE_PATH` 的临时库（含固定令牌）               |
+| SSR 冒烟         | `npm run smoke:ui -- --require-migrated`   | 逐页验收；`--paths` 限定页面，`--require-migrated` 把占位页计为失败 |
+| 手动备份         | `npm run db:backup`                        | 写入 `data/backups/`，保留最近 5 份                                 |
+| 重置主人令牌     | `npm run owner:reset -- --confirm`         | 先自动备份，再撤销旧令牌与会话                                      |
+| 局域网放行端口   | 见根 README「局域网访问」                  | 管理员 PowerShell 执行 `New-NetFirewallRule`                        |
 
 ## 文档索引
 
