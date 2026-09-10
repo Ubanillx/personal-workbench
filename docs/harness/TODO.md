@@ -6,9 +6,7 @@
 
 ## P0 · 阻断
 
-| ID      | 事项                          | 验收标准                                                                                                                                                                                                             | 状态 |
-| ------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- |
-| TODO-01 | 给项目建 git 仓库并做首次提交 | `git log` 有首个提交；`.gitignore` 排除 `node_modules/`、`dist-server/`、`web/dist/`、`data/workbench.sqlite*`、`data/backups/`、`data/uploads/`；`_archive/` **要纳入版本控制**（它是旧实现的唯一副本）；工作区干净 | 待办 |
+（当前无阻断项。原 TODO-01「建 git 仓库」已于 2026-09-10 完成，见「已完成」。）
 
 ## P1 · 重要
 
@@ -25,7 +23,8 @@
 | TODO-05 | 给「双击即启动」补一个入口（`DEBT-07`） | 提供一个不依赖 npm/Node 版本预检的启动方式（`.cmd` 或文档化的 `node --env-file` 命令），并在根 README 写明                                                             | 待办 |
 | TODO-06 | 备份覆盖范围与归档位置（`DEBT-08`）     | `data/uploads/` 有备份方案；`.before-migration-*.bak` 不再散落在 `data/` 根目录                                                                                        | 待办 |
 | TODO-07 | 迁移器加内容校验和（`DEBT-09`）         | `schema_migrations` 增加 sql hash 列（新迁移 009），runner 启动时校验已应用迁移未被篡改                                                                                | 待办 |
-| TODO-08 | 拆分 `workbench.ts`（`DEBT-06`，可选）  | 39 个端点按域拆成 `routes/tasks.ts`、`routes/todos.ts`、`routes/notes.ts`、`routes/files.ts`、`routes/users.ts`、`routes/notifications.ts`；行为零变化（契约测试全绿） | 待办 |
+| TODO-08 | 拆分 `workbench.ts`（可选，结构改进）   | 39 个端点按域拆成 `routes/tasks.ts`、`routes/todos.ts`、`routes/notes.ts`、`routes/files.ts`、`routes/users.ts`、`routes/notifications.ts`；行为零变化（契约测试全绿） | 待办 |
+| TODO-11 | 收敛前端 effect 依赖（`DEBT-12`）       | 先补前端测试，再开启 `react-hooks/exhaustive-deps` 与 `react/set-state-in-effect` 并修完 9 处命中；`npm run lint` 仍为 0/0                                             | 待办 |
 
 ## P3 · 清理
 
@@ -36,7 +35,9 @@
 
 ## 已完成
 
-| ID  | 事项                                                          | 完成日期   | 结果                                                                                                                                                       |
-| --- | ------------------------------------------------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| —   | Electron 遗留栈清理（代码 / bat / ps1 / 文档 / 旧 JSON 数据） | 2026-09-10 | 45 项移入 `_archive/legacy-electron/`；`electron` 依赖卸载（node_modules 389 MB → 116 MB）；`owner:reset`、`db:backup` 迁至 `server/src/cli/` 且命令名不变 |
-| —   | 删除 `db/` 空目录与 5 个孤儿数据/夹具文件                     | 2026-09-10 | 正式库 SHA-256 前后一致，`npm test` 16/16                                                                                                                  |
+| ID      | 事项                                                          | 完成日期   | 结果                                                                                                                                                             |
+| ------- | ------------------------------------------------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| —       | Electron 遗留栈清理（代码 / bat / ps1 / 文档 / 旧 JSON 数据） | 2026-09-10 | 45 项移入 `_archive/legacy-electron/`；`electron` 依赖卸载（node_modules 389 MB → 116 MB）；`owner:reset`、`db:backup` 迁至 `server/src/cli/` 且命令名不变       |
+| —       | 删除 `db/` 空目录与 5 个孤儿数据/夹具文件                     | 2026-09-10 | 正式库 SHA-256 前后一致，`npm test` 16/16                                                                                                                        |
+| TODO-01 | 建立 git 仓库并做基线快照                                     | 2026-09-10 | `git init -b main`（a9fa96c 基线）；`.gitignore` 排除 `data/`、`_archive/legacy-electron/data/`（内含明文令牌）、构建产物；首提交跟踪 104 个文件，无隐私文件入库 |
+| —       | 引入 TypeScript + lint/格式规范（本次任务）                   | 2026-09-10 | 核查源码已无 `.js`；引入 oxlint（0 warning / 0 error）与 Prettier；全量格式化 42 文件（+4734/-834）；修复 15 处存量违规；`CODE_STYLE.md` 落规范；4 次提交        |

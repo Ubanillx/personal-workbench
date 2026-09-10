@@ -16,28 +16,28 @@
 
 ## server/src 模块职责
 
-| 文件 / 目录                            | 职责                                                                                                               | 备注                                           |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------- |
-| `index.ts`                             | 进程入口：校验 Node 版本 → 载入配置 → `buildApp` → 监听端口 → 打印本机/局域网地址                                  | 2,392 B                                        |
-| `app.ts`                               | Fastify 组装：helmet/CSP、cookie、multipart(20MB)、非生产环境 CORS、路由注册、生产环境静态托管 SPA、404 与错误处理 | 5,242 B                                        |
-| `runtime.ts`                           | `assertSupportedNodeRuntime()`（>=22.5.0 硬校验）与运行时标签                                                      |                                                |
-| `network.ts`                           | 局域网 IPv4 地址枚举（`getLanIPv4Addresses`）                                                                      | 409 B                                          |
-| `config/env.ts`                        | 配置装载（`NODE_ENV/HOST/PORT/DATABASE_PATH/WEB_DIST_PATH/SESSION_COOKIE_NAME/UPLOADS_DIR`）                       | 只读 `process.env`                             |
-| `routes/health.ts`                     | `GET /api/ping`、`GET /api/health`                                                                                 |                                                |
-| `routes/workbench.ts`                  | **39 个端点**：认证、仪表盘、任务全流程、评论/时间线、通知、成员、待办、随手记、重要文件、验收、企微收件箱         | 39,493 B / 88 行（超长单行风格，见 `DEBT-06`） |
-| `routes/report.ts`                     | **7 个端点**：周报提交/查询/上传/审批/退回/下载                                                                    | 15,896 B，使用 `ReportRepository`              |
-| `db/client.ts`                         | SQLite 连接（`node:sqlite`）、pragma、迁移触发、迁移前自动备份、只读/可写两种打开方式                              |                                                |
-| `db/migration-runner.ts`               | 迁移执行器：读 `schema_migrations` → 按文件名顺序执行未应用迁移                                                    |                                                |
-| `db/migrations/*.sql`                  | 8 个版本化迁移（001–008）                                                                                          | 见 `DATA_MODEL.md`                             |
-| `db/backup.ts`                         | `backupSqlite` / `backupOpenDatabase`，写入 `data/backups/` 并按 `keep=5` 裁剪                                     |                                                |
-| `db/health.ts`                         | 数据库健康探测（供 `/api/health` 返回 `database.status`）                                                          |                                                |
-| `db/repositories/report-repository.ts` | 周报数据访问（**唯一在用的 repository**）                                                                          |                                                |
-| `db/repositories/*.ts`（其余 5 个）    | 未被引用的旧分层实现                                                                                               | 见 `DEBT-05`                                   |
-| `db/json-migration.ts`                 | 一次性 JSON→SQLite 迁移（调用方已归档）                                                                            | 生产死代码                                     |
-| `security/owner-token.ts`              | 主人令牌重置：备份 → 撤销旧令牌/会话 → 生成新令牌（仅 sha256 落库）                                                |                                                |
-| `cli/reset-owner-token.ts`             | `npm run owner:reset` 入口                                                                                         |                                                |
-| `cli/backup-sqlite.ts`                 | `npm run db:backup` 入口                                                                                           |                                                |
-| `middleware/`、`utils/`                | **空目录**（无文件）                                                                                               | 见 `DEBT-11`                                   |
+| 文件 / 目录                            | 职责                                                                                                               | 备注                                       |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------ |
+| `index.ts`                             | 进程入口：校验 Node 版本 → 载入配置 → `buildApp` → 监听端口 → 打印本机/局域网地址                                  | 2,392 B                                    |
+| `app.ts`                               | Fastify 组装：helmet/CSP、cookie、multipart(20MB)、非生产环境 CORS、路由注册、生产环境静态托管 SPA、404 与错误处理 | 5,242 B                                    |
+| `runtime.ts`                           | `assertSupportedNodeRuntime()`（>=22.5.0 硬校验）与运行时标签                                                      |                                            |
+| `network.ts`                           | 局域网 IPv4 地址枚举（`getLanIPv4Addresses`）                                                                      | 409 B                                      |
+| `config/env.ts`                        | 配置装载（`NODE_ENV/HOST/PORT/DATABASE_PATH/WEB_DIST_PATH/SESSION_COOKIE_NAME/UPLOADS_DIR`）                       | 只读 `process.env`                         |
+| `routes/health.ts`                     | `GET /api/ping`、`GET /api/health`                                                                                 |                                            |
+| `routes/workbench.ts`                  | **39 个端点**：认证、仪表盘、任务全流程、评论/时间线、通知、成员、待办、随手记、重要文件、验收、企微收件箱         | 1,026 行 / 44,262 B（2026-09-10 已格式化） |
+| `routes/report.ts`                     | **7 个端点**：周报提交/查询/上传/审批/退回/下载                                                                    | 381 行 / 16,709 B，使用 `ReportRepository` |
+| `db/client.ts`                         | SQLite 连接（`node:sqlite`）、pragma、迁移触发、迁移前自动备份、只读/可写两种打开方式                              |                                            |
+| `db/migration-runner.ts`               | 迁移执行器：读 `schema_migrations` → 按文件名顺序执行未应用迁移                                                    |                                            |
+| `db/migrations/*.sql`                  | 8 个版本化迁移（001–008）                                                                                          | 见 `DATA_MODEL.md`                         |
+| `db/backup.ts`                         | `backupSqlite` / `backupOpenDatabase`，写入 `data/backups/` 并按 `keep=5` 裁剪                                     |                                            |
+| `db/health.ts`                         | 数据库健康探测（供 `/api/health` 返回 `database.status`）                                                          |                                            |
+| `db/repositories/report-repository.ts` | 周报数据访问（**唯一在用的 repository**）                                                                          |                                            |
+| `db/repositories/*.ts`（其余 5 个）    | 未被引用的旧分层实现                                                                                               | 见 `DEBT-05`                               |
+| `db/json-migration.ts`                 | 一次性 JSON→SQLite 迁移（调用方已归档）                                                                            | 生产死代码                                 |
+| `security/owner-token.ts`              | 主人令牌重置：备份 → 撤销旧令牌/会话 → 生成新令牌（仅 sha256 落库）                                                |                                            |
+| `cli/reset-owner-token.ts`             | `npm run owner:reset` 入口                                                                                         |                                            |
+| `cli/backup-sqlite.ts`                 | `npm run db:backup` 入口                                                                                           |                                            |
+| `middleware/`、`utils/`                | **空目录**（无文件）                                                                                               | 见 `DEBT-11`                               |
 
 ## 请求链路
 
@@ -168,16 +168,16 @@ Fastify (app.ts)
 
 ## 前端结构
 
-| 文件                                          | 职责                                                        |
-| --------------------------------------------- | ----------------------------------------------------------- |
-| `web/src/main.tsx` / `App.tsx`                | 入口、路由与鉴权外壳；30 秒轮询通知                         |
-| `web/src/services/apiClient.ts`               | 统一 API 客户端（10,649 B），所有请求与错误归一化的唯一出口 |
-| `web/src/pages/DashboardPage.tsx`             | 首页概览                                                    |
-| `web/src/pages/WorkbenchPages.tsx`            | 任务列表/详情/时间线、待办、随手记                          |
-| `web/src/pages/MorePages.tsx`                 | 成员管理、文件库、收件箱、验收视图等                        |
-| `web/src/pages/ReportsPage.tsx`               | 周报提交与审批                                              |
-| `web/src/styles/global.css`                   | 全局样式（12,925 B）                                        |
-| `web/src/components/`、`web/src/types/api.ts` | 组件目录为空；types 仅含健康检查类型                        |
+| 文件                                          | 职责                                                      |
+| --------------------------------------------- | --------------------------------------------------------- |
+| `web/src/main.tsx` / `App.tsx`                | 入口、路由与鉴权外壳；30 秒轮询通知                       |
+| `web/src/services/apiClient.ts`               | 统一 API 客户端（214 行），所有请求与错误归一化的唯一出口 |
+| `web/src/pages/DashboardPage.tsx`             | 首页概览                                                  |
+| `web/src/pages/WorkbenchPages.tsx`            | 任务列表/详情/时间线、待办、随手记（592 行）              |
+| `web/src/pages/MorePages.tsx`                 | 成员管理、文件库、收件箱、验收视图等（645 行）            |
+| `web/src/pages/ReportsPage.tsx`               | 周报提交与审批                                            |
+| `web/src/styles/global.css`                   | 全局样式（840 行）                                        |
+| `web/src/components/`、`web/src/types/api.ts` | 组件目录为空；types 仅含健康检查类型                      |
 
 ## 已知架构不一致
 

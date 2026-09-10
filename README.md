@@ -129,12 +129,16 @@ API_PROXY_TARGET=http://127.0.0.1:17500
 - `data/uploads/reports/`：周报上传文件目录。
 - 旧的 JSON 数据源和 Electron 相关代码已移入 `_archive/legacy-electron/`，正式服务不再读取。
 
-## 验证命令
+## 代码规范与验证命令
+
+源码只写 TypeScript（`.ts`/`.tsx`/`.mts`，禁用 `.js`），规范细则见 [`docs/harness/CODE_STYLE.md`](docs/harness/CODE_STYLE.md)。
 
 ```bash
-npm run typecheck
-npm run build
-npm test
+npm run lint          # oxlint，门禁 0 warning / 0 error
+npm run typecheck     # server + web
+npm test              # 依次 test:api → test:web → test:db
+npm run build         # 前端 + 后端产物
+npm run format:check  # 确认没有 Prettier 格式漂移
 ```
 
 `npm test` 依次执行 `test:api`、`test:web`、`test:db`；也可单独运行其中任意一个。
