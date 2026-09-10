@@ -28,6 +28,7 @@
 | 契约快照     | 139 条用例覆盖 48 端点 × 五种身份；`contract:compare` 全绿                                                          |
 | 前端 UI      | **antd v6.6.3** + icons 6.3.4；`antd doctor` 14 项全过，`antd lint app` 73 文件无问题                               |
 | 全栈迁移     | **Phase 0–4 全部完成** → `FULLSTACK_MIGRATION.md`                                                                   |
+| 账号与组织   | **改造设计已确认、待实施**（D-18…D-34，A–E 五阶段）→ `ACCOUNTS_AND_ORGS.md`                                         |
 
 ## 命令速查
 
@@ -56,20 +57,21 @@
 
 ## 文档索引
 
-| 文件                     | 内容                                       | 什么时候看 / 改                        |
-| ------------------------ | ------------------------------------------ | -------------------------------------- |
-| `README.md`（本文）      | 状态快照、命令速查、维护约定               | 每次交付后更新「当前状态快照」         |
-| `TODO.md`                | 待办清单（P0–P3 + 验收标准）               | 开工前挑一项；完成后勾掉并写明日期     |
-| `PLAN.md`                | 路线选择、里程碑、决策记录、风险           | 改方向、做取舍时                       |
-| `TECH_DEBT.md`           | 技术债登记 + 旧 BUG_LIST 复核结论          | 还债时；每季度体检时                   |
-| `ARCHITECTURE.md`        | 目录架构、模块职责、请求链路、48 端点      | 改代码结构、加接口时                   |
-| `DATA_MODEL.md`          | 16 张表、状态机、迁移机制、备份恢复        | 动数据库、动迁移时                     |
-| `CODE_STYLE.md`          | TS 约束、oxlint 规则、Prettier、抑制规范   | 写代码前；加规则、遇误报时             |
-| `FULLSTACK_MIGRATION.md` | 全栈迁移（React Router 8）阶段、决策、回退 | 迁移期间的主线文档；每阶段结束都要更新 |
+| 文件                     | 内容                                                   | 什么时候看 / 改                            |
+| ------------------------ | ------------------------------------------------------ | ------------------------------------------ |
+| `README.md`（本文）      | 状态快照、命令速查、维护约定                           | 每次交付后更新「当前状态快照」             |
+| `TODO.md`                | 待办清单（P0–P3 + 验收标准）                           | 开工前挑一项；完成后勾掉并写明日期         |
+| `PLAN.md`                | 路线选择、里程碑、决策记录、风险                       | 改方向、做取舍时                           |
+| `TECH_DEBT.md`           | 技术债登记 + 旧 BUG_LIST 复核结论                      | 还债时；每季度体检时                       |
+| `ARCHITECTURE.md`        | 目录架构、模块职责、请求链路、48 端点                  | 改代码结构、加接口时                       |
+| `DATA_MODEL.md`          | 16 张表、状态机、迁移机制、备份恢复                    | 动数据库、动迁移时                         |
+| `CODE_STYLE.md`          | TS 约束、oxlint 规则、Prettier、抑制规范               | 写代码前；加规则、遇误报时                 |
+| `FULLSTACK_MIGRATION.md` | 全栈迁移（React Router 8）阶段、决策、回退             | 迁移期间的主线文档；每阶段结束都要更新     |
+| `ACCOUNTS_AND_ORGS.md`   | 账号密码 + 多组织改造（D-18…D-34）、权限矩阵、A–E 阶段 | 改造期间的主线文档；改认证/权限/组织前必读 |
 
 ## 给 AI Agent 的阅读顺序
 
-1. 本文 → 2. `ARCHITECTURE.md` → 3. `DATA_MODEL.md` → 4. `CODE_STYLE.md` → 5. 迁移期间先读 `FULLSTACK_MIGRATION.md` → 6. 按任务读 `TODO.md` / `TECH_DEBT.md` / `PLAN.md`。
+1. 本文 → 2. `ARCHITECTURE.md` → 3. `DATA_MODEL.md` → 4. `CODE_STYLE.md` → 5. 迁移期间先读 `FULLSTACK_MIGRATION.md` → 6. **改造期间先读 `ACCOUNTS_AND_ORGS.md`** → 7. 按任务读 `TODO.md` / `TECH_DEBT.md` / `PLAN.md`。
 
 硬规则（违反会破坏项目一致性）：
 
