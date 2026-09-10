@@ -11,3 +11,6 @@ data/
 
 # 锁文件体积大、由 npm 生成，不格式化
 package-lock.json
+
+# 契约快照由工具生成，需保持字节稳定
+test/contract/golden/

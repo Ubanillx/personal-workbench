@@ -1,0 +1,6571 @@
+{
+  "meta": {
+    "generatedAt": "2026-09-10T03:36:15.531Z",
+    "entry": "server/src/index.ts",
+    "node": "24.19.0",
+    "caseCount": 139
+  },
+  "responses": [
+    {
+      "name": "health.ping.anon",
+      "role": "anon",
+      "request": {
+        "method": "GET",
+        "path": "/api/ping"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "name": "personal-workbench",
+          "status": "ok",
+          "version": "1.0.0",
+          "runtime": "node",
+          "database": {
+            "status": "ready",
+            "driver": "node:sqlite"
+          },
+          "timestamp": "<ts>"
+        }
+      }
+    },
+    {
+      "name": "health.status.anon",
+      "role": "anon",
+      "request": {
+        "method": "GET",
+        "path": "/api/health"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "name": "personal-workbench",
+          "status": "ok",
+          "version": "1.0.0",
+          "runtime": "node",
+          "database": {
+            "status": "ready",
+            "driver": "node:sqlite"
+          },
+          "timestamp": "<ts>"
+        }
+      }
+    },
+    {
+      "name": "health.status.owner",
+      "role": "owner",
+      "request": {
+        "method": "GET",
+        "path": "/api/health"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "name": "personal-workbench",
+          "status": "ok",
+          "version": "1.0.0",
+          "runtime": "node",
+          "database": {
+            "status": "ready",
+            "driver": "node:sqlite"
+          },
+          "timestamp": "<ts>"
+        }
+      }
+    },
+    {
+      "name": "auth.access.bad-token",
+      "role": "anon",
+      "request": {
+        "method": "POST",
+        "path": "/api/auth/access",
+        "body": {
+          "token": "not-a-token"
+        }
+      },
+      "status": 401,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "INVALID_TOKEN",
+          "message": "访问令牌无效"
+        }
+      }
+    },
+    {
+      "name": "auth.access.owner",
+      "role": "owner",
+      "request": {
+        "method": "POST",
+        "path": "/api/auth/access",
+        "body": {
+          "token": "owner-token"
+        }
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": true,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "user": {
+            "id": "owner",
+            "name": "主人",
+            "role": "owner",
+            "isActive": true
+          }
+        }
+      }
+    },
+    {
+      "name": "auth.access.missing-body",
+      "role": "anon",
+      "request": {
+        "method": "POST",
+        "path": "/api/auth/access",
+        "body": {}
+      },
+      "status": 401,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "INVALID_TOKEN",
+          "message": "访问令牌无效"
+        }
+      }
+    },
+    {
+      "name": "auth.me.anon",
+      "role": "anon",
+      "request": {
+        "method": "GET",
+        "path": "/api/auth/me"
+      },
+      "status": 401,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "UNAUTHENTICATED",
+          "message": "请先完成访问验证"
+        }
+      }
+    },
+    {
+      "name": "auth.me.owner",
+      "role": "owner",
+      "request": {
+        "method": "GET",
+        "path": "/api/auth/me"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "user": {
+            "id": "owner",
+            "name": "主人",
+            "role": "owner",
+            "isActive": true
+          }
+        }
+      }
+    },
+    {
+      "name": "auth.me.assistant",
+      "role": "assistant",
+      "request": {
+        "method": "GET",
+        "path": "/api/auth/me"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "user": {
+            "id": "assistant-a",
+            "name": "助理 A",
+            "role": "assistant",
+            "isActive": true
+          }
+        }
+      }
+    },
+    {
+      "name": "auth.me.viewer",
+      "role": "viewer",
+      "request": {
+        "method": "GET",
+        "path": "/api/auth/me"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "user": {
+            "id": "viewer-a",
+            "name": "查看者",
+            "role": "viewer",
+            "isActive": true
+          }
+        }
+      }
+    },
+    {
+      "name": "access-info.owner",
+      "role": "owner",
+      "request": {
+        "method": "GET",
+        "path": "/api/access-info"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "port": "<port>",
+          "host": "<ip>",
+          "localUrl": "http://<ip>:<port>",
+          "lanUrls": [
+            "http://<ip>:<port>",
+            "http://<ip>:<port>"
+          ],
+          "warning": "仅将局域网地址发给同一网络内的助理，不要发送 <ip> 或带令牌的链接"
+        }
+      }
+    },
+    {
+      "name": "access-info.assistant",
+      "role": "assistant",
+      "request": {
+        "method": "GET",
+        "path": "/api/access-info"
+      },
+      "status": 403,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "FORBIDDEN",
+          "message": "只有主人可以访问此功能"
+        }
+      }
+    },
+    {
+      "name": "access-info.viewer",
+      "role": "viewer",
+      "request": {
+        "method": "GET",
+        "path": "/api/access-info"
+      },
+      "status": 403,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "FORBIDDEN",
+          "message": "只有主人可以访问此功能"
+        }
+      }
+    },
+    {
+      "name": "dashboard.owner",
+      "role": "owner",
+      "request": {
+        "method": "GET",
+        "path": "/api/dashboard"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "user": {
+            "id": "owner",
+            "name": "主人",
+            "role": "owner",
+            "isActive": true
+          },
+          "tasks": [
+            {
+              "id": "t-todo",
+              "title": "待办任务",
+              "description": "",
+              "priority": "P1",
+              "status": "todo",
+              "progress": 0,
+              "dueDate": null,
+              "ownerId": "assistant-a",
+              "createdBy": "owner",
+              "source": "manual",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": null,
+              "archivedAt": null,
+              "ownerName": "助理 A",
+              "ownerRole": "assistant"
+            },
+            {
+              "id": "t-doing",
+              "title": "进行中任务",
+              "description": "",
+              "priority": "P0",
+              "status": "in_progress",
+              "progress": 40,
+              "dueDate": "2026-09-30",
+              "ownerId": "assistant-a",
+              "createdBy": "owner",
+              "source": "manual",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": null,
+              "archivedAt": null,
+              "ownerName": "助理 A",
+              "ownerRole": "assistant"
+            },
+            {
+              "id": "t-review",
+              "title": "待验收任务",
+              "description": "",
+              "priority": "P1",
+              "status": "pending_review",
+              "progress": 100,
+              "dueDate": "2026-09-30",
+              "ownerId": "assistant-a",
+              "createdBy": "owner",
+              "source": "manual",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": null,
+              "archivedAt": null,
+              "ownerName": "助理 A",
+              "ownerRole": "assistant"
+            },
+            {
+              "id": "t-done",
+              "title": "已完成任务",
+              "description": "",
+              "priority": "P2",
+              "status": "completed",
+              "progress": 100,
+              "dueDate": "2026-09-10",
+              "ownerId": "assistant-a",
+              "createdBy": "owner",
+              "source": "manual",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": "<ts>",
+              "archivedAt": null,
+              "ownerName": "助理 A",
+              "ownerRole": "assistant"
+            },
+            {
+              "id": "t-private",
+              "title": "私密任务",
+              "description": "",
+              "priority": "P2",
+              "status": "todo",
+              "progress": 0,
+              "dueDate": null,
+              "ownerId": "owner",
+              "createdBy": "owner",
+              "source": "manual",
+              "isPrivate": true,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": null,
+              "archivedAt": null,
+              "ownerName": "主人",
+              "ownerRole": "owner"
+            },
+            {
+              "id": "t-overdue",
+              "title": "逾期任务",
+              "description": "",
+              "priority": "P0",
+              "status": "todo",
+              "progress": 10,
+              "dueDate": "2020-01-01",
+              "ownerId": "assistant-a",
+              "createdBy": "owner",
+              "source": "manual",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": null,
+              "archivedAt": null,
+              "ownerName": "助理 A",
+              "ownerRole": "assistant"
+            },
+            {
+              "id": "t-of-b",
+              "title": "助理B的任务",
+              "description": "",
+              "priority": "P1",
+              "status": "todo",
+              "progress": 0,
+              "dueDate": null,
+              "ownerId": "assistant-b",
+              "createdBy": "owner",
+              "source": "manual",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": null,
+              "archivedAt": null,
+              "ownerName": "助理 B",
+              "ownerRole": "assistant"
+            }
+          ],
+          "todos": [
+            {
+              "id": "todo-open",
+              "content": "跟进报价",
+              "todoDate": "2026-09-01",
+              "isCompleted": 0,
+              "completedAt": null,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>"
+            }
+          ],
+          "notes": [
+            {
+              "id": "note-1",
+              "content": "会议要点",
+              "isPinned": 0,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>"
+            }
+          ],
+          "stats": {
+            "tasks": 7,
+            "activeTasks": 6,
+            "pendingTodos": 1,
+            "notes": 1
+          }
+        }
+      }
+    },
+    {
+      "name": "dashboard.assistant",
+      "role": "assistant",
+      "request": {
+        "method": "GET",
+        "path": "/api/dashboard"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "user": {
+            "id": "assistant-a",
+            "name": "助理 A",
+            "role": "assistant",
+            "isActive": true
+          },
+          "tasks": [
+            {
+              "id": "t-todo",
+              "title": "待办任务",
+              "description": "",
+              "priority": "P1",
+              "status": "todo",
+              "progress": 0,
+              "dueDate": null,
+              "ownerId": "assistant-a",
+              "createdBy": "owner",
+              "source": "manual",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": null,
+              "archivedAt": null,
+              "ownerName": "助理 A",
+              "ownerRole": "assistant"
+            },
+            {
+              "id": "t-doing",
+              "title": "进行中任务",
+              "description": "",
+              "priority": "P0",
+              "status": "in_progress",
+              "progress": 40,
+              "dueDate": "2026-09-30",
+              "ownerId": "assistant-a",
+              "createdBy": "owner",
+              "source": "manual",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": null,
+              "archivedAt": null,
+              "ownerName": "助理 A",
+              "ownerRole": "assistant"
+            },
+            {
+              "id": "t-review",
+              "title": "待验收任务",
+              "description": "",
+              "priority": "P1",
+              "status": "pending_review",
+              "progress": 100,
+              "dueDate": "2026-09-30",
+              "ownerId": "assistant-a",
+              "createdBy": "owner",
+              "source": "manual",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": null,
+              "archivedAt": null,
+              "ownerName": "助理 A",
+              "ownerRole": "assistant"
+            },
+            {
+              "id": "t-done",
+              "title": "已完成任务",
+              "description": "",
+              "priority": "P2",
+              "status": "completed",
+              "progress": 100,
+              "dueDate": "2026-09-10",
+              "ownerId": "assistant-a",
+              "createdBy": "owner",
+              "source": "manual",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": "<ts>",
+              "archivedAt": null,
+              "ownerName": "助理 A",
+              "ownerRole": "assistant"
+            },
+            {
+              "id": "t-overdue",
+              "title": "逾期任务",
+              "description": "",
+              "priority": "P0",
+              "status": "todo",
+              "progress": 10,
+              "dueDate": "2020-01-01",
+              "ownerId": "assistant-a",
+              "createdBy": "owner",
+              "source": "manual",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": null,
+              "archivedAt": null,
+              "ownerName": "助理 A",
+              "ownerRole": "assistant"
+            }
+          ],
+          "todos": [],
+          "notes": [],
+          "stats": {
+            "tasks": 5,
+            "activeTasks": 4,
+            "pendingTodos": 0,
+            "notes": 0
+          }
+        }
+      }
+    },
+    {
+      "name": "dashboard.viewer",
+      "role": "viewer",
+      "request": {
+        "method": "GET",
+        "path": "/api/dashboard"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "user": {
+            "id": "viewer-a",
+            "name": "查看者",
+            "role": "viewer",
+            "isActive": true
+          },
+          "tasks": [
+            {
+              "id": "t-todo",
+              "title": "待办任务",
+              "description": "",
+              "priority": "P1",
+              "status": "todo",
+              "progress": 0,
+              "dueDate": null,
+              "ownerId": "assistant-a",
+              "createdBy": "owner",
+              "source": "manual",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": null,
+              "archivedAt": null,
+              "ownerName": "助理 A",
+              "ownerRole": "assistant"
+            },
+            {
+              "id": "t-doing",
+              "title": "进行中任务",
+              "description": "",
+              "priority": "P0",
+              "status": "in_progress",
+              "progress": 40,
+              "dueDate": "2026-09-30",
+              "ownerId": "assistant-a",
+              "createdBy": "owner",
+              "source": "manual",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": null,
+              "archivedAt": null,
+              "ownerName": "助理 A",
+              "ownerRole": "assistant"
+            },
+            {
+              "id": "t-review",
+              "title": "待验收任务",
+              "description": "",
+              "priority": "P1",
+              "status": "pending_review",
+              "progress": 100,
+              "dueDate": "2026-09-30",
+              "ownerId": "assistant-a",
+              "createdBy": "owner",
+              "source": "manual",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": null,
+              "archivedAt": null,
+              "ownerName": "助理 A",
+              "ownerRole": "assistant"
+            },
+            {
+              "id": "t-done",
+              "title": "已完成任务",
+              "description": "",
+              "priority": "P2",
+              "status": "completed",
+              "progress": 100,
+              "dueDate": "2026-09-10",
+              "ownerId": "assistant-a",
+              "createdBy": "owner",
+              "source": "manual",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": "<ts>",
+              "archivedAt": null,
+              "ownerName": "助理 A",
+              "ownerRole": "assistant"
+            },
+            {
+              "id": "t-overdue",
+              "title": "逾期任务",
+              "description": "",
+              "priority": "P0",
+              "status": "todo",
+              "progress": 10,
+              "dueDate": "2020-01-01",
+              "ownerId": "assistant-a",
+              "createdBy": "owner",
+              "source": "manual",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": null,
+              "archivedAt": null,
+              "ownerName": "助理 A",
+              "ownerRole": "assistant"
+            },
+            {
+              "id": "t-of-b",
+              "title": "助理B的任务",
+              "description": "",
+              "priority": "P1",
+              "status": "todo",
+              "progress": 0,
+              "dueDate": null,
+              "ownerId": "assistant-b",
+              "createdBy": "owner",
+              "source": "manual",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": null,
+              "archivedAt": null,
+              "ownerName": "助理 B",
+              "ownerRole": "assistant"
+            }
+          ],
+          "todos": [],
+          "notes": [],
+          "stats": {
+            "tasks": 6,
+            "activeTasks": 5,
+            "pendingTodos": 0,
+            "notes": 0
+          }
+        }
+      }
+    },
+    {
+      "name": "tasks.list.anon",
+      "role": "anon",
+      "request": {
+        "method": "GET",
+        "path": "/api/tasks"
+      },
+      "status": 401,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "UNAUTHENTICATED",
+          "message": "请先完成访问验证"
+        }
+      }
+    },
+    {
+      "name": "tasks.list.owner",
+      "role": "owner",
+      "request": {
+        "method": "GET",
+        "path": "/api/tasks"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": [
+          {
+            "id": "t-todo",
+            "title": "待办任务",
+            "description": "",
+            "priority": "P1",
+            "status": "todo",
+            "progress": 0,
+            "dueDate": null,
+            "ownerId": "assistant-a",
+            "createdBy": "owner",
+            "source": "manual",
+            "isPrivate": false,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "completedAt": null,
+            "archivedAt": null,
+            "ownerName": "助理 A",
+            "ownerRole": "assistant"
+          },
+          {
+            "id": "t-doing",
+            "title": "进行中任务",
+            "description": "",
+            "priority": "P0",
+            "status": "in_progress",
+            "progress": 40,
+            "dueDate": "2026-09-30",
+            "ownerId": "assistant-a",
+            "createdBy": "owner",
+            "source": "manual",
+            "isPrivate": false,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "completedAt": null,
+            "archivedAt": null,
+            "ownerName": "助理 A",
+            "ownerRole": "assistant"
+          },
+          {
+            "id": "t-review",
+            "title": "待验收任务",
+            "description": "",
+            "priority": "P1",
+            "status": "pending_review",
+            "progress": 100,
+            "dueDate": "2026-09-30",
+            "ownerId": "assistant-a",
+            "createdBy": "owner",
+            "source": "manual",
+            "isPrivate": false,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "completedAt": null,
+            "archivedAt": null,
+            "ownerName": "助理 A",
+            "ownerRole": "assistant"
+          },
+          {
+            "id": "t-done",
+            "title": "已完成任务",
+            "description": "",
+            "priority": "P2",
+            "status": "completed",
+            "progress": 100,
+            "dueDate": "2026-09-10",
+            "ownerId": "assistant-a",
+            "createdBy": "owner",
+            "source": "manual",
+            "isPrivate": false,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "completedAt": "<ts>",
+            "archivedAt": null,
+            "ownerName": "助理 A",
+            "ownerRole": "assistant"
+          },
+          {
+            "id": "t-private",
+            "title": "私密任务",
+            "description": "",
+            "priority": "P2",
+            "status": "todo",
+            "progress": 0,
+            "dueDate": null,
+            "ownerId": "owner",
+            "createdBy": "owner",
+            "source": "manual",
+            "isPrivate": true,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "completedAt": null,
+            "archivedAt": null,
+            "ownerName": "主人",
+            "ownerRole": "owner"
+          },
+          {
+            "id": "t-overdue",
+            "title": "逾期任务",
+            "description": "",
+            "priority": "P0",
+            "status": "todo",
+            "progress": 10,
+            "dueDate": "2020-01-01",
+            "ownerId": "assistant-a",
+            "createdBy": "owner",
+            "source": "manual",
+            "isPrivate": false,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "completedAt": null,
+            "archivedAt": null,
+            "ownerName": "助理 A",
+            "ownerRole": "assistant"
+          },
+          {
+            "id": "t-of-b",
+            "title": "助理B的任务",
+            "description": "",
+            "priority": "P1",
+            "status": "todo",
+            "progress": 0,
+            "dueDate": null,
+            "ownerId": "assistant-b",
+            "createdBy": "owner",
+            "source": "manual",
+            "isPrivate": false,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "completedAt": null,
+            "archivedAt": null,
+            "ownerName": "助理 B",
+            "ownerRole": "assistant"
+          }
+        ]
+      }
+    },
+    {
+      "name": "tasks.list.owner.archived",
+      "role": "owner",
+      "request": {
+        "method": "GET",
+        "path": "/api/tasks?includeArchived=1"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": [
+          {
+            "id": "t-todo",
+            "title": "待办任务",
+            "description": "",
+            "priority": "P1",
+            "status": "todo",
+            "progress": 0,
+            "dueDate": null,
+            "ownerId": "assistant-a",
+            "createdBy": "owner",
+            "source": "manual",
+            "isPrivate": false,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "completedAt": null,
+            "archivedAt": null,
+            "ownerName": "助理 A",
+            "ownerRole": "assistant"
+          },
+          {
+            "id": "t-doing",
+            "title": "进行中任务",
+            "description": "",
+            "priority": "P0",
+            "status": "in_progress",
+            "progress": 40,
+            "dueDate": "2026-09-30",
+            "ownerId": "assistant-a",
+            "createdBy": "owner",
+            "source": "manual",
+            "isPrivate": false,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "completedAt": null,
+            "archivedAt": null,
+            "ownerName": "助理 A",
+            "ownerRole": "assistant"
+          },
+          {
+            "id": "t-review",
+            "title": "待验收任务",
+            "description": "",
+            "priority": "P1",
+            "status": "pending_review",
+            "progress": 100,
+            "dueDate": "2026-09-30",
+            "ownerId": "assistant-a",
+            "createdBy": "owner",
+            "source": "manual",
+            "isPrivate": false,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "completedAt": null,
+            "archivedAt": null,
+            "ownerName": "助理 A",
+            "ownerRole": "assistant"
+          },
+          {
+            "id": "t-done",
+            "title": "已完成任务",
+            "description": "",
+            "priority": "P2",
+            "status": "completed",
+            "progress": 100,
+            "dueDate": "2026-09-10",
+            "ownerId": "assistant-a",
+            "createdBy": "owner",
+            "source": "manual",
+            "isPrivate": false,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "completedAt": "<ts>",
+            "archivedAt": null,
+            "ownerName": "助理 A",
+            "ownerRole": "assistant"
+          },
+          {
+            "id": "t-archived",
+            "title": "已归档任务",
+            "description": "",
+            "priority": "P1",
+            "status": "todo",
+            "progress": 0,
+            "dueDate": null,
+            "ownerId": "owner",
+            "createdBy": "owner",
+            "source": "manual",
+            "isPrivate": false,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "completedAt": null,
+            "archivedAt": "<ts>",
+            "ownerName": "主人",
+            "ownerRole": "owner"
+          },
+          {
+            "id": "t-private",
+            "title": "私密任务",
+            "description": "",
+            "priority": "P2",
+            "status": "todo",
+            "progress": 0,
+            "dueDate": null,
+            "ownerId": "owner",
+            "createdBy": "owner",
+            "source": "manual",
+            "isPrivate": true,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "completedAt": null,
+            "archivedAt": null,
+            "ownerName": "主人",
+            "ownerRole": "owner"
+          },
+          {
+            "id": "t-overdue",
+            "title": "逾期任务",
+            "description": "",
+            "priority": "P0",
+            "status": "todo",
+            "progress": 10,
+            "dueDate": "2020-01-01",
+            "ownerId": "assistant-a",
+            "createdBy": "owner",
+            "source": "manual",
+            "isPrivate": false,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "completedAt": null,
+            "archivedAt": null,
+            "ownerName": "助理 A",
+            "ownerRole": "assistant"
+          },
+          {
+            "id": "t-of-b",
+            "title": "助理B的任务",
+            "description": "",
+            "priority": "P1",
+            "status": "todo",
+            "progress": 0,
+            "dueDate": null,
+            "ownerId": "assistant-b",
+            "createdBy": "owner",
+            "source": "manual",
+            "isPrivate": false,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "completedAt": null,
+            "archivedAt": null,
+            "ownerName": "助理 B",
+            "ownerRole": "assistant"
+          }
+        ]
+      }
+    },
+    {
+      "name": "tasks.list.assistant",
+      "role": "assistant",
+      "request": {
+        "method": "GET",
+        "path": "/api/tasks"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": [
+          {
+            "id": "t-todo",
+            "title": "待办任务",
+            "description": "",
+            "priority": "P1",
+            "status": "todo",
+            "progress": 0,
+            "dueDate": null,
+            "ownerId": "assistant-a",
+            "createdBy": "owner",
+            "source": "manual",
+            "isPrivate": false,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "completedAt": null,
+            "archivedAt": null,
+            "ownerName": "助理 A",
+            "ownerRole": "assistant"
+          },
+          {
+            "id": "t-doing",
+            "title": "进行中任务",
+            "description": "",
+            "priority": "P0",
+            "status": "in_progress",
+            "progress": 40,
+            "dueDate": "2026-09-30",
+            "ownerId": "assistant-a",
+            "createdBy": "owner",
+            "source": "manual",
+            "isPrivate": false,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "completedAt": null,
+            "archivedAt": null,
+            "ownerName": "助理 A",
+            "ownerRole": "assistant"
+          },
+          {
+            "id": "t-review",
+            "title": "待验收任务",
+            "description": "",
+            "priority": "P1",
+            "status": "pending_review",
+            "progress": 100,
+            "dueDate": "2026-09-30",
+            "ownerId": "assistant-a",
+            "createdBy": "owner",
+            "source": "manual",
+            "isPrivate": false,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "completedAt": null,
+            "archivedAt": null,
+            "ownerName": "助理 A",
+            "ownerRole": "assistant"
+          },
+          {
+            "id": "t-done",
+            "title": "已完成任务",
+            "description": "",
+            "priority": "P2",
+            "status": "completed",
+            "progress": 100,
+            "dueDate": "2026-09-10",
+            "ownerId": "assistant-a",
+            "createdBy": "owner",
+            "source": "manual",
+            "isPrivate": false,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "completedAt": "<ts>",
+            "archivedAt": null,
+            "ownerName": "助理 A",
+            "ownerRole": "assistant"
+          },
+          {
+            "id": "t-overdue",
+            "title": "逾期任务",
+            "description": "",
+            "priority": "P0",
+            "status": "todo",
+            "progress": 10,
+            "dueDate": "2020-01-01",
+            "ownerId": "assistant-a",
+            "createdBy": "owner",
+            "source": "manual",
+            "isPrivate": false,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "completedAt": null,
+            "archivedAt": null,
+            "ownerName": "助理 A",
+            "ownerRole": "assistant"
+          }
+        ]
+      }
+    },
+    {
+      "name": "tasks.list.assistant.archived",
+      "role": "assistant",
+      "request": {
+        "method": "GET",
+        "path": "/api/tasks?includeArchived=1"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": [
+          {
+            "id": "t-todo",
+            "title": "待办任务",
+            "description": "",
+            "priority": "P1",
+            "status": "todo",
+            "progress": 0,
+            "dueDate": null,
+            "ownerId": "assistant-a",
+            "createdBy": "owner",
+            "source": "manual",
+            "isPrivate": false,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "completedAt": null,
+            "archivedAt": null,
+            "ownerName": "助理 A",
+            "ownerRole": "assistant"
+          },
+          {
+            "id": "t-doing",
+            "title": "进行中任务",
+            "description": "",
+            "priority": "P0",
+            "status": "in_progress",
+            "progress": 40,
+            "dueDate": "2026-09-30",
+            "ownerId": "assistant-a",
+            "createdBy": "owner",
+            "source": "manual",
+            "isPrivate": false,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "completedAt": null,
+            "archivedAt": null,
+            "ownerName": "助理 A",
+            "ownerRole": "assistant"
+          },
+          {
+            "id": "t-review",
+            "title": "待验收任务",
+            "description": "",
+            "priority": "P1",
+            "status": "pending_review",
+            "progress": 100,
+            "dueDate": "2026-09-30",
+            "ownerId": "assistant-a",
+            "createdBy": "owner",
+            "source": "manual",
+            "isPrivate": false,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "completedAt": null,
+            "archivedAt": null,
+            "ownerName": "助理 A",
+            "ownerRole": "assistant"
+          },
+          {
+            "id": "t-done",
+            "title": "已完成任务",
+            "description": "",
+            "priority": "P2",
+            "status": "completed",
+            "progress": 100,
+            "dueDate": "2026-09-10",
+            "ownerId": "assistant-a",
+            "createdBy": "owner",
+            "source": "manual",
+            "isPrivate": false,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "completedAt": "<ts>",
+            "archivedAt": null,
+            "ownerName": "助理 A",
+            "ownerRole": "assistant"
+          },
+          {
+            "id": "t-overdue",
+            "title": "逾期任务",
+            "description": "",
+            "priority": "P0",
+            "status": "todo",
+            "progress": 10,
+            "dueDate": "2020-01-01",
+            "ownerId": "assistant-a",
+            "createdBy": "owner",
+            "source": "manual",
+            "isPrivate": false,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "completedAt": null,
+            "archivedAt": null,
+            "ownerName": "助理 A",
+            "ownerRole": "assistant"
+          }
+        ]
+      }
+    },
+    {
+      "name": "tasks.list.assistantB",
+      "role": "assistantB",
+      "request": {
+        "method": "GET",
+        "path": "/api/tasks"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": [
+          {
+            "id": "t-of-b",
+            "title": "助理B的任务",
+            "description": "",
+            "priority": "P1",
+            "status": "todo",
+            "progress": 0,
+            "dueDate": null,
+            "ownerId": "assistant-b",
+            "createdBy": "owner",
+            "source": "manual",
+            "isPrivate": false,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "completedAt": null,
+            "archivedAt": null,
+            "ownerName": "助理 B",
+            "ownerRole": "assistant"
+          }
+        ]
+      }
+    },
+    {
+      "name": "tasks.list.viewer",
+      "role": "viewer",
+      "request": {
+        "method": "GET",
+        "path": "/api/tasks"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": [
+          {
+            "id": "t-todo",
+            "title": "待办任务",
+            "description": "",
+            "priority": "P1",
+            "status": "todo",
+            "progress": 0,
+            "dueDate": null,
+            "ownerId": "assistant-a",
+            "createdBy": "owner",
+            "source": "manual",
+            "isPrivate": false,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "completedAt": null,
+            "archivedAt": null,
+            "ownerName": "助理 A",
+            "ownerRole": "assistant"
+          },
+          {
+            "id": "t-doing",
+            "title": "进行中任务",
+            "description": "",
+            "priority": "P0",
+            "status": "in_progress",
+            "progress": 40,
+            "dueDate": "2026-09-30",
+            "ownerId": "assistant-a",
+            "createdBy": "owner",
+            "source": "manual",
+            "isPrivate": false,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "completedAt": null,
+            "archivedAt": null,
+            "ownerName": "助理 A",
+            "ownerRole": "assistant"
+          },
+          {
+            "id": "t-review",
+            "title": "待验收任务",
+            "description": "",
+            "priority": "P1",
+            "status": "pending_review",
+            "progress": 100,
+            "dueDate": "2026-09-30",
+            "ownerId": "assistant-a",
+            "createdBy": "owner",
+            "source": "manual",
+            "isPrivate": false,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "completedAt": null,
+            "archivedAt": null,
+            "ownerName": "助理 A",
+            "ownerRole": "assistant"
+          },
+          {
+            "id": "t-done",
+            "title": "已完成任务",
+            "description": "",
+            "priority": "P2",
+            "status": "completed",
+            "progress": 100,
+            "dueDate": "2026-09-10",
+            "ownerId": "assistant-a",
+            "createdBy": "owner",
+            "source": "manual",
+            "isPrivate": false,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "completedAt": "<ts>",
+            "archivedAt": null,
+            "ownerName": "助理 A",
+            "ownerRole": "assistant"
+          },
+          {
+            "id": "t-overdue",
+            "title": "逾期任务",
+            "description": "",
+            "priority": "P0",
+            "status": "todo",
+            "progress": 10,
+            "dueDate": "2020-01-01",
+            "ownerId": "assistant-a",
+            "createdBy": "owner",
+            "source": "manual",
+            "isPrivate": false,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "completedAt": null,
+            "archivedAt": null,
+            "ownerName": "助理 A",
+            "ownerRole": "assistant"
+          },
+          {
+            "id": "t-of-b",
+            "title": "助理B的任务",
+            "description": "",
+            "priority": "P1",
+            "status": "todo",
+            "progress": 0,
+            "dueDate": null,
+            "ownerId": "assistant-b",
+            "createdBy": "owner",
+            "source": "manual",
+            "isPrivate": false,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "completedAt": null,
+            "archivedAt": null,
+            "ownerName": "助理 B",
+            "ownerRole": "assistant"
+          }
+        ]
+      }
+    },
+    {
+      "name": "tasks.create.owner",
+      "role": "owner",
+      "request": {
+        "method": "POST",
+        "path": "/api/tasks",
+        "body": {
+          "title": "契约-主人创建",
+          "ownerId": "assistant-a",
+          "priority": "P1",
+          "dueDate": "2026-12-31",
+          "description": "契约用例"
+        }
+      },
+      "status": 201,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "id": "<uuid>",
+          "title": "契约-主人创建",
+          "description": "契约用例",
+          "priority": "P1",
+          "status": "todo",
+          "progress": 0,
+          "dueDate": "2026-12-31",
+          "ownerId": "assistant-a",
+          "createdBy": "owner",
+          "source": "manual",
+          "isPrivate": false,
+          "createdAt": "<ts>",
+          "updatedAt": "<ts>",
+          "completedAt": null,
+          "archivedAt": null,
+          "ownerName": "助理 A",
+          "ownerRole": "assistant"
+        }
+      }
+    },
+    {
+      "name": "tasks.create.owner.private",
+      "role": "owner",
+      "request": {
+        "method": "POST",
+        "path": "/api/tasks",
+        "body": {
+          "title": "契约-私密",
+          "isPrivate": true
+        }
+      },
+      "status": 201,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "id": "<uuid>",
+          "title": "契约-私密",
+          "description": "",
+          "priority": "P1",
+          "status": "todo",
+          "progress": 0,
+          "dueDate": null,
+          "ownerId": "owner",
+          "createdBy": "owner",
+          "source": "manual",
+          "isPrivate": true,
+          "createdAt": "<ts>",
+          "updatedAt": "<ts>",
+          "completedAt": null,
+          "archivedAt": null,
+          "ownerName": "主人",
+          "ownerRole": "owner"
+        }
+      }
+    },
+    {
+      "name": "tasks.create.owner.private-to-assistant",
+      "role": "owner",
+      "request": {
+        "method": "POST",
+        "path": "/api/tasks",
+        "body": {
+          "title": "契约-私密给助理",
+          "isPrivate": true,
+          "ownerId": "assistant-a"
+        }
+      },
+      "status": 201,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "id": "<uuid>",
+          "title": "契约-私密给助理",
+          "description": "",
+          "priority": "P1",
+          "status": "todo",
+          "progress": 0,
+          "dueDate": null,
+          "ownerId": "assistant-a",
+          "createdBy": "owner",
+          "source": "manual",
+          "isPrivate": true,
+          "createdAt": "<ts>",
+          "updatedAt": "<ts>",
+          "completedAt": null,
+          "archivedAt": null,
+          "ownerName": "助理 A",
+          "ownerRole": "assistant"
+        }
+      }
+    },
+    {
+      "name": "tasks.create.owner.no-title",
+      "role": "owner",
+      "request": {
+        "method": "POST",
+        "path": "/api/tasks",
+        "body": {}
+      },
+      "status": 400,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "任务标题不能为空"
+        }
+      }
+    },
+    {
+      "name": "tasks.create.assistant",
+      "role": "assistant",
+      "request": {
+        "method": "POST",
+        "path": "/api/tasks",
+        "body": {
+          "title": "契约-助理创建",
+          "ownerId": "assistant-b"
+        }
+      },
+      "status": 201,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "id": "<uuid>",
+          "title": "契约-助理创建",
+          "description": "",
+          "priority": "P1",
+          "status": "todo",
+          "progress": 0,
+          "dueDate": null,
+          "ownerId": "assistant-a",
+          "createdBy": "assistant-a",
+          "source": "assistant",
+          "isPrivate": false,
+          "createdAt": "<ts>",
+          "updatedAt": "<ts>",
+          "completedAt": null,
+          "archivedAt": null,
+          "ownerName": "助理 A",
+          "ownerRole": "assistant"
+        }
+      }
+    },
+    {
+      "name": "tasks.create.viewer",
+      "role": "viewer",
+      "request": {
+        "method": "POST",
+        "path": "/api/tasks",
+        "body": {
+          "title": "契约-查看者创建"
+        }
+      },
+      "status": 403,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "FORBIDDEN",
+          "message": "查看者不能创建任务"
+        }
+      }
+    },
+    {
+      "name": "tasks.create.owner.to-delete",
+      "role": "owner",
+      "request": {
+        "method": "POST",
+        "path": "/api/tasks",
+        "body": {
+          "title": "契约-待删除"
+        }
+      },
+      "status": 201,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "id": "<uuid>",
+          "title": "契约-待删除",
+          "description": "",
+          "priority": "P1",
+          "status": "todo",
+          "progress": 0,
+          "dueDate": null,
+          "ownerId": "owner",
+          "createdBy": "owner",
+          "source": "manual",
+          "isPrivate": false,
+          "createdAt": "<ts>",
+          "updatedAt": "<ts>",
+          "completedAt": null,
+          "archivedAt": null,
+          "ownerName": "主人",
+          "ownerRole": "owner"
+        }
+      }
+    },
+    {
+      "name": "tasks.patch.owner",
+      "role": "owner",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/tasks/c585891a-70e6-4b26-9813-ca61307c8519",
+        "body": {
+          "title": "契约-改名",
+          "priority": "P2"
+        }
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "id": "<uuid>",
+          "title": "契约-改名",
+          "description": "契约用例",
+          "priority": "P2",
+          "status": "todo",
+          "progress": 0,
+          "dueDate": "2026-12-31",
+          "ownerId": "assistant-a",
+          "createdBy": "owner",
+          "source": "manual",
+          "isPrivate": false,
+          "createdAt": "<ts>",
+          "updatedAt": "<ts>",
+          "completedAt": null,
+          "archivedAt": null,
+          "ownerName": "助理 A",
+          "ownerRole": "assistant"
+        }
+      }
+    },
+    {
+      "name": "tasks.patch.reject-progress",
+      "role": "owner",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/tasks/c585891a-70e6-4b26-9813-ca61307c8519",
+        "body": {
+          "progress": 50
+        }
+      },
+      "status": 400,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "FIELD_FORBIDDEN",
+          "message": "请使用进度和验收接口变更任务状态"
+        }
+      }
+    },
+    {
+      "name": "tasks.patch.archived",
+      "role": "owner",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/tasks/t-archived",
+        "body": {
+          "title": "改归档任务"
+        }
+      },
+      "status": 400,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "ARCHIVED",
+          "message": "请先恢复归档任务"
+        }
+      }
+    },
+    {
+      "name": "tasks.patch.bad-owner",
+      "role": "owner",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/tasks/c585891a-70e6-4b26-9813-ca61307c8519",
+        "body": {
+          "ownerId": "nobody"
+        }
+      },
+      "status": 400,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "负责人不存在"
+        }
+      }
+    },
+    {
+      "name": "tasks.patch.missing",
+      "role": "owner",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/tasks/no-such-task",
+        "body": {
+          "title": "x"
+        }
+      },
+      "status": 404,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "任务不存在"
+        }
+      }
+    },
+    {
+      "name": "tasks.patch.assistant",
+      "role": "assistant",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/tasks/c585891a-70e6-4b26-9813-ca61307c8519",
+        "body": {
+          "title": "x"
+        }
+      },
+      "status": 403,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "FORBIDDEN",
+          "message": "只有主人可以访问此功能"
+        }
+      }
+    },
+    {
+      "name": "tasks.progress.assistant",
+      "role": "assistant",
+      "request": {
+        "method": "POST",
+        "path": "/api/tasks/c585891a-70e6-4b26-9813-ca61307c8519/progress",
+        "body": {
+          "progress": 30,
+          "content": "已完成三成"
+        }
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "id": "<uuid>",
+          "title": "契约-改名",
+          "description": "契约用例",
+          "priority": "P2",
+          "status": "in_progress",
+          "progress": 30,
+          "dueDate": "2026-12-31",
+          "ownerId": "assistant-a",
+          "createdBy": "owner",
+          "source": "manual",
+          "isPrivate": false,
+          "createdAt": "<ts>",
+          "updatedAt": "<ts>",
+          "completedAt": null,
+          "archivedAt": null,
+          "ownerName": "助理 A",
+          "ownerRole": "assistant"
+        }
+      }
+    },
+    {
+      "name": "tasks.progress.other-task",
+      "role": "assistant",
+      "request": {
+        "method": "POST",
+        "path": "/api/tasks/t-of-b/progress",
+        "body": {
+          "progress": 30
+        }
+      },
+      "status": 403,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "FORBIDDEN",
+          "message": "只能更新自己负责的任务"
+        }
+      }
+    },
+    {
+      "name": "tasks.progress.invalid-value",
+      "role": "assistant",
+      "request": {
+        "method": "POST",
+        "path": "/api/tasks/c585891a-70e6-4b26-9813-ca61307c8519/progress",
+        "body": {
+          "progress": 200
+        }
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "id": "<uuid>",
+          "title": "契约-改名",
+          "description": "契约用例",
+          "priority": "P2",
+          "status": "pending_review",
+          "progress": 100,
+          "dueDate": "2026-12-31",
+          "ownerId": "assistant-a",
+          "createdBy": "owner",
+          "source": "manual",
+          "isPrivate": false,
+          "createdAt": "<ts>",
+          "updatedAt": "<ts>",
+          "completedAt": null,
+          "archivedAt": null,
+          "ownerName": "助理 A",
+          "ownerRole": "assistant"
+        }
+      }
+    },
+    {
+      "name": "tasks.submit-review.assistant",
+      "role": "assistant",
+      "request": {
+        "method": "POST",
+        "path": "/api/tasks/c585891a-70e6-4b26-9813-ca61307c8519/submit-review",
+        "body": {}
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "id": "<uuid>",
+          "title": "契约-改名",
+          "description": "契约用例",
+          "priority": "P2",
+          "status": "pending_review",
+          "progress": 100,
+          "dueDate": "2026-12-31",
+          "ownerId": "assistant-a",
+          "createdBy": "owner",
+          "source": "manual",
+          "isPrivate": false,
+          "createdAt": "<ts>",
+          "updatedAt": "<ts>",
+          "completedAt": null,
+          "archivedAt": null,
+          "ownerName": "助理 A",
+          "ownerRole": "assistant"
+        }
+      }
+    },
+    {
+      "name": "tasks.approve.owner",
+      "role": "owner",
+      "request": {
+        "method": "POST",
+        "path": "/api/tasks/c585891a-70e6-4b26-9813-ca61307c8519/approve",
+        "body": {}
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "id": "<uuid>",
+          "title": "契约-改名",
+          "description": "契约用例",
+          "priority": "P2",
+          "status": "completed",
+          "progress": 100,
+          "dueDate": "2026-12-31",
+          "ownerId": "assistant-a",
+          "createdBy": "owner",
+          "source": "manual",
+          "isPrivate": false,
+          "createdAt": "<ts>",
+          "updatedAt": "<ts>",
+          "completedAt": "<ts>",
+          "archivedAt": null,
+          "ownerName": "助理 A",
+          "ownerRole": "assistant"
+        }
+      }
+    },
+    {
+      "name": "tasks.return.owner",
+      "role": "owner",
+      "request": {
+        "method": "POST",
+        "path": "/api/tasks/c585891a-70e6-4b26-9813-ca61307c8519/return",
+        "body": {
+          "note": "请补充截图"
+        }
+      },
+      "status": 400,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "INVALID_STATE",
+          "message": "只有待验收任务可以退回"
+        }
+      }
+    },
+    {
+      "name": "tasks.return.viewer",
+      "role": "viewer",
+      "request": {
+        "method": "POST",
+        "path": "/api/tasks/c585891a-70e6-4b26-9813-ca61307c8519/return",
+        "body": {
+          "note": "x"
+        }
+      },
+      "status": 403,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "FORBIDDEN",
+          "message": "只有主人可以访问此功能"
+        }
+      }
+    },
+    {
+      "name": "tasks.archive.owner",
+      "role": "owner",
+      "request": {
+        "method": "POST",
+        "path": "/api/tasks/c585891a-70e6-4b26-9813-ca61307c8519/archive"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": null
+      }
+    },
+    {
+      "name": "tasks.archive.again",
+      "role": "owner",
+      "request": {
+        "method": "POST",
+        "path": "/api/tasks/c585891a-70e6-4b26-9813-ca61307c8519/archive"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": null
+      }
+    },
+    {
+      "name": "tasks.restore.owner",
+      "role": "owner",
+      "request": {
+        "method": "POST",
+        "path": "/api/tasks/c585891a-70e6-4b26-9813-ca61307c8519/restore"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "id": "<uuid>",
+          "title": "契约-改名",
+          "description": "契约用例",
+          "priority": "P2",
+          "status": "completed",
+          "progress": 100,
+          "dueDate": "2026-12-31",
+          "ownerId": "assistant-a",
+          "createdBy": "owner",
+          "source": "manual",
+          "isPrivate": false,
+          "createdAt": "<ts>",
+          "updatedAt": "<ts>",
+          "completedAt": "<ts>",
+          "archivedAt": null,
+          "ownerName": "助理 A",
+          "ownerRole": "assistant"
+        }
+      }
+    },
+    {
+      "name": "tasks.restore.again",
+      "role": "owner",
+      "request": {
+        "method": "POST",
+        "path": "/api/tasks/c585891a-70e6-4b26-9813-ca61307c8519/restore"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "id": "<uuid>",
+          "title": "契约-改名",
+          "description": "契约用例",
+          "priority": "P2",
+          "status": "completed",
+          "progress": 100,
+          "dueDate": "2026-12-31",
+          "ownerId": "assistant-a",
+          "createdBy": "owner",
+          "source": "manual",
+          "isPrivate": false,
+          "createdAt": "<ts>",
+          "updatedAt": "<ts>",
+          "completedAt": "<ts>",
+          "archivedAt": null,
+          "ownerName": "助理 A",
+          "ownerRole": "assistant"
+        }
+      }
+    },
+    {
+      "name": "tasks.delete.missing",
+      "role": "owner",
+      "request": {
+        "method": "DELETE",
+        "path": "/api/tasks/no-such-task"
+      },
+      "status": 404,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "任务不存在"
+        }
+      }
+    },
+    {
+      "name": "comments.list.owner",
+      "role": "owner",
+      "request": {
+        "method": "GET",
+        "path": "/api/tasks/t-doing/comments"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": [
+          {
+            "id": "comment-1",
+            "taskId": "t-doing",
+            "authorId": "owner",
+            "authorName": "主人",
+            "authorRole": "owner",
+            "content": "请补充报价单",
+            "createdAt": "<ts>"
+          }
+        ]
+      }
+    },
+    {
+      "name": "comments.create.assistant",
+      "role": "assistant",
+      "request": {
+        "method": "POST",
+        "path": "/api/tasks/t-doing/comments",
+        "body": {
+          "content": "助理评论"
+        }
+      },
+      "status": 201,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "id": "<uuid>",
+          "taskId": "t-doing",
+          "authorId": "assistant-a",
+          "authorName": "助理 A",
+          "authorRole": "assistant",
+          "content": "助理评论",
+          "createdAt": "<ts>"
+        }
+      }
+    },
+    {
+      "name": "comments.create.other-task",
+      "role": "assistant",
+      "request": {
+        "method": "POST",
+        "path": "/api/tasks/t-of-b/comments",
+        "body": {
+          "content": "越权评论"
+        }
+      },
+      "status": 403,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "FORBIDDEN",
+          "message": "无权评论该任务"
+        }
+      }
+    },
+    {
+      "name": "comments.create.viewer",
+      "role": "viewer",
+      "request": {
+        "method": "POST",
+        "path": "/api/tasks/t-doing/comments",
+        "body": {
+          "content": "查看者评论"
+        }
+      },
+      "status": 201,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "id": "<uuid>",
+          "taskId": "t-doing",
+          "authorId": "viewer-a",
+          "authorName": "查看者",
+          "authorRole": "viewer",
+          "content": "查看者评论",
+          "createdAt": "<ts>"
+        }
+      }
+    },
+    {
+      "name": "comments.create.private-task",
+      "role": "viewer",
+      "request": {
+        "method": "POST",
+        "path": "/api/tasks/t-private/comments",
+        "body": {
+          "content": "越权评论"
+        }
+      },
+      "status": 403,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "FORBIDDEN",
+          "message": "无权评论该任务"
+        }
+      }
+    },
+    {
+      "name": "comments.create.empty",
+      "role": "owner",
+      "request": {
+        "method": "POST",
+        "path": "/api/tasks/t-doing/comments",
+        "body": {
+          "content": "  "
+        }
+      },
+      "status": 400,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "评论内容不能为空"
+        }
+      }
+    },
+    {
+      "name": "activity.owner",
+      "role": "owner",
+      "request": {
+        "method": "GET",
+        "path": "/api/tasks/t-doing/activity"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": [
+          {
+            "id": "log-1",
+            "kind": "progress",
+            "authorId": "assistant-a",
+            "authorName": "助理 A",
+            "content": "已完成一半",
+            "progress": 40,
+            "createdAt": "<ts>"
+          },
+          {
+            "id": "comment-1",
+            "kind": "comment",
+            "authorId": "owner",
+            "authorName": "主人",
+            "content": "请补充报价单",
+            "progress": null,
+            "createdAt": "<ts>"
+          },
+          {
+            "id": "event-1",
+            "kind": "task_created",
+            "authorId": "owner",
+            "authorName": "主人",
+            "content": "创建任务",
+            "progress": null,
+            "createdAt": "<ts>"
+          },
+          {
+            "id": "<uuid>",
+            "kind": "comment",
+            "authorId": "assistant-a",
+            "authorName": "助理 A",
+            "content": "助理评论",
+            "progress": null,
+            "createdAt": "<ts>"
+          },
+          {
+            "id": "<uuid>",
+            "kind": "comment",
+            "authorId": "viewer-a",
+            "authorName": "查看者",
+            "content": "查看者评论",
+            "progress": null,
+            "createdAt": "<ts>"
+          }
+        ]
+      }
+    },
+    {
+      "name": "activity.anon",
+      "role": "anon",
+      "request": {
+        "method": "GET",
+        "path": "/api/tasks/t-doing/activity"
+      },
+      "status": 401,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "UNAUTHENTICATED",
+          "message": "请先完成访问验证"
+        }
+      }
+    },
+    {
+      "name": "activity.missing",
+      "role": "owner",
+      "request": {
+        "method": "GET",
+        "path": "/api/tasks/no-such-task/activity"
+      },
+      "status": 404,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "任务不存在"
+        }
+      }
+    },
+    {
+      "name": "notifications.owner",
+      "role": "owner",
+      "request": {
+        "method": "GET",
+        "path": "/api/notifications"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": [
+          {
+            "id": "<uuid>",
+            "recipientId": "owner",
+            "actorId": "viewer-a",
+            "taskId": "t-doing",
+            "reportId": null,
+            "eventType": "task_commented",
+            "title": "任务有新评论",
+            "message": "查看者 评论了任务“进行中任务”",
+            "isRead": 0,
+            "createdAt": "<ts>",
+            "readAt": null
+          },
+          {
+            "id": "<uuid>",
+            "recipientId": "owner",
+            "actorId": "assistant-a",
+            "taskId": "t-doing",
+            "reportId": null,
+            "eventType": "task_commented",
+            "title": "任务有新评论",
+            "message": "助理 A 评论了任务“进行中任务”",
+            "isRead": 0,
+            "createdAt": "<ts>",
+            "readAt": null
+          },
+          {
+            "id": "<uuid>",
+            "recipientId": "owner",
+            "actorId": "assistant-a",
+            "taskId": "<uuid>",
+            "reportId": null,
+            "eventType": "task_submitted",
+            "title": "任务待验收",
+            "message": "助理 A 更新了任务“契约-改名”",
+            "isRead": 0,
+            "createdAt": "<ts>",
+            "readAt": null
+          },
+          {
+            "id": "<uuid>",
+            "recipientId": "owner",
+            "actorId": "assistant-a",
+            "taskId": "<uuid>",
+            "reportId": null,
+            "eventType": "task_progress",
+            "title": "任务进度更新",
+            "message": "助理 A 更新了任务“契约-改名”",
+            "isRead": 0,
+            "createdAt": "<ts>",
+            "readAt": null
+          },
+          {
+            "id": "<uuid>",
+            "recipientId": "owner",
+            "actorId": null,
+            "taskId": "t-overdue",
+            "reportId": null,
+            "eventType": "task_overdue",
+            "title": "任务已逾期",
+            "message": "任务“逾期任务”已超过截止日期",
+            "isRead": 0,
+            "createdAt": "<ts>",
+            "readAt": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "notifications.owner.unread",
+      "role": "owner",
+      "request": {
+        "method": "GET",
+        "path": "/api/notifications?unread=1"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": [
+          {
+            "id": "<uuid>",
+            "recipientId": "owner",
+            "actorId": "viewer-a",
+            "taskId": "t-doing",
+            "reportId": null,
+            "eventType": "task_commented",
+            "title": "任务有新评论",
+            "message": "查看者 评论了任务“进行中任务”",
+            "isRead": 0,
+            "createdAt": "<ts>",
+            "readAt": null
+          },
+          {
+            "id": "<uuid>",
+            "recipientId": "owner",
+            "actorId": "assistant-a",
+            "taskId": "t-doing",
+            "reportId": null,
+            "eventType": "task_commented",
+            "title": "任务有新评论",
+            "message": "助理 A 评论了任务“进行中任务”",
+            "isRead": 0,
+            "createdAt": "<ts>",
+            "readAt": null
+          },
+          {
+            "id": "<uuid>",
+            "recipientId": "owner",
+            "actorId": "assistant-a",
+            "taskId": "<uuid>",
+            "reportId": null,
+            "eventType": "task_submitted",
+            "title": "任务待验收",
+            "message": "助理 A 更新了任务“契约-改名”",
+            "isRead": 0,
+            "createdAt": "<ts>",
+            "readAt": null
+          },
+          {
+            "id": "<uuid>",
+            "recipientId": "owner",
+            "actorId": "assistant-a",
+            "taskId": "<uuid>",
+            "reportId": null,
+            "eventType": "task_progress",
+            "title": "任务进度更新",
+            "message": "助理 A 更新了任务“契约-改名”",
+            "isRead": 0,
+            "createdAt": "<ts>",
+            "readAt": null
+          },
+          {
+            "id": "<uuid>",
+            "recipientId": "owner",
+            "actorId": null,
+            "taskId": "t-overdue",
+            "reportId": null,
+            "eventType": "task_overdue",
+            "title": "任务已逾期",
+            "message": "任务“逾期任务”已超过截止日期",
+            "isRead": 0,
+            "createdAt": "<ts>",
+            "readAt": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "notifications.assistant.unread",
+      "role": "assistant",
+      "request": {
+        "method": "GET",
+        "path": "/api/notifications?unread=1"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": [
+          {
+            "id": "<uuid>",
+            "recipientId": "assistant-a",
+            "actorId": "viewer-a",
+            "taskId": "t-doing",
+            "reportId": null,
+            "eventType": "task_commented",
+            "title": "任务有新评论",
+            "message": "查看者 评论了任务“进行中任务”",
+            "isRead": 0,
+            "createdAt": "<ts>",
+            "readAt": null
+          },
+          {
+            "id": "<uuid>",
+            "recipientId": "assistant-a",
+            "actorId": "owner",
+            "taskId": "<uuid>",
+            "reportId": null,
+            "eventType": "task_approved",
+            "title": "任务验收通过",
+            "message": "任务“契约-改名”已通过验收",
+            "isRead": 0,
+            "createdAt": "<ts>",
+            "readAt": null
+          },
+          {
+            "id": "<uuid>",
+            "recipientId": "assistant-a",
+            "actorId": "owner",
+            "taskId": "<uuid>",
+            "reportId": null,
+            "eventType": "task_assigned",
+            "title": "收到新任务",
+            "message": "你收到来自 主人 的任务“契约-私密给助理”",
+            "isRead": 0,
+            "createdAt": "<ts>",
+            "readAt": null
+          },
+          {
+            "id": "<uuid>",
+            "recipientId": "assistant-a",
+            "actorId": "owner",
+            "taskId": "<uuid>",
+            "reportId": null,
+            "eventType": "task_assigned",
+            "title": "收到新任务",
+            "message": "你收到来自 主人 的任务“契约-主人创建”",
+            "isRead": 0,
+            "createdAt": "<ts>",
+            "readAt": null
+          },
+          {
+            "id": "<uuid>",
+            "recipientId": "assistant-a",
+            "actorId": null,
+            "taskId": "t-overdue",
+            "reportId": null,
+            "eventType": "task_overdue",
+            "title": "任务已逾期",
+            "message": "任务“逾期任务”已超过截止日期",
+            "isRead": 0,
+            "createdAt": "<ts>",
+            "readAt": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "notifications.viewer",
+      "role": "viewer",
+      "request": {
+        "method": "GET",
+        "path": "/api/notifications"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": []
+      }
+    },
+    {
+      "name": "notifications.read.task",
+      "role": "owner",
+      "request": {
+        "method": "POST",
+        "path": "/api/notifications/read",
+        "body": {
+          "taskId": "{{taskDoing}}"
+        }
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": null
+      }
+    },
+    {
+      "name": "notifications.read.all",
+      "role": "owner",
+      "request": {
+        "method": "POST",
+        "path": "/api/notifications/read",
+        "body": {}
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": null
+      }
+    },
+    {
+      "name": "review.owner",
+      "role": "owner",
+      "request": {
+        "method": "GET",
+        "path": "/api/review"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "tasks": [
+            {
+              "id": "<uuid>",
+              "title": "契约-改名",
+              "description": "契约用例",
+              "priority": "P2",
+              "status": "completed",
+              "progress": 100,
+              "dueDate": "2026-12-31",
+              "ownerId": "assistant-a",
+              "createdBy": "owner",
+              "source": "manual",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": "<ts>",
+              "archivedAt": null,
+              "ownerName": "助理 A",
+              "ownerRole": "assistant"
+            },
+            {
+              "id": "<uuid>",
+              "title": "契约-待删除",
+              "description": "",
+              "priority": "P1",
+              "status": "todo",
+              "progress": 0,
+              "dueDate": null,
+              "ownerId": "owner",
+              "createdBy": "owner",
+              "source": "manual",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": null,
+              "archivedAt": null,
+              "ownerName": "主人",
+              "ownerRole": "owner"
+            },
+            {
+              "id": "<uuid>",
+              "title": "契约-助理创建",
+              "description": "",
+              "priority": "P1",
+              "status": "todo",
+              "progress": 0,
+              "dueDate": null,
+              "ownerId": "assistant-a",
+              "createdBy": "assistant-a",
+              "source": "assistant",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": null,
+              "archivedAt": null,
+              "ownerName": "助理 A",
+              "ownerRole": "assistant"
+            },
+            {
+              "id": "<uuid>",
+              "title": "契约-私密给助理",
+              "description": "",
+              "priority": "P1",
+              "status": "todo",
+              "progress": 0,
+              "dueDate": null,
+              "ownerId": "assistant-a",
+              "createdBy": "owner",
+              "source": "manual",
+              "isPrivate": true,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": null,
+              "archivedAt": null,
+              "ownerName": "助理 A",
+              "ownerRole": "assistant"
+            },
+            {
+              "id": "<uuid>",
+              "title": "契约-私密",
+              "description": "",
+              "priority": "P1",
+              "status": "todo",
+              "progress": 0,
+              "dueDate": null,
+              "ownerId": "owner",
+              "createdBy": "owner",
+              "source": "manual",
+              "isPrivate": true,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": null,
+              "archivedAt": null,
+              "ownerName": "主人",
+              "ownerRole": "owner"
+            },
+            {
+              "id": "t-todo",
+              "title": "待办任务",
+              "description": "",
+              "priority": "P1",
+              "status": "todo",
+              "progress": 0,
+              "dueDate": null,
+              "ownerId": "assistant-a",
+              "createdBy": "owner",
+              "source": "manual",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": null,
+              "archivedAt": null,
+              "ownerName": "助理 A",
+              "ownerRole": "assistant"
+            },
+            {
+              "id": "t-doing",
+              "title": "进行中任务",
+              "description": "",
+              "priority": "P0",
+              "status": "in_progress",
+              "progress": 40,
+              "dueDate": "2026-09-30",
+              "ownerId": "assistant-a",
+              "createdBy": "owner",
+              "source": "manual",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": null,
+              "archivedAt": null,
+              "ownerName": "助理 A",
+              "ownerRole": "assistant"
+            },
+            {
+              "id": "t-review",
+              "title": "待验收任务",
+              "description": "",
+              "priority": "P1",
+              "status": "pending_review",
+              "progress": 100,
+              "dueDate": "2026-09-30",
+              "ownerId": "assistant-a",
+              "createdBy": "owner",
+              "source": "manual",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": null,
+              "archivedAt": null,
+              "ownerName": "助理 A",
+              "ownerRole": "assistant"
+            },
+            {
+              "id": "t-done",
+              "title": "已完成任务",
+              "description": "",
+              "priority": "P2",
+              "status": "completed",
+              "progress": 100,
+              "dueDate": "2026-09-10",
+              "ownerId": "assistant-a",
+              "createdBy": "owner",
+              "source": "manual",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": "<ts>",
+              "archivedAt": null,
+              "ownerName": "助理 A",
+              "ownerRole": "assistant"
+            },
+            {
+              "id": "t-private",
+              "title": "私密任务",
+              "description": "",
+              "priority": "P2",
+              "status": "todo",
+              "progress": 0,
+              "dueDate": null,
+              "ownerId": "owner",
+              "createdBy": "owner",
+              "source": "manual",
+              "isPrivate": true,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": null,
+              "archivedAt": null,
+              "ownerName": "主人",
+              "ownerRole": "owner"
+            },
+            {
+              "id": "t-overdue",
+              "title": "逾期任务",
+              "description": "",
+              "priority": "P0",
+              "status": "todo",
+              "progress": 10,
+              "dueDate": "2020-01-01",
+              "ownerId": "assistant-a",
+              "createdBy": "owner",
+              "source": "manual",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": null,
+              "archivedAt": null,
+              "ownerName": "助理 A",
+              "ownerRole": "assistant"
+            },
+            {
+              "id": "t-of-b",
+              "title": "助理B的任务",
+              "description": "",
+              "priority": "P1",
+              "status": "todo",
+              "progress": 0,
+              "dueDate": null,
+              "ownerId": "assistant-b",
+              "createdBy": "owner",
+              "source": "manual",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": null,
+              "archivedAt": null,
+              "ownerName": "助理 B",
+              "ownerRole": "assistant"
+            }
+          ],
+          "summary": {
+            "total": 12,
+            "completed": 2,
+            "active": 10,
+            "overdue": 1,
+            "completionRate": 17
+          }
+        }
+      }
+    },
+    {
+      "name": "review.owner.status",
+      "role": "owner",
+      "request": {
+        "method": "GET",
+        "path": "/api/review?status=pending_review"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "tasks": [
+            {
+              "id": "t-review",
+              "title": "待验收任务",
+              "description": "",
+              "priority": "P1",
+              "status": "pending_review",
+              "progress": 100,
+              "dueDate": "2026-09-30",
+              "ownerId": "assistant-a",
+              "createdBy": "owner",
+              "source": "manual",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": null,
+              "archivedAt": null,
+              "ownerName": "助理 A",
+              "ownerRole": "assistant"
+            }
+          ],
+          "summary": {
+            "total": 1,
+            "completed": 0,
+            "active": 1,
+            "overdue": 0,
+            "completionRate": 0
+          }
+        }
+      }
+    },
+    {
+      "name": "review.owner.range",
+      "role": "owner",
+      "request": {
+        "method": "GET",
+        "path": "/api/review?from=2026-09-01&to=2026-09-30"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "tasks": [
+            {
+              "id": "<uuid>",
+              "title": "契约-改名",
+              "description": "契约用例",
+              "priority": "P2",
+              "status": "completed",
+              "progress": 100,
+              "dueDate": "2026-12-31",
+              "ownerId": "assistant-a",
+              "createdBy": "owner",
+              "source": "manual",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": "<ts>",
+              "archivedAt": null,
+              "ownerName": "助理 A",
+              "ownerRole": "assistant"
+            },
+            {
+              "id": "<uuid>",
+              "title": "契约-待删除",
+              "description": "",
+              "priority": "P1",
+              "status": "todo",
+              "progress": 0,
+              "dueDate": null,
+              "ownerId": "owner",
+              "createdBy": "owner",
+              "source": "manual",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": null,
+              "archivedAt": null,
+              "ownerName": "主人",
+              "ownerRole": "owner"
+            },
+            {
+              "id": "<uuid>",
+              "title": "契约-助理创建",
+              "description": "",
+              "priority": "P1",
+              "status": "todo",
+              "progress": 0,
+              "dueDate": null,
+              "ownerId": "assistant-a",
+              "createdBy": "assistant-a",
+              "source": "assistant",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": null,
+              "archivedAt": null,
+              "ownerName": "助理 A",
+              "ownerRole": "assistant"
+            },
+            {
+              "id": "<uuid>",
+              "title": "契约-私密给助理",
+              "description": "",
+              "priority": "P1",
+              "status": "todo",
+              "progress": 0,
+              "dueDate": null,
+              "ownerId": "assistant-a",
+              "createdBy": "owner",
+              "source": "manual",
+              "isPrivate": true,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": null,
+              "archivedAt": null,
+              "ownerName": "助理 A",
+              "ownerRole": "assistant"
+            },
+            {
+              "id": "<uuid>",
+              "title": "契约-私密",
+              "description": "",
+              "priority": "P1",
+              "status": "todo",
+              "progress": 0,
+              "dueDate": null,
+              "ownerId": "owner",
+              "createdBy": "owner",
+              "source": "manual",
+              "isPrivate": true,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": null,
+              "archivedAt": null,
+              "ownerName": "主人",
+              "ownerRole": "owner"
+            },
+            {
+              "id": "t-todo",
+              "title": "待办任务",
+              "description": "",
+              "priority": "P1",
+              "status": "todo",
+              "progress": 0,
+              "dueDate": null,
+              "ownerId": "assistant-a",
+              "createdBy": "owner",
+              "source": "manual",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": null,
+              "archivedAt": null,
+              "ownerName": "助理 A",
+              "ownerRole": "assistant"
+            },
+            {
+              "id": "t-doing",
+              "title": "进行中任务",
+              "description": "",
+              "priority": "P0",
+              "status": "in_progress",
+              "progress": 40,
+              "dueDate": "2026-09-30",
+              "ownerId": "assistant-a",
+              "createdBy": "owner",
+              "source": "manual",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": null,
+              "archivedAt": null,
+              "ownerName": "助理 A",
+              "ownerRole": "assistant"
+            },
+            {
+              "id": "t-review",
+              "title": "待验收任务",
+              "description": "",
+              "priority": "P1",
+              "status": "pending_review",
+              "progress": 100,
+              "dueDate": "2026-09-30",
+              "ownerId": "assistant-a",
+              "createdBy": "owner",
+              "source": "manual",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": null,
+              "archivedAt": null,
+              "ownerName": "助理 A",
+              "ownerRole": "assistant"
+            },
+            {
+              "id": "t-done",
+              "title": "已完成任务",
+              "description": "",
+              "priority": "P2",
+              "status": "completed",
+              "progress": 100,
+              "dueDate": "2026-09-10",
+              "ownerId": "assistant-a",
+              "createdBy": "owner",
+              "source": "manual",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": "<ts>",
+              "archivedAt": null,
+              "ownerName": "助理 A",
+              "ownerRole": "assistant"
+            },
+            {
+              "id": "t-private",
+              "title": "私密任务",
+              "description": "",
+              "priority": "P2",
+              "status": "todo",
+              "progress": 0,
+              "dueDate": null,
+              "ownerId": "owner",
+              "createdBy": "owner",
+              "source": "manual",
+              "isPrivate": true,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": null,
+              "archivedAt": null,
+              "ownerName": "主人",
+              "ownerRole": "owner"
+            },
+            {
+              "id": "t-overdue",
+              "title": "逾期任务",
+              "description": "",
+              "priority": "P0",
+              "status": "todo",
+              "progress": 10,
+              "dueDate": "2020-01-01",
+              "ownerId": "assistant-a",
+              "createdBy": "owner",
+              "source": "manual",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": null,
+              "archivedAt": null,
+              "ownerName": "助理 A",
+              "ownerRole": "assistant"
+            },
+            {
+              "id": "t-of-b",
+              "title": "助理B的任务",
+              "description": "",
+              "priority": "P1",
+              "status": "todo",
+              "progress": 0,
+              "dueDate": null,
+              "ownerId": "assistant-b",
+              "createdBy": "owner",
+              "source": "manual",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": null,
+              "archivedAt": null,
+              "ownerName": "助理 B",
+              "ownerRole": "assistant"
+            }
+          ],
+          "summary": {
+            "total": 12,
+            "completed": 2,
+            "active": 10,
+            "overdue": 1,
+            "completionRate": 17
+          }
+        }
+      }
+    },
+    {
+      "name": "review.owner.ownerId",
+      "role": "owner",
+      "request": {
+        "method": "GET",
+        "path": "/api/review?ownerId=assistant-a"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "tasks": [
+            {
+              "id": "<uuid>",
+              "title": "契约-改名",
+              "description": "契约用例",
+              "priority": "P2",
+              "status": "completed",
+              "progress": 100,
+              "dueDate": "2026-12-31",
+              "ownerId": "assistant-a",
+              "createdBy": "owner",
+              "source": "manual",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": "<ts>",
+              "archivedAt": null,
+              "ownerName": "助理 A",
+              "ownerRole": "assistant"
+            },
+            {
+              "id": "<uuid>",
+              "title": "契约-助理创建",
+              "description": "",
+              "priority": "P1",
+              "status": "todo",
+              "progress": 0,
+              "dueDate": null,
+              "ownerId": "assistant-a",
+              "createdBy": "assistant-a",
+              "source": "assistant",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": null,
+              "archivedAt": null,
+              "ownerName": "助理 A",
+              "ownerRole": "assistant"
+            },
+            {
+              "id": "<uuid>",
+              "title": "契约-私密给助理",
+              "description": "",
+              "priority": "P1",
+              "status": "todo",
+              "progress": 0,
+              "dueDate": null,
+              "ownerId": "assistant-a",
+              "createdBy": "owner",
+              "source": "manual",
+              "isPrivate": true,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": null,
+              "archivedAt": null,
+              "ownerName": "助理 A",
+              "ownerRole": "assistant"
+            },
+            {
+              "id": "t-todo",
+              "title": "待办任务",
+              "description": "",
+              "priority": "P1",
+              "status": "todo",
+              "progress": 0,
+              "dueDate": null,
+              "ownerId": "assistant-a",
+              "createdBy": "owner",
+              "source": "manual",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": null,
+              "archivedAt": null,
+              "ownerName": "助理 A",
+              "ownerRole": "assistant"
+            },
+            {
+              "id": "t-doing",
+              "title": "进行中任务",
+              "description": "",
+              "priority": "P0",
+              "status": "in_progress",
+              "progress": 40,
+              "dueDate": "2026-09-30",
+              "ownerId": "assistant-a",
+              "createdBy": "owner",
+              "source": "manual",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": null,
+              "archivedAt": null,
+              "ownerName": "助理 A",
+              "ownerRole": "assistant"
+            },
+            {
+              "id": "t-review",
+              "title": "待验收任务",
+              "description": "",
+              "priority": "P1",
+              "status": "pending_review",
+              "progress": 100,
+              "dueDate": "2026-09-30",
+              "ownerId": "assistant-a",
+              "createdBy": "owner",
+              "source": "manual",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": null,
+              "archivedAt": null,
+              "ownerName": "助理 A",
+              "ownerRole": "assistant"
+            },
+            {
+              "id": "t-done",
+              "title": "已完成任务",
+              "description": "",
+              "priority": "P2",
+              "status": "completed",
+              "progress": 100,
+              "dueDate": "2026-09-10",
+              "ownerId": "assistant-a",
+              "createdBy": "owner",
+              "source": "manual",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": "<ts>",
+              "archivedAt": null,
+              "ownerName": "助理 A",
+              "ownerRole": "assistant"
+            },
+            {
+              "id": "t-overdue",
+              "title": "逾期任务",
+              "description": "",
+              "priority": "P0",
+              "status": "todo",
+              "progress": 10,
+              "dueDate": "2020-01-01",
+              "ownerId": "assistant-a",
+              "createdBy": "owner",
+              "source": "manual",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": null,
+              "archivedAt": null,
+              "ownerName": "助理 A",
+              "ownerRole": "assistant"
+            }
+          ],
+          "summary": {
+            "total": 8,
+            "completed": 2,
+            "active": 6,
+            "overdue": 1,
+            "completionRate": 25
+          }
+        }
+      }
+    },
+    {
+      "name": "review.assistant",
+      "role": "assistant",
+      "request": {
+        "method": "GET",
+        "path": "/api/review"
+      },
+      "status": 403,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "FORBIDDEN",
+          "message": "只有主人可以访问此功能"
+        }
+      }
+    },
+    {
+      "name": "inbox.preview.owner",
+      "role": "owner",
+      "request": {
+        "method": "POST",
+        "path": "/api/inbox/preview",
+        "body": {
+          "drafts": [
+            {
+              "title": "企微草稿",
+              "sender": "张三",
+              "priority": "P1",
+              "messageAt": "2026-09-01 10:23"
+            }
+          ]
+        }
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": [
+          {
+            "title": "企微草稿",
+            "sender": "张三",
+            "priority": "P1",
+            "messageAt": "2026-09-01 10:23",
+            "fingerprint": "<token>",
+            "duplicate": false
+          }
+        ]
+      }
+    },
+    {
+      "name": "inbox.preview.assistant",
+      "role": "assistant",
+      "request": {
+        "method": "POST",
+        "path": "/api/inbox/preview",
+        "body": {
+          "drafts": [
+            {
+              "title": "企微草稿"
+            }
+          ]
+        }
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": [
+          {
+            "title": "企微草稿",
+            "fingerprint": "<token>",
+            "duplicate": false
+          }
+        ]
+      }
+    },
+    {
+      "name": "inbox.preview.viewer",
+      "role": "viewer",
+      "request": {
+        "method": "POST",
+        "path": "/api/inbox/preview",
+        "body": {
+          "drafts": [
+            {
+              "title": "企微草稿"
+            }
+          ]
+        }
+      },
+      "status": 403,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "FORBIDDEN",
+          "message": "查看者不能导入任务"
+        }
+      }
+    },
+    {
+      "name": "inbox.import.owner",
+      "role": "owner",
+      "request": {
+        "method": "POST",
+        "path": "/api/inbox/import",
+        "body": {
+          "drafts": [
+            {
+              "title": "企微导入",
+              "ownerId": "assistant-b",
+              "priority": "P1",
+              "fingerprint": "fp-contract"
+            }
+          ]
+        }
+      },
+      "status": 201,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "created": [
+            {
+              "id": "<uuid>",
+              "title": "企微导入",
+              "description": "",
+              "priority": "P1",
+              "status": "todo",
+              "progress": 0,
+              "dueDate": null,
+              "ownerId": "assistant-b",
+              "createdBy": "owner",
+              "source": "wecom",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": null,
+              "archivedAt": null,
+              "ownerName": "助理 B",
+              "ownerRole": "assistant"
+            }
+          ],
+          "skipped": []
+        }
+      }
+    },
+    {
+      "name": "inbox.import.duplicate",
+      "role": "owner",
+      "request": {
+        "method": "POST",
+        "path": "/api/inbox/import",
+        "body": {
+          "drafts": [
+            {
+              "title": "企微导入",
+              "ownerId": "assistant-b",
+              "priority": "P1",
+              "fingerprint": "fp-contract"
+            }
+          ]
+        }
+      },
+      "status": 201,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "created": [],
+          "skipped": [
+            {
+              "title": "企微导入",
+              "reason": "疑似重复"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "inbox.import.allow-duplicates",
+      "role": "owner",
+      "request": {
+        "method": "POST",
+        "path": "/api/inbox/import",
+        "body": {
+          "drafts": [
+            {
+              "title": "企微导入",
+              "ownerId": "assistant-b",
+              "priority": "P1",
+              "fingerprint": "fp-contract"
+            }
+          ],
+          "allowDuplicates": true
+        }
+      },
+      "status": 201,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "created": [
+            {
+              "id": "<uuid>",
+              "title": "企微导入",
+              "description": "",
+              "priority": "P1",
+              "status": "todo",
+              "progress": 0,
+              "dueDate": null,
+              "ownerId": "assistant-b",
+              "createdBy": "owner",
+              "source": "wecom",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": null,
+              "archivedAt": null,
+              "ownerName": "助理 B",
+              "ownerRole": "assistant"
+            }
+          ],
+          "skipped": []
+        }
+      }
+    },
+    {
+      "name": "inbox.import.assistant",
+      "role": "assistant",
+      "request": {
+        "method": "POST",
+        "path": "/api/inbox/import",
+        "body": {
+          "drafts": [
+            {
+              "title": "助理导入",
+              "fingerprint": "fp-a"
+            }
+          ]
+        }
+      },
+      "status": 201,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "created": [
+            {
+              "id": "<uuid>",
+              "title": "助理导入",
+              "description": "",
+              "priority": "P1",
+              "status": "todo",
+              "progress": 0,
+              "dueDate": null,
+              "ownerId": "assistant-a",
+              "createdBy": "assistant-a",
+              "source": "wecom",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": null,
+              "archivedAt": null,
+              "ownerName": "助理 A",
+              "ownerRole": "assistant"
+            }
+          ],
+          "skipped": []
+        }
+      }
+    },
+    {
+      "name": "inbox.import.viewer",
+      "role": "viewer",
+      "request": {
+        "method": "POST",
+        "path": "/api/inbox/import",
+        "body": {
+          "drafts": []
+        }
+      },
+      "status": 403,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "FORBIDDEN",
+          "message": "查看者不能导入任务"
+        }
+      }
+    },
+    {
+      "name": "users.list.owner",
+      "role": "owner",
+      "request": {
+        "method": "GET",
+        "path": "/api/users"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": [
+          {
+            "id": "assistant-a",
+            "name": "助理 A",
+            "role": "assistant",
+            "isActive": 1,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>"
+          },
+          {
+            "id": "assistant-b",
+            "name": "助理 B",
+            "role": "assistant",
+            "isActive": 1,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>"
+          },
+          {
+            "id": "owner",
+            "name": "主人",
+            "role": "owner",
+            "isActive": 1,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>"
+          },
+          {
+            "id": "viewer-a",
+            "name": "查看者",
+            "role": "viewer",
+            "isActive": 1,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>"
+          }
+        ]
+      }
+    },
+    {
+      "name": "users.list.assistant",
+      "role": "assistant",
+      "request": {
+        "method": "GET",
+        "path": "/api/users"
+      },
+      "status": 403,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "FORBIDDEN",
+          "message": "只有主人可以访问此功能"
+        }
+      }
+    },
+    {
+      "name": "users.create.owner",
+      "role": "owner",
+      "request": {
+        "method": "POST",
+        "path": "/api/users",
+        "body": {
+          "name": "契约成员",
+          "role": "assistant"
+        }
+      },
+      "status": 201,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "user": {
+            "id": "<uuid>",
+            "name": "契约成员",
+            "role": "assistant",
+            "isActive": true,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>"
+          },
+          "token": "<token>"
+        }
+      }
+    },
+    {
+      "name": "users.create.no-name",
+      "role": "owner",
+      "request": {
+        "method": "POST",
+        "path": "/api/users",
+        "body": {
+          "name": "",
+          "role": "assistant"
+        }
+      },
+      "status": 400,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "请填写成员名称并选择角色"
+        }
+      }
+    },
+    {
+      "name": "users.create.bad-role",
+      "role": "owner",
+      "request": {
+        "method": "POST",
+        "path": "/api/users",
+        "body": {
+          "name": "契约成员2",
+          "role": "boss"
+        }
+      },
+      "status": 400,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "请填写成员名称并选择角色"
+        }
+      }
+    },
+    {
+      "name": "users.create.assistant",
+      "role": "assistant",
+      "request": {
+        "method": "POST",
+        "path": "/api/users",
+        "body": {
+          "name": "越权成员",
+          "role": "assistant"
+        }
+      },
+      "status": 403,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "FORBIDDEN",
+          "message": "只有主人可以访问此功能"
+        }
+      }
+    },
+    {
+      "name": "users.deactivate",
+      "role": "owner",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/users/1d24efa7-ea6b-4f4a-897a-94ad85b55737",
+        "body": {
+          "isActive": false
+        }
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": null
+      }
+    },
+    {
+      "name": "users.deactivate.owner",
+      "role": "owner",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/users/owner",
+        "body": {
+          "isActive": false
+        }
+      },
+      "status": 400,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "不能停用主人账户"
+        }
+      }
+    },
+    {
+      "name": "users.deactivate.missing",
+      "role": "owner",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/users/no-such-user",
+        "body": {
+          "isActive": false
+        }
+      },
+      "status": 404,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "成员不存在"
+        }
+      }
+    },
+    {
+      "name": "users.rotate-token",
+      "role": "owner",
+      "request": {
+        "method": "POST",
+        "path": "/api/users/1d24efa7-ea6b-4f4a-897a-94ad85b55737/token"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "token": "<token>"
+        }
+      }
+    },
+    {
+      "name": "users.rotate-token.missing",
+      "role": "owner",
+      "request": {
+        "method": "POST",
+        "path": "/api/users/no-such-user/token"
+      },
+      "status": 404,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "成员不存在"
+        }
+      }
+    },
+    {
+      "name": "users.reactivate",
+      "role": "owner",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/users/1d24efa7-ea6b-4f4a-897a-94ad85b55737",
+        "body": {
+          "isActive": true
+        }
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": null
+      }
+    },
+    {
+      "name": "todos.list.owner",
+      "role": "owner",
+      "request": {
+        "method": "GET",
+        "path": "/api/todos"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": [
+          {
+            "id": "todo-open",
+            "content": "跟进报价",
+            "todoDate": "2026-09-01",
+            "isCompleted": 0,
+            "completedAt": null,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>"
+          }
+        ]
+      }
+    },
+    {
+      "name": "todos.list.assistant",
+      "role": "assistant",
+      "request": {
+        "method": "GET",
+        "path": "/api/todos"
+      },
+      "status": 403,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "FORBIDDEN",
+          "message": "只有主人可以访问此功能"
+        }
+      }
+    },
+    {
+      "name": "todos.list.viewer",
+      "role": "viewer",
+      "request": {
+        "method": "GET",
+        "path": "/api/todos"
+      },
+      "status": 403,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "FORBIDDEN",
+          "message": "只有主人可以访问此功能"
+        }
+      }
+    },
+    {
+      "name": "todos.create.owner",
+      "role": "owner",
+      "request": {
+        "method": "POST",
+        "path": "/api/todos",
+        "body": {
+          "content": "契约待办",
+          "todoDate": "2026-09-05"
+        }
+      },
+      "status": 201,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "id": "<uuid>",
+          "content": "契约待办",
+          "todoDate": "2026-09-05",
+          "isCompleted": 0,
+          "completedAt": null,
+          "createdAt": "<ts>",
+          "updatedAt": "<ts>"
+        }
+      }
+    },
+    {
+      "name": "todos.create.empty",
+      "role": "owner",
+      "request": {
+        "method": "POST",
+        "path": "/api/todos",
+        "body": {}
+      },
+      "status": 400,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "待办内容不能为空"
+        }
+      }
+    },
+    {
+      "name": "todos.patch.owner",
+      "role": "owner",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/todos/c9d1fd67-f41d-485b-b517-e0fd3d05c1f5",
+        "body": {
+          "isCompleted": true
+        }
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "id": "<uuid>",
+          "content": "契约待办",
+          "todoDate": "2026-09-05",
+          "isCompleted": 1,
+          "completedAt": "<ts>",
+          "createdAt": "<ts>",
+          "updatedAt": "<ts>"
+        }
+      }
+    },
+    {
+      "name": "todos.patch.missing",
+      "role": "owner",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/todos/no-such-todo",
+        "body": {
+          "isCompleted": true
+        }
+      },
+      "status": 404,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "待办不存在"
+        }
+      }
+    },
+    {
+      "name": "todos.delete.viewer",
+      "role": "viewer",
+      "request": {
+        "method": "DELETE",
+        "path": "/api/todos/c9d1fd67-f41d-485b-b517-e0fd3d05c1f5"
+      },
+      "status": 403,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "FORBIDDEN",
+          "message": "只有主人可以访问此功能"
+        }
+      }
+    },
+    {
+      "name": "todos.delete.owner",
+      "role": "owner",
+      "request": {
+        "method": "DELETE",
+        "path": "/api/todos/c9d1fd67-f41d-485b-b517-e0fd3d05c1f5"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": null
+      }
+    },
+    {
+      "name": "todos.delete.missing",
+      "role": "owner",
+      "request": {
+        "method": "DELETE",
+        "path": "/api/todos/no-such-todo"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": null
+      }
+    },
+    {
+      "name": "notes.list.owner",
+      "role": "owner",
+      "request": {
+        "method": "GET",
+        "path": "/api/notes"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": [
+          {
+            "id": "note-1",
+            "content": "会议要点",
+            "isPinned": 0,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>"
+          }
+        ]
+      }
+    },
+    {
+      "name": "notes.list.assistant",
+      "role": "assistant",
+      "request": {
+        "method": "GET",
+        "path": "/api/notes"
+      },
+      "status": 403,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "FORBIDDEN",
+          "message": "只有主人可以访问此功能"
+        }
+      }
+    },
+    {
+      "name": "notes.create.owner",
+      "role": "owner",
+      "request": {
+        "method": "POST",
+        "path": "/api/notes",
+        "body": {
+          "content": "契约随手记",
+          "isPinned": true
+        }
+      },
+      "status": 201,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "id": "<uuid>",
+          "content": "契约随手记",
+          "isPinned": 0,
+          "createdAt": "<ts>",
+          "updatedAt": "<ts>"
+        }
+      }
+    },
+    {
+      "name": "notes.create.empty",
+      "role": "owner",
+      "request": {
+        "method": "POST",
+        "path": "/api/notes",
+        "body": {}
+      },
+      "status": 400,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "笔记内容不能为空"
+        }
+      }
+    },
+    {
+      "name": "notes.patch.owner",
+      "role": "owner",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/notes/852e4358-23a1-4fd9-88aa-88f0f307b33a",
+        "body": {
+          "content": "改过的随手记"
+        }
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "id": "<uuid>",
+          "content": "改过的随手记",
+          "isPinned": 0,
+          "createdAt": "<ts>",
+          "updatedAt": "<ts>"
+        }
+      }
+    },
+    {
+      "name": "notes.patch.missing",
+      "role": "owner",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/notes/no-such-note",
+        "body": {
+          "content": "x"
+        }
+      },
+      "status": 404,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "笔记不存在"
+        }
+      }
+    },
+    {
+      "name": "notes.delete.owner",
+      "role": "owner",
+      "request": {
+        "method": "DELETE",
+        "path": "/api/notes/852e4358-23a1-4fd9-88aa-88f0f307b33a"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": null
+      }
+    },
+    {
+      "name": "notes.delete.missing",
+      "role": "owner",
+      "request": {
+        "method": "DELETE",
+        "path": "/api/notes/no-such-note"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": null
+      }
+    },
+    {
+      "name": "files.list.owner",
+      "role": "owner",
+      "request": {
+        "method": "GET",
+        "path": "/api/files"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": [
+          {
+            "id": "file-1",
+            "name": "报价单模板",
+            "filePath": "C:\\fixture\\quote-template.xlsx",
+            "category": "报价",
+            "lastUsedAt": null,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>"
+          }
+        ]
+      }
+    },
+    {
+      "name": "files.list.search",
+      "role": "owner",
+      "request": {
+        "method": "GET",
+        "path": "/api/files?search=报价"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": [
+          {
+            "id": "file-1",
+            "name": "报价单模板",
+            "filePath": "C:\\fixture\\quote-template.xlsx",
+            "category": "报价",
+            "lastUsedAt": null,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>"
+          }
+        ]
+      }
+    },
+    {
+      "name": "files.list.category",
+      "role": "owner",
+      "request": {
+        "method": "GET",
+        "path": "/api/files?category=报价"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": [
+          {
+            "id": "file-1",
+            "name": "报价单模板",
+            "filePath": "C:\\fixture\\quote-template.xlsx",
+            "category": "报价",
+            "lastUsedAt": null,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>"
+          }
+        ]
+      }
+    },
+    {
+      "name": "files.list.assistant",
+      "role": "assistant",
+      "request": {
+        "method": "GET",
+        "path": "/api/files"
+      },
+      "status": 403,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "FORBIDDEN",
+          "message": "只有主人可以访问此功能"
+        }
+      }
+    },
+    {
+      "name": "files.create.owner",
+      "role": "owner",
+      "request": {
+        "method": "POST",
+        "path": "/api/files",
+        "body": {
+          "name": "契约文件",
+          "filePath": "C:\\fixture\\contract.xlsx",
+          "category": "报价"
+        }
+      },
+      "status": 201,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "id": "<uuid>",
+          "name": "契约文件",
+          "filePath": "C:\\fixture\\contract.xlsx",
+          "category": "报价",
+          "lastUsedAt": null,
+          "createdAt": "<ts>",
+          "updatedAt": "<ts>"
+        }
+      }
+    },
+    {
+      "name": "files.create.empty",
+      "role": "owner",
+      "request": {
+        "method": "POST",
+        "path": "/api/files",
+        "body": {
+          "name": "",
+          "filePath": ""
+        }
+      },
+      "status": 400,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "文件名称和路径不能为空"
+        }
+      }
+    },
+    {
+      "name": "files.use.owner",
+      "role": "owner",
+      "request": {
+        "method": "POST",
+        "path": "/api/files/42efd660-b421-4de1-b76a-6a89ab0a15f3/use"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "id": "<uuid>",
+          "name": "契约文件",
+          "filePath": "C:\\fixture\\contract.xlsx",
+          "category": "报价",
+          "lastUsedAt": "<ts>",
+          "createdAt": "<ts>",
+          "updatedAt": "<ts>"
+        }
+      }
+    },
+    {
+      "name": "files.use.missing",
+      "role": "owner",
+      "request": {
+        "method": "POST",
+        "path": "/api/files/no-such-file/use"
+      },
+      "status": 404,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "文件不存在"
+        }
+      }
+    },
+    {
+      "name": "files.delete.owner",
+      "role": "owner",
+      "request": {
+        "method": "DELETE",
+        "path": "/api/files/42efd660-b421-4de1-b76a-6a89ab0a15f3"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": null
+      }
+    },
+    {
+      "name": "reports.list.viewer",
+      "role": "viewer",
+      "request": {
+        "method": "GET",
+        "path": "/api/reports"
+      },
+      "status": 403,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "FORBIDDEN",
+          "message": "查看者不能访问周报"
+        }
+      }
+    },
+    {
+      "name": "reports.list.owner",
+      "role": "owner",
+      "request": {
+        "method": "GET",
+        "path": "/api/reports"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": [
+          {
+            "id": "report-submitted",
+            "ownerId": "assistant-a",
+            "ownerName": "助理 A",
+            "periodStart": "2026-08-24",
+            "periodEnd": "2026-08-30",
+            "docType": "weekly_report",
+            "note": "第八周",
+            "status": "submitted",
+            "currentVersion": 1,
+            "uploadedBy": "assistant-a",
+            "reviewNote": null,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "submittedAt": "<ts>",
+            "reviewedAt": null,
+            "returnedAt": null,
+            "files": [
+              {
+                "id": "rf-1",
+                "reportId": "report-submitted",
+                "version": 1,
+                "originalName": "第八周周报.docx",
+                "storedName": "v1.docx",
+                "sizeBytes": 12,
+                "ext": ".docx",
+                "mimeType": "application/msword",
+                "uploadedBy": "assistant-a",
+                "uploadedAt": "<ts>"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "reports.list.assistant",
+      "role": "assistant",
+      "request": {
+        "method": "GET",
+        "path": "/api/reports"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": [
+          {
+            "id": "report-submitted",
+            "ownerId": "assistant-a",
+            "ownerName": "助理 A",
+            "periodStart": "2026-08-24",
+            "periodEnd": "2026-08-30",
+            "docType": "weekly_report",
+            "note": "第八周",
+            "status": "submitted",
+            "currentVersion": 1,
+            "uploadedBy": "assistant-a",
+            "reviewNote": null,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "submittedAt": "<ts>",
+            "reviewedAt": null,
+            "returnedAt": null,
+            "files": [
+              {
+                "id": "rf-1",
+                "reportId": "report-submitted",
+                "version": 1,
+                "originalName": "第八周周报.docx",
+                "storedName": "v1.docx",
+                "sizeBytes": 12,
+                "ext": ".docx",
+                "mimeType": "application/msword",
+                "uploadedBy": "assistant-a",
+                "uploadedAt": "<ts>"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "reports.detail.owner",
+      "role": "owner",
+      "request": {
+        "method": "GET",
+        "path": "/api/reports/report-submitted"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "id": "report-submitted",
+          "ownerId": "assistant-a",
+          "ownerName": "助理 A",
+          "periodStart": "2026-08-24",
+          "periodEnd": "2026-08-30",
+          "docType": "weekly_report",
+          "note": "第八周",
+          "status": "submitted",
+          "currentVersion": 1,
+          "uploadedBy": "assistant-a",
+          "reviewNote": null,
+          "createdAt": "<ts>",
+          "updatedAt": "<ts>",
+          "submittedAt": "<ts>",
+          "reviewedAt": null,
+          "returnedAt": null,
+          "files": [
+            {
+              "id": "rf-1",
+              "reportId": "report-submitted",
+              "version": 1,
+              "originalName": "第八周周报.docx",
+              "storedName": "v1.docx",
+              "sizeBytes": 12,
+              "ext": ".docx",
+              "mimeType": "application/msword",
+              "uploadedBy": "assistant-a",
+              "uploadedAt": "<ts>"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "reports.detail.assistant",
+      "role": "assistant",
+      "request": {
+        "method": "GET",
+        "path": "/api/reports/report-submitted"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "id": "report-submitted",
+          "ownerId": "assistant-a",
+          "ownerName": "助理 A",
+          "periodStart": "2026-08-24",
+          "periodEnd": "2026-08-30",
+          "docType": "weekly_report",
+          "note": "第八周",
+          "status": "submitted",
+          "currentVersion": 1,
+          "uploadedBy": "assistant-a",
+          "reviewNote": null,
+          "createdAt": "<ts>",
+          "updatedAt": "<ts>",
+          "submittedAt": "<ts>",
+          "reviewedAt": null,
+          "returnedAt": null,
+          "files": [
+            {
+              "id": "rf-1",
+              "reportId": "report-submitted",
+              "version": 1,
+              "originalName": "第八周周报.docx",
+              "storedName": "v1.docx",
+              "sizeBytes": 12,
+              "ext": ".docx",
+              "mimeType": "application/msword",
+              "uploadedBy": "assistant-a",
+              "uploadedAt": "<ts>"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "reports.detail.missing",
+      "role": "assistant",
+      "request": {
+        "method": "GET",
+        "path": "/api/reports/no-such-report"
+      },
+      "status": 404,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "周报不存在"
+        }
+      }
+    },
+    {
+      "name": "reports.download.v1",
+      "role": "owner",
+      "request": {
+        "method": "GET",
+        "path": "/api/reports/report-submitted/file/1"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/msword",
+        "contentDisposition": "attachment; filename*=UTF-8''%E7%AC%AC%E5%85%AB%E5%91%A8%E5%91%A8%E6%8A%A5.docx",
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": "fake-docx-v1"
+    },
+    {
+      "name": "reports.download.missing-version",
+      "role": "owner",
+      "request": {
+        "method": "GET",
+        "path": "/api/reports/report-submitted/file/9"
+      },
+      "status": 404,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "文件版本不存在"
+        }
+      }
+    },
+    {
+      "name": "reports.return.no-note",
+      "role": "owner",
+      "request": {
+        "method": "POST",
+        "path": "/api/reports/report-submitted/return",
+        "body": {}
+      },
+      "status": 400,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "退回时请填写原因"
+        }
+      }
+    },
+    {
+      "name": "reports.return.owner",
+      "role": "owner",
+      "request": {
+        "method": "POST",
+        "path": "/api/reports/report-submitted/return",
+        "body": {
+          "note": "请补充数据"
+        }
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "id": "report-submitted",
+          "ownerId": "assistant-a",
+          "ownerName": "助理 A",
+          "periodStart": "2026-08-24",
+          "periodEnd": "2026-08-30",
+          "docType": "weekly_report",
+          "note": "第八周",
+          "status": "returned",
+          "currentVersion": 1,
+          "uploadedBy": "assistant-a",
+          "reviewNote": "请补充数据",
+          "createdAt": "<ts>",
+          "updatedAt": "<ts>",
+          "submittedAt": "<ts>",
+          "reviewedAt": null,
+          "returnedAt": "<ts>",
+          "files": [
+            {
+              "id": "rf-1",
+              "reportId": "report-submitted",
+              "version": 1,
+              "originalName": "第八周周报.docx",
+              "storedName": "v1.docx",
+              "sizeBytes": 12,
+              "ext": ".docx",
+              "mimeType": "application/msword",
+              "uploadedBy": "assistant-a",
+              "uploadedAt": "<ts>"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "reports.approve.assistant",
+      "role": "assistant",
+      "request": {
+        "method": "POST",
+        "path": "/api/reports/report-submitted/approve",
+        "body": {}
+      },
+      "status": 403,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "FORBIDDEN",
+          "message": "只有主人可以执行此操作"
+        }
+      }
+    },
+    {
+      "name": "reports.approve.owner",
+      "role": "owner",
+      "request": {
+        "method": "POST",
+        "path": "/api/reports/report-submitted/approve",
+        "body": {
+          "note": "通过"
+        }
+      },
+      "status": 400,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "INVALID_STATE",
+          "message": "只有已提交的周报才能通过"
+        }
+      }
+    },
+    {
+      "name": "reports.create.assistant-upload",
+      "role": "assistant",
+      "request": {
+        "method": "POST",
+        "path": "/api/reports",
+        "upload": "contract-week1.xlsx"
+      },
+      "status": 201,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "id": "<uuid>",
+          "ownerId": "assistant-a",
+          "ownerName": "助理 A",
+          "periodStart": "2026-09-01",
+          "periodEnd": "2026-09-07",
+          "docType": "weekly_report",
+          "note": "契约第一周",
+          "status": "submitted",
+          "currentVersion": 1,
+          "uploadedBy": "assistant-a",
+          "reviewNote": null,
+          "createdAt": "<ts>",
+          "updatedAt": "<ts>",
+          "submittedAt": "<ts>",
+          "reviewedAt": null,
+          "returnedAt": null,
+          "files": [
+            {
+              "id": "<uuid>",
+              "reportId": "<uuid>",
+              "version": 1,
+              "originalName": "contract-week1.xlsx",
+              "storedName": "v1.xlsx",
+              "sizeBytes": 18,
+              "ext": ".xlsx",
+              "mimeType": "application/octet-stream",
+              "uploadedBy": "assistant-a",
+              "uploadedAt": "<ts>"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "reports.create.viewer-upload",
+      "role": "viewer",
+      "request": {
+        "method": "POST",
+        "path": "/api/reports",
+        "upload": "contract-week1.xlsx"
+      },
+      "status": 403,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "FORBIDDEN",
+          "message": "查看者不能上传周报"
+        }
+      }
+    },
+    {
+      "name": "reports.create.owner-proxy",
+      "role": "owner",
+      "request": {
+        "method": "POST",
+        "path": "/api/reports",
+        "upload": "contract-summary.docx"
+      },
+      "status": 201,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "id": "<uuid>",
+          "ownerId": "assistant-b",
+          "ownerName": "助理 B",
+          "periodStart": "2026-09-01",
+          "periodEnd": "2026-09-07",
+          "docType": "summary",
+          "note": "",
+          "status": "submitted",
+          "currentVersion": 1,
+          "uploadedBy": "owner",
+          "reviewNote": null,
+          "createdAt": "<ts>",
+          "updatedAt": "<ts>",
+          "submittedAt": "<ts>",
+          "reviewedAt": null,
+          "returnedAt": null,
+          "files": [
+            {
+              "id": "<uuid>",
+              "reportId": "<uuid>",
+              "version": 1,
+              "originalName": "contract-summary.docx",
+              "storedName": "v1.docx",
+              "sizeBytes": 18,
+              "ext": ".docx",
+              "mimeType": "application/octet-stream",
+              "uploadedBy": "owner",
+              "uploadedAt": "<ts>"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "reports.create.bad-ext",
+      "role": "assistant",
+      "request": {
+        "method": "POST",
+        "path": "/api/reports",
+        "upload": "evil.exe"
+      },
+      "status": 400,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "仅支持 .xlsx / .xls / .docx / .doc 文件"
+        }
+      }
+    },
+    {
+      "name": "reports.upload-new-version",
+      "role": "assistant",
+      "request": {
+        "method": "POST",
+        "path": "/api/reports/0ad858ce-ed59-4b2b-8ef4-9006ca6e9b1f/file",
+        "upload": "contract-week1-v2.xlsx"
+      },
+      "status": 400,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "INVALID_STATE",
+          "message": "只有被退回的周报才能重新上传"
+        }
+      }
+    },
+    {
+      "name": "reports.download.uploaded",
+      "role": "owner",
+      "request": {
+        "method": "GET",
+        "path": "/api/reports/0ad858ce-ed59-4b2b-8ef4-9006ca6e9b1f/file/1"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/octet-stream",
+        "contentDisposition": "attachment; filename*=UTF-8''contract-week1.xlsx",
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": "fake-xlsx-contract"
+    },
+    {
+      "name": "reports.download.uploaded-v2",
+      "role": "owner",
+      "request": {
+        "method": "GET",
+        "path": "/api/reports/0ad858ce-ed59-4b2b-8ef4-9006ca6e9b1f/file/2"
+      },
+      "status": 404,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "文件版本不存在"
+        }
+      }
+    },
+    {
+      "name": "reports.detail.other-owner",
+      "role": "assistant",
+      "request": {
+        "method": "GET",
+        "path": "/api/reports/aa6413a6-2f5a-4e51-bb2f-07b4c2c30802"
+      },
+      "status": 403,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "FORBIDDEN",
+          "message": "无权查看该周报"
+        }
+      }
+    },
+    {
+      "name": "reports.upload.missing-report",
+      "role": "owner",
+      "request": {
+        "method": "POST",
+        "path": "/api/reports/no-such-report/file",
+        "upload": "a.xlsx"
+      },
+      "status": 404,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "周报不存在"
+        }
+      }
+    },
+    {
+      "name": "tasks.delete.owner",
+      "role": "owner",
+      "request": {
+        "method": "DELETE",
+        "path": "/api/tasks/317b8205-ab8f-4bac-8953-e9bd3a1f920d"
+      },
+      "status": 400,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "ARCHIVE_REQUIRED",
+          "message": "请先归档任务，再彻底删除"
+        }
+      }
+    },
+    {
+      "name": "auth.logout.viewer",
+      "role": "viewer",
+      "request": {
+        "method": "POST",
+        "path": "/api/auth/logout"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": true,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": null
+      }
+    },
+    {
+      "name": "auth.logout.anon",
+      "role": "anon",
+      "request": {
+        "method": "POST",
+        "path": "/api/auth/logout"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": true,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": null
+      }
+    }
+  ]
+}
