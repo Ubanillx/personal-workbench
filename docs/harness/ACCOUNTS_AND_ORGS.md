@@ -295,33 +295,110 @@ npm run user:init   -- --confirm       # 迁移后一次性初始化：给未设
 **迁移文件**：`009_accounts_and_organizations.sql`（新表 + 重建 `users`/`task_comments` + 5 张业务表加 `org_id` + 回填），
 `010_drop_access_tokens.sql`（退役令牌表）。沿用 `004`/`008` 已验证的「建 `_new` → `INSERT…SELECT` → `DROP` → `RENAME`」模式。
 
-**执行顺序**（正式库只在最后一步动）：
+### 9.1 暂存目录（为什么迁移先不放进 migrations/）
 
-1. 在 `data/workbench.sqlite` 的**副本**上跑迁移，核对：每张表迁移前后行数一致、初始组织已建、5 个账号字段齐全、
-   业务数据全部挂到 `org-default`。
-2. 副本上跑 `npm run user:init`，确认 5 个初始密码可登录（用契约/冒烟工具打真实 HTTP）。
-3. 副本上跑四件套 + 契约回放。
-4. 上述全绿后，才让正式服务加载新版本（`client.ts` 会在应用迁移前自动备份到 `data/backups/`，另有一份副本）。
+这两个文件放在 `server/src/db/migrations-pending/`，**不会**被服务自动应用。原因是顺序耦合：
+`009` 给 5 张业务表加的是 `NOT NULL org_id`，而旧代码插入这些表时不带 `org_id`——一旦迁移生效，
+应用立刻写不进数据，`npm test` 也会一直红到 B/C 阶段代码落地。所以：
+
+- **A–D 阶段**：迁移留在 `migrations-pending/`，用 `npm run db:rehearse` 在**正式库的副本**上反复验证；
+- **E 阶段**：代码齐了之后 `git mv` 进 `migrations/`，再走下面的正式迁移流程。
+
+### 9.2 演练工具 `npm run db:rehearse`
+
+```bash
+npm run db:rehearse                 # 默认源：data/workbench.sqlite
+npm run db:rehearse -- --keep       # 保留副本目录，便于继续手工验证
+npm run db:rehearse -- --source <路径>
+```
+
+它做四件事：用 `node:sqlite` 的 `backup()` 取一致快照（服务不用停）→ 把 `migrations/` 与
+`migrations-pending/` 合成一个临时目录交给**真实的 `SqliteMigrationRunner`** 执行（顺带验证 runner 的
+「FK OFF + 单事务」行为）→ 逐表核对行数、账号映射、组织归属、约束是否真的生效 → 打印报告，任一项失败即 exit 1。
+
+### 9.3 正式迁移流程（E 阶段，正式库只在最后一步动）
+
+1. `npm run db:rehearse` 全绿（当前：**42 项 0 失败**，见 §12）。
+2. 在保留下来的副本上跑 `npm run user:init -- --confirm`，用契约/冒烟工具打真实 HTTP 确认初始密码能登录。
+3. 副本上跑四件套 + 契约全量回放。
+4. 上述全绿后，才让正式服务加载新版本（`client.ts` 会在应用迁移前自动备份到 `data/backups/`，另有一份手工副本）。
 
 **回滚**：迁移前的自动备份 + 手工副本都可直接替换回 `data/workbench.sqlite`；
 旧实现（令牌登录）已归档在 `_archive/legacy-fastify/`，但**回滚到旧实现意味着放弃组织数据模型**，只适合刚迁移完就发现问题的情况。
+
+### 9.4 落地顺序：B 与 C 必须一起上（重要）
+
+B（用户名密码登录）和 C（组织隔离）**不能分两次落地**，原因是双向耦合：
+
+- B 要读 `users.username` / `users.password_hash`，这两列只有 `009` 生效后才存在；
+- `009` 给 5 张业务表加的是 `NOT NULL org_id`，只有 C 把所有插入改成带 `org_id` 之后，应用才写得进数据。
+
+所以「009/010 启用 + B 的认证 + C 的隔离」是**同一次落地**。为了让 `main` 在此期间保持绿色：
+
+1. 在分支 `feat/accounts-orgs` 上开发 B+C，`main` 不动、运行中的服务不动；
+2. 分支内先让 `npm run db:rehearse` 与四件套全绿，再按新行为 `contract:capture` 重录认证域；
+3. 全部绿了再把 009/010 `git mv` 进 `migrations/` 并合并回 `main`；
+4. 合并后**不要立刻重启正式服务**，先按 §9.3 在副本上跑完 `user:init` 与契约回放，再重启。
+
+> 注意：运行中的 `npm run serve` 进程已经把模块加载进内存，重新 `npm run build` 不会影响它；
+> 但只要**重启**服务，它就会应用 `migrations/` 里的一切。迁移未验证完之前不要重启。
 
 ## 10. 分阶段实施计划
 
 每个阶段独立验收（四件套 + `format:check` + `npx antd lint app` 全绿），上一阶段不绿不进下一阶段。
 
-| 阶段         | 内容                                                                                                    | 验收                                                                                   |
-| ------------ | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| **A 数据层** | 009/010 迁移、`organizations`/`join_requests`/成员与账号 repository、`password` 工具、`user:init` CLI   | 副本上迁移后行数逐表核对一致；`user:list`/`user:passwd` 可用；`test:db` 全绿           |
-| **B 认证**   | register/login/password 端点、scrypt、会话、`must_change_password` 门禁；退役令牌登录与 `owner:reset`   | 注册→登录→改密→登录全链路 HTTP 通过；旧令牌一律 401；`test:owner` 改写为密码重置端到端 |
-| **C 隔离**   | 所有业务查询加组织过滤、组织/成员/申请端点、§4 的 6 条不变式                                            | 新增跨组织隔离测试（构造 2 个组织，逐端点验证 404）；契约按新行为重录                  |
-| **D 界面**   | `/login`、`/register`、`/password`、`/join`、`/organization`、`/admin` + 8 个页面接入组织上下文与筛选器 | `smoke:ui` 全绿并渲染出真实数据；`antd lint app` 无问题；人工过一遍关键路径            |
-| **E 收尾**   | 契约全量重录、夹具改造（2 个组织）、文档回写、正式库迁移与演练                                          | 139 → 约 190 条契约全部一致；正式库迁移前后行数核对；README/harness 六份文档回写       |
+| 阶段         | 内容                                                                                                    | 验收                                                                                   | 状态          |
+| ------------ | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | ------------- |
+| **A 数据层** | 009/010 迁移、`organizations`/`join_requests`/成员与账号 repository、`password` 工具、`user:init` CLI   | 副本上迁移后行数逐表核对一致；`user:list`/`user:passwd` 可用；`test:db` 全绿           | ✅ 2026-09-10 |
+| **B 认证**   | register/login/password 端点、scrypt、会话、`must_change_password` 门禁；退役令牌登录与 `owner:reset`   | 注册→登录→改密→登录全链路 HTTP 通过；旧令牌一律 401；`test:owner` 改写为密码重置端到端 | 下一步        |
+| **C 隔离**   | 所有业务查询加组织过滤、组织/成员/申请端点、§4 的 6 条不变式                                            | 新增跨组织隔离测试（构造 2 个组织，逐端点验证 404）；契约按新行为重录                  | 待办          |
+| **D 界面**   | `/login`、`/register`、`/password`、`/join`、`/organization`、`/admin` + 8 个页面接入组织上下文与筛选器 | `smoke:ui` 全绿并渲染出真实数据；`antd lint app` 无问题；人工过一遍关键路径            | 待办          |
+| **E 收尾**   | 契约全量重录、夹具改造（2 个组织）、文档回写、正式库迁移与演练                                          | 139 → 约 190 条契约全部一致；正式库迁移前后行数核对；README/harness 六份文档回写       | 待办          |
 
 **对现有资产的影响**：`tools/contract/fixture.ts` 要改成「两个组织 + 三角色 + 无组织用户」；
 139 条用例里认证域（12 条）会重写，其余用例要补组织上下文；`test/api/owner-reset.test.ts` 改成密码重置端到端。
 
-## 11. 风险
+## 12. Phase A 实施记录（2026-09-10）
+
+### 交付物
+
+| 文件                                                                 | 内容                                                                                  |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `server/src/security/password.ts`                                    | scrypt 哈希/校验（参数写进哈希串、`timingSafeEqual`、`locked$` 占位、参数上下界防护） |
+| `server/src/security/account.ts`                                     | 账号运维：`listAccounts` / `setAccountPassword` / `initMissingPasswords`（幂等）      |
+| `server/src/cli/{support,list-users,set-password,init-passwords}.ts` | `user:list`、`user:passwd`、`user:init` 三个命令                                      |
+| `server/src/db/migrations-pending/009…sql`、`010…sql`                | 见 §3：2 张新表 + 7 张表重建 + 初始组织与归属回填                                     |
+| `tools/db/rehearse-migration.ts`（`npm run db:rehearse`）            | 副本演练 + 42 项核对                                                                  |
+| `test/db/password.test.ts`                                           | 6 条密码单元测试（含「格式/参数异常一律失败」与「改过参数的哈希仍可校验」）           |
+
+### 在正式库副本上的演练结果（42 项 0 失败）
+
+- 14 张保留表行数**逐表一致**（tasks 7、todos 8、notes 1、weekly_reports 4、users 5、task_comments 2、…）。
+- 账号映射：`owner` → `admin`（全局管理员，`org_id` NULL）；创建最早的助理 `SELENE` → `selene` / `manager`；
+  `LEAH`/`MINTY`/`YANIS` → `member`。用户名取「小写名字」（纯 ASCII 合法时），否则回退 `member-<id 前 6 位>`。
+- 全部业务数据挂到 `org-default`；`access_tokens` 已删除；`PRAGMA foreign_key_check` 干净。
+- 约束真的生效（都用探针插入验证过被拒绝）：旧角色 `owner` 被 CHECK 拒、非管理员 `org_id` 为 NULL 被拒、
+  业务表缺 `org_id` 被 NOT NULL 拒、同一用户第二个 `pending` 申请被部分唯一索引拒。
+
+### 密码链路验证
+
+- `test:db` 13/13（原 7 + 密码 6）。
+- `user:init` 为 5 个账号生成初始密码后，用**独立实现的标准 scrypt**复算 `password_hash` 全部匹配（5/5），
+  证明写入的不是自洽的假格式；`user:passwd` 设置的密码同样通过独立校验。
+- `user:init` 幂等：第二次执行报告「所有账号都已设置过密码，无需初始化」；不带 `--confirm` 拒绝执行（exit 1）。
+- 不存在的账号报错并 exit 1；密码短于 8 位被拒。
+
+### 踩到的坑（已记入文档，避免重复）
+
+1. **`--password-stdin` 会被 npm 吃掉**：Windows 上 `npm run user:passwd -- x --password-stdin` 会打印
+   `npm warn Unknown cli config "--password-stdin"` 并把该参数丢弃（管道调用时 PowerShell 的 npm shim 还会进一步打乱参数）。
+   解法：密码输入改为「环境变量 `WORKBENCH_PASSWORD` → stdin 非 TTY 就自动读一行 → TTY 交互式隐藏输入」三级回退，
+   不再依赖该标志。
+2. **`--keep` 的副本目录位置**：演练副本在系统临时目录，`--keep` 会打印路径；验证完记得手工清理。
+3. **生产库可以边跑边拷**：服务持有连接时 PowerShell 的 `Get-FileHash` 会被共享锁挡住，但 `node:sqlite` 的
+   `backup()` 与 `fs.copyFileSync` 都能正常取到快照（`backup()` 是**异步**的，必须 `await`，否则得到 0 字节文件）。
+
+## 13. 风险
 
 | 风险                                             | 对策                                                                                                                        |
 | ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |

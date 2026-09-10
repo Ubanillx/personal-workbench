@@ -28,7 +28,7 @@
 | 契约快照     | 139 条用例覆盖 48 端点 × 五种身份；`contract:compare` 全绿                                                          |
 | 前端 UI      | **antd v6.6.3** + icons 6.3.4；`antd doctor` 14 项全过，`antd lint app` 73 文件无问题                               |
 | 全栈迁移     | **Phase 0–4 全部完成** → `FULLSTACK_MIGRATION.md`                                                                   |
-| 账号与组织   | **改造设计已确认、待实施**（D-18…D-34，A–E 五阶段）→ `ACCOUNTS_AND_ORGS.md`                                         |
+| 账号与组织   | **改造中**：A 阶段（数据层迁移 + CLI，`db:rehearse` 42 项全绿）已完成，B–E 待做 → `ACCOUNTS_AND_ORGS.md`            |
 
 ## 命令速查
 
@@ -52,7 +52,11 @@
 | 生成夹具库       | `npm run contract:fixture`                                | 输出可直接用作 `DATABASE_PATH` 的临时库（含固定令牌）                                 |
 | SSR 冒烟         | `npm run smoke:ui -- --require-migrated`                  | 逐页验收；`--paths` 限定页面，`--require-migrated` 把占位页计为失败                   |
 | 手动备份         | `npm run db:backup`                                       | 写入 `data/backups/`，保留最近 5 份                                                   |
-| 重置主人令牌     | `npm run owner:reset -- --confirm`                        | 先自动备份，再撤销旧令牌与会话                                                        |
+| 重置主人令牌     | `npm run owner:reset -- --confirm`                        | 先自动备份，再撤销旧令牌与会话（**B 阶段退役**，改用 `user:passwd`）                  |
+| 账号清单         | `npm run user:list`                                       | 用户名 / 邮箱 / 角色 / 组织 / 是否待改密（**B 阶段启用**）                            |
+| 重置账号密码     | `npm run user:passwd -- <用户名> [--generate]`            | 本机唯一的重置途径；也可用 `WORKBENCH_PASSWORD` 环境变量或管道输入                    |
+| 初始化初始密码   | `npm run user:init -- --confirm`                          | 迁移后一次性：给仍是 `locked$` 的账号生成初始密码并打印（幂等）                       |
+| 迁移演练         | `npm run db:rehearse [-- --keep]`                         | 在**正式库副本**上试跑 `server/src/db/migrations-pending/`，42 项核对                 |
 | 局域网放行端口   | 见根 README「局域网访问」                                 | 管理员 PowerShell 执行 `New-NetFirewallRule`                                          |
 
 ## 文档索引

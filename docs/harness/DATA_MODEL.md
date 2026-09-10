@@ -1,5 +1,11 @@
 # 数据架构
 
+> **待启用结构（尚未生效）**：账号密码 + 多组织改造的 `009`/`010` 迁移暂存在
+> `server/src/db/migrations-pending/`，**正式库仍是下面描述的结构**（16 张活表、迁移 001–008）。
+> 那两份迁移会新增 `organizations` 与 `organization_join_requests`、重建 `users`/`task_comments`、
+> 给 5 张业务表补 `org_id`、删除 `access_tokens`。看设计看 `ACCOUNTS_AND_ORGS.md`，
+> 在副本上演练用 `npm run db:rehearse`。启用（E 阶段）后本文件会整体回写。
+
 ## 存储位置
 
 | 路径                                               | 内容                                    | 是否纳入备份                              |

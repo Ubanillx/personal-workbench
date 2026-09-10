@@ -30,9 +30,13 @@
     "test:api": "\"%npm_node_execpath%\" --import tsx tools/contract/compare.ts --serve-npm serve",
     "test:owner": "\"%npm_node_execpath%\" --import tsx --test test/api/owner-reset.test.ts",
     "test:ui": "\"%npm_node_execpath%\" --import tsx tools/contract/smoke-ui.ts --require-migrated",
-    "test:db": "\"%npm_node_execpath%\" --import tsx --test test/db/backup.test.ts test/db/json-migration.test.ts test/db/migration-backup.test.ts test/db/owner-token.test.ts",
+    "test:db": "\"%npm_node_execpath%\" --import tsx --test test/db/backup.test.ts test/db/json-migration.test.ts test/db/migration-backup.test.ts test/db/owner-token.test.ts test/db/password.test.ts",
     "owner:reset": "\"%npm_node_execpath%\" --import tsx server/src/cli/reset-owner-token.ts",
-    "db:backup": "\"%npm_node_execpath%\" --import tsx server/src/cli/backup-sqlite.ts"
+    "user:list": "\"%npm_node_execpath%\" --import tsx server/src/cli/list-users.ts",
+    "user:passwd": "\"%npm_node_execpath%\" --import tsx server/src/cli/set-password.ts",
+    "user:init": "\"%npm_node_execpath%\" --import tsx server/src/cli/init-passwords.ts",
+    "db:backup": "\"%npm_node_execpath%\" --import tsx server/src/cli/backup-sqlite.ts",
+    "db:rehearse": "\"%npm_node_execpath%\" --import tsx tools/db/rehearse-migration.ts"
   },
   "devDependencies": {
     "@ant-design/cli": "^6.6.3",
