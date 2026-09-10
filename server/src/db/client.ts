@@ -4,7 +4,10 @@ import path from "node:path";
 import type { DatabaseSync as DatabaseSyncType } from "node:sqlite";
 import { SqliteMigrationRunner } from "./migration-runner";
 
-const nodeRequire = createRequire(__filename);
+// 双运行时兼容：__filename 在 ESM 下不存在（typeof 对未声明标识符安全），
+// 因此回退到以 cwd 为锚点的 require —— 解析 node:sqlite 这类内置模块不依赖具体基路径。
+const requireBase = typeof __filename === "string" ? __filename : path.join(process.cwd(), "index.js");
+const nodeRequire = createRequire(requireBase);
 type DatabaseConstructor = typeof DatabaseSyncType;
 let databaseConstructor: DatabaseConstructor | undefined;
 

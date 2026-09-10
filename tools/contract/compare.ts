@@ -41,15 +41,25 @@ async function main(): Promise<void> {
   const entry = argValue("--entry", DEFAULT_ENTRY);
   const baseUrlArg = argValue("--base-url", "");
   const goldenFile = path.resolve(process.cwd(), argValue("--golden", DEFAULT_GOLDEN));
+  /** 只比对指定前缀的用例（逗号分隔），便于按阶段分批验收 */
+  const only = argValue("--only", "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
   if (!fs.existsSync(goldenFile)) throw new Error(`找不到 golden 文件：${goldenFile}（先跑 npm run contract:capture）`);
-  const golden = JSON.parse(fs.readFileSync(goldenFile, "utf8")) as GoldenFile;
+  const goldenAll = JSON.parse(fs.readFileSync(goldenFile, "utf8")) as GoldenFile;
+  const golden: GoldenFile = only.length
+    ? { meta: goldenAll.meta, responses: goldenAll.responses.filter((item) => only.some((prefix) => item.name.startsWith(prefix))) }
+    : goldenAll;
+  if (golden.responses.length === 0) throw new Error(`--only ${only.join(",")} 没有匹配到任何用例`);
 
   const fixture = createFixture();
   const port = baseUrlArg ? Number(new URL(baseUrlArg).port) : await findFreePort();
   const server = baseUrlArg ? null : await startServer({ entry, fixture, port });
   const baseUrl = baseUrlArg || `http://127.0.0.1:${port}`;
   try {
-    const actual = await runCases({ baseUrl, fixture, port, cases: CASES });
+    const selectedNames = new Set(golden.responses.map((item) => item.name));
+    const actual = await runCases({ baseUrl, fixture, port, cases: CASES.filter((item) => selectedNames.has(item.name)) });
     if (actual.length !== golden.responses.length) {
       throw new Error(`用例数量不一致：golden ${golden.responses.length} 条，本次 ${actual.length} 条（cases.ts 改过？需要重新 capture）`);
     }

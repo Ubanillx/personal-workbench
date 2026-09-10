@@ -1,6 +1,6 @@
 import React, { Component, type ErrorInfo, type ReactNode } from "react";
 import ReactDOM from "react-dom/client";
-import { BrowserRouter } from "react-router-dom";
+import { BrowserRouter } from "react-router";
 import { App as AntdApp, Button, ConfigProvider, Result, type ThemeConfig } from "antd";
 import zhCN from "antd/locale/zh_CN";
 import dayjs from "dayjs";

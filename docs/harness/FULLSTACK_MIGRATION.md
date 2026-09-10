@@ -64,7 +64,26 @@
 
 结论：Phase 1 不需要为「TS 7 原生编译器 / `node:sqlite` / Vite 8」做额外适配，按 RR8 官方结构落地即可。
 
-**验收**：新工程能用临时库启动并对 `/api/health`、`/api/auth/*` 通过 golden 比对。
+**验收**：新工程能用临时库启动并对 `/api/health`、`/api/ping` 通过 golden 比对（`/api/auth/*` 依赖 workbench 路由代码，实际归入 Phase 2）。
+
+**Phase 1 进度（2026-09-10，骨架与 health 已完成）**
+
+| 事项                | 状态                                                                                                                                                                                                                                                                                                    |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| RR8 依赖            | ✅ `react-router@8.3.1` + `@react-router/{dev,node,serve}@8.3.1`；`@react-router/dev` 的 peer 明确支持 `typescript ^7.0.0`                                                                                                                                                                              |
+| **依赖冲突解法**    | 旧前端依赖 `react-router-dom@7`（内含 `react-router@7`），与 RR8 的 peer 冲突。解法是**统一版本**：旧前端 3 处导入由 `react-router-dom` 改为 `react-router`（v8 仍导出 BrowserRouter/Routes/Route/NavLink/useNavigate/useSearchParams 等 129 个导出），并卸载 `react-router-dom`；旧前端 typecheck 通过 |
+| 新工程骨架          | ✅ 根目录 `react-router.config.ts`（`ssr:true`）、`vite.config.ts`、`tsconfig.json`，以及 `app/{root.tsx,routes.ts,routes/,lib/}`                                                                                                                                                                       |
+| 数据/安全层复用方式 | **相对导入原地复用**（`app/lib/context.server.ts` → `server/src/db                                                                                                                                                                                                                                      | config`），不做物理搬迁；物理搬迁放到 Phase 4 与归档一起做（否则旧实现立刻不可运行） |
+| 一处必须改的代码    | `server/src/db/client.ts` 的 `createRequire(__filename)` 在 ESM 下会在**模块加载时**崩溃 → 改为 `typeof __filename === "string" ? __filename : path.join(process.cwd(), "index.js")`，双运行时兼容（旧实现 typecheck + 16 测试仍全过）                                                                  |
+| 响应信封对齐        | 新增 `app/lib/http.server.ts`，逐字节复刻旧实现的 `{ok,data}` / `{ok,error:{code,message}}`、`application/json; charset=utf-8`、helmet 的 CSP（去除 `upgrade-insecure-requests`）、`X-Content-Type-Options: nosniff`，且不发 HSTS/COOP                                                                  |
+| 验收结果            | ✅ `npm run rr:build` 通过（客户端 84 模块 / SSR 14 模块）；新实现 `/api/ping` 与旧实现**逐字节一致**（仅时间戳不同）；`contract:compare --base-url … --only health.ping.anon,health.status.anon` → **全部一致**                                                                                        |
+| 正式库安全          | ✅ `data/workbench.sqlite` 验收前后 size 与 mtime 完全一致（运行指向临时副本）                                                                                                                                                                                                                          |
+| 新增工具能力        | 契约工具支持 `--only <前缀,前缀>`，可按阶段/按域分批验收                                                                                                                                                                                                                                                |
+
+**两处环境坑（已踩，务必记住）**
+
+1. **npmmirror 上的 `@react-router/dev@8.3.1` 包不完整**（缺 `module-sync-enabled/index.mjs`），构建报 `ERR_MODULE_NOT_FOUND`，且失败过程会触发 npm 清理把该包整个删掉。解法：`npm install -D @react-router/dev@8.3.1 --registry=https://registry.npmjs.org`。
+2. 本工具的 `pwsh` 实际是 **Windows PowerShell 5.1**（不支持 `??` 等 PS7 语法，`Get-Content` 按 GBK 解码 UTF-8）→ 脚本避免 PS7 语法，读写仓库文件一律用文件工具。
 
 ### Phase 2 · 48 个端点迁移（预计 2–3 天）
 

@@ -16,10 +16,14 @@
     "build:web": "\"%npm_node_execpath%\" node_modules/vite/bin/vite.js build --config web/vite.config.mts",
     "build:server": "\"%npm_node_execpath%\" node_modules/typescript/lib/tsc.js -p server/tsconfig.json",
     "build": "npm run build:web && npm run build:server",
-    "typecheck": "npm run typecheck:server && npm run typecheck:web && npm run typecheck:tools",
+    "typecheck": "npm run typecheck:server && npm run typecheck:web && npm run typecheck:tools && npm run typecheck:app",
     "typecheck:server": "\"%npm_node_execpath%\" node_modules/typescript/lib/tsc.js -p server/tsconfig.json --noEmit",
     "typecheck:web": "\"%npm_node_execpath%\" node_modules/typescript/lib/tsc.js -p web/tsconfig.json --noEmit",
     "typecheck:tools": "\"%npm_node_execpath%\" node_modules/typescript/lib/tsc.js -p tools/tsconfig.json",
+    "typecheck:app": "\"%npm_node_execpath%\" node_modules/typescript/lib/tsc.js -p tsconfig.json --noEmit",
+    "rr:dev": "react-router dev",
+    "rr:build": "react-router build",
+    "rr:start": "react-router-serve build/server/index.js",
     "contract:capture": "\"%npm_node_execpath%\" --import tsx tools/contract/capture.ts",
     "contract:compare": "\"%npm_node_execpath%\" --import tsx tools/contract/compare.ts",
     "lint": "oxlint",
@@ -35,6 +39,7 @@
   },
   "devDependencies": {
     "@ant-design/cli": "^6.6.3",
+    "@react-router/dev": "^8.3.1",
     "@types/node": "^26.4.1",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
@@ -53,11 +58,14 @@
     "@fastify/helmet": "^13.1.1",
     "@fastify/multipart": "^10.1.1",
     "@fastify/static": "^10.1.3",
+    "@react-router/node": "^8.3.1",
+    "@react-router/serve": "^8.3.1",
     "antd": "^6.6.3",
     "dayjs": "^1.11.23",
     "fastify": "^5.12.1",
+    "isbot": "^5",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "react-router-dom": "^7.18.3"
+    "react-router": "^8.3.1"
   }
 }
