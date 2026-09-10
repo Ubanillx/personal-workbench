@@ -109,3 +109,77 @@ npm run build         # 前端 + 后端产物
 2. 跑 `npm run lint` 看存量命中数。
 3. 能当次修完就修；修不完则**不要开规则**，而是在 `TECH_DEBT.md` 登记（写明命中数、涉及文件、暂缓原因），修复后再开。
 4. 同步更新本文第 3 节的规则表。
+
+## 10. UI 组件规范（antd v6）
+
+前端统一使用 **antd v6**（`antd@6.6.3` + `@ant-design/icons@6.3.4`），品牌色沿用旧版手写样式的 `#185fa5`，在 `web/src/main.tsx` 的 `ConfigProvider` 里集中配置。
+
+### 10.1 先查再写（强制）
+
+`.agents/skills/antd/SKILL.md` 与仓库根 `AGENTS.md` 要求：**写 antd 代码前先用官方 CLI 查 API，不许凭记忆写**。antd v6 与 v5 差异很大，凭记忆写必然踩废弃 API。
+
+| 命令                            | 用途                                       |
+| ------------------------------- | ------------------------------------------ |
+| `npx antd info <组件>`          | 查 props、类型、默认值、引入版本           |
+| `npx antd demo <组件> <示例名>` | 取可直接改用的官方示例源码                 |
+| `npx antd doc <组件>`           | 完整 markdown 文档                         |
+| `npx antd lint web/src`         | **提交前必跑**：废弃用法 / a11y / 性能     |
+| `npx antd doctor`               | 诊断项目级配置（版本冲突、重复安装、主题） |
+| `npx antd usage web/src`        | 统计组件使用情况                           |
+| `npx antd migrate 5 6`          | 版本迁移清单                               |
+
+### 10.2 v6 与 v5 的关键差异（已核实清单）
+
+| 组件         | v5 写法                        | v6 正确写法                                                                            |
+| ------------ | ------------------------------ | -------------------------------------------------------------------------------------- |
+| Button       | `type="primary"`               | `color="primary" variant="solid"`；`size` 是 `small/medium/large`（**没有 `middle`**） |
+| List         | `<List dataSource renderItem>` | **`List` 已废弃** → `<Listy items rowKey itemRender>`                                  |
+| Space        | `direction` / `split`          | `orientation` / `separator`                                                            |
+| Alert        | `message`                      | `title`                                                                                |
+| Card         | `bordered` / `bodyStyle`       | `variant` / `styles.body`                                                              |
+| Tabs         | `Tabs.TabPane` / `tabPosition` | `items` / `tabPlacement`                                                               |
+| Timeline     | `Timeline.Item`                | `items`                                                                                |
+| Modal        | `destroyOnClose` / `bodyStyle` | `destroyOnHidden` / `styles.body`                                                      |
+| Table        | `pagination.position`          | `pagination.placement`                                                                 |
+| Tag          | `bordered={false}`             | `variant="filled"`                                                                     |
+| Divider      | `type`                         | `orientation`                                                                          |
+| Dropdown     | `Dropdown.Button`              | `Space.Compact + Dropdown + Button`                                                    |
+| notification | `message`                      | `title`                                                                                |
+| Progress     | `strokeWidth` / `trailColor`   | `size` / `railColor`                                                                   |
+| Form         | `onFinish` 含未注册字段        | v6 起 `onFinish` **不包含**未注册的 Form.Item 字段                                     |
+
+### 10.3 反馈组件必须走上下文
+
+```tsx
+import { App as AntdApp } from "antd";
+
+const { message, modal, notification } = AntdApp.useApp();
+```
+
+**禁止**使用 `message.success()` 这类静态方法：静态方法拿不到 `ConfigProvider` 的主题与 locale。`main.tsx` 已用 `<AntdApp>` 包裹整棵树。
+
+### 10.4 严格模式下的可选 prop
+
+`exactOptionalPropertyTypes: true` 下**不能给可选 prop 传显式 `undefined`**，antd 的条件样式/状态最常踩：
+
+```tsx
+// ❌ type={done ? "secondary" : undefined}
+<Typography.Text {...(done ? { type: "secondary" as const } : {})}>…</Typography.Text>
+```
+
+`validateStatus`、`help`、`status`、`type`、`variant` 等条件传参都要用条件展开。
+
+### 10.5 布局与样式
+
+- 布局优先用 antd 的 `Flex` / `Space` / `Row`+`Col` / `Layout`，**不要为新页面写 CSS**。
+- 结构性辅助类集中在 `web/src/styles/layout.css`（`page-stack`、`page-head`、`status-card`、`fill-card`、`list-block`、`list-row` 等）。
+- 历史包袱 `web/src/styles/global.css` 是早期手写样式，随页面逐个 antd 化而收缩；**新代码不要往里加规则**。
+- 视觉调整优先用 Design Token（`ConfigProvider` 的 `theme.token` / `theme.components`），而不是覆盖 antd 内部类名。
+
+### 10.6 交付前新增一项门禁
+
+```bash
+npx antd lint web/src     # 必须 No issues found
+```
+
+它不替代 `npm run lint`（oxlint），两者都要过。

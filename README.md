@@ -6,7 +6,7 @@
 
 ## 当前状态
 
-- 新 Web 工程使用 React + Vite、Node.js + Fastify、TypeScript 和 SQLite。
+- 新 Web 工程使用 React 19 + Vite、**antd v6**、Node.js + Fastify、TypeScript 和 SQLite。
 - Web 服务启动时会自动执行 SQLite migrations，并通过 HttpOnly Cookie 建立会话。
 - 正式数据库为 `data/workbench.sqlite`；每次主人令牌重置会先在 `data/backups/` 创建备份。
 - 日常使用正式地址 `http://127.0.0.1:17500`，不要使用 `5173` 开发预览地址。
@@ -131,11 +131,12 @@ API_PROXY_TARGET=http://127.0.0.1:17500
 
 ## 代码规范与验证命令
 
-源码只写 TypeScript（`.ts`/`.tsx`/`.mts`，禁用 `.js`），规范细则见 [`docs/harness/CODE_STYLE.md`](docs/harness/CODE_STYLE.md)。
+源码只写 TypeScript（`.ts`/`.tsx`/`.mts`，禁用 `.js`）；前端 UI 统一用 antd v6，规范细则见 [`docs/harness/CODE_STYLE.md`](docs/harness/CODE_STYLE.md)。仓库根 `AGENTS.md` 与 `.agents/skills/antd/` 是官方 Ant Design CLI skill，写 antd 代码前先用 `npx antd info/demo/doc` 查权威 API。
 
 ```bash
 npm run lint          # oxlint，门禁 0 warning / 0 error
-npm run typecheck     # server + web
+npx antd lint web/src # antd 官方检查：必须 No issues found
+npm run typecheck     # server + web + tools
 npm test              # 依次 test:api → test:web → test:db
 npm run build         # 前端 + 后端产物
 npm run format:check  # 确认没有 Prettier 格式漂移

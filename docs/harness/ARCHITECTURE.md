@@ -168,16 +168,20 @@ Fastify (app.ts)
 
 ## 前端结构
 
-| 文件                                          | 职责                                                      |
-| --------------------------------------------- | --------------------------------------------------------- |
-| `web/src/main.tsx` / `App.tsx`                | 入口、路由与鉴权外壳；30 秒轮询通知                       |
-| `web/src/services/apiClient.ts`               | 统一 API 客户端（214 行），所有请求与错误归一化的唯一出口 |
-| `web/src/pages/DashboardPage.tsx`             | 首页概览                                                  |
-| `web/src/pages/WorkbenchPages.tsx`            | 任务列表/详情/时间线、待办、随手记（592 行）              |
-| `web/src/pages/MorePages.tsx`                 | 成员管理、文件库、收件箱、验收视图等（645 行）            |
-| `web/src/pages/ReportsPage.tsx`               | 周报提交与审批                                            |
-| `web/src/styles/global.css`                   | 全局样式（840 行）                                        |
-| `web/src/components/`、`web/src/types/api.ts` | 组件目录为空；types 仅含健康检查类型                      |
+UI 层统一使用 **antd v6**（`antd@6.6.3` + `@ant-design/icons@6.3.4`）：`main.tsx` 用 `ConfigProvider`（`locale=zh_CN`、`theme.token.colorPrimary=#185fa5`）与 `AntdApp` 包裹整棵树，反馈组件一律走 `AntdApp.useApp()`。组件 API 规范、v6 差异清单与 `antd lint` 门禁见 `CODE_STYLE.md` 第 10 节。
+
+| 文件                                          | 职责                                                                                              |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `web/src/main.tsx`                            | 入口：`ConfigProvider`(zh_CN + 主题) → `AntdApp` → 错误边界 → `BrowserRouter`；dayjs 中文 locale  |
+| `web/src/App.tsx`                             | antd `Layout` 外壳：Sider + Menu 导航、Header 通知下拉/用户信息/退出、`Routes` 路由表、令牌登录页 |
+| `web/src/services/apiClient.ts`               | 统一 API 客户端（214 行），所有请求与错误归一化的唯一出口                                         |
+| `web/src/pages/DashboardPage.tsx`             | 首页概览（antd 参考实现：Card + Statistic + Listy + Empty）                                       |
+| `web/src/pages/WorkbenchPages.tsx`            | 任务列表/详情/时间线、待办、随手记（592 行）                                                      |
+| `web/src/pages/MorePages.tsx`                 | 成员管理、文件库、收件箱、验收视图等（645 行）                                                    |
+| `web/src/pages/ReportsPage.tsx`               | 周报提交与审批                                                                                    |
+| `web/src/styles/layout.css`                   | antd 版结构性辅助类（新代码只用这里的类）                                                         |
+| `web/src/styles/global.css`                   | 早期手写样式（840 行），随页面 antd 化逐步收缩                                                    |
+| `web/src/components/`、`web/src/types/api.ts` | 组件目录为空；`types/api.ts` 为无人引用的手写镜像（待删）                                         |
 
 ## 已知架构不一致
 
