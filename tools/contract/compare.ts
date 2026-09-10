@@ -39,6 +39,7 @@ function diffResponse(expected: RecordedResponse, actual: RecordedResponse): str
 
 async function main(): Promise<void> {
   const entry = argValue("--entry", DEFAULT_ENTRY);
+  const serveNpm = argValue("--serve-npm", "");
   const baseUrlArg = argValue("--base-url", "");
   const goldenFile = path.resolve(process.cwd(), argValue("--golden", DEFAULT_GOLDEN));
   /** 只比对指定前缀的用例（逗号分隔），便于按阶段分批验收 */
@@ -55,7 +56,11 @@ async function main(): Promise<void> {
 
   const fixture = createFixture();
   const port = baseUrlArg ? Number(new URL(baseUrlArg).port) : await findFreePort();
-  const server = baseUrlArg ? null : await startServer({ entry, fixture, port });
+  const server = baseUrlArg
+    ? null
+    : serveNpm
+      ? await startServer({ serveNpm, fixture, port })
+      : await startServer({ entry, fixture, port });
   const baseUrl = baseUrlArg || `http://127.0.0.1:${port}`;
   try {
     const selectedNames = new Set(golden.responses.map((item) => item.name));

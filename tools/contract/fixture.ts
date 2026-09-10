@@ -197,5 +197,10 @@ export function createFixture(): Fixture {
 }
 
 export function removeFixture(fixture: Fixture): void {
-  fs.rmSync(fixture.directory, { recursive: true, force: true });
+  try {
+    fs.rmSync(fixture.directory, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 });
+  } catch (error) {
+    // 临时目录残留无害（系统会自行清 Temp），不要因此让整个验收流程失败
+    console.warn(`临时夹具目录未能删除（可忽略）：${error instanceof Error ? error.message : String(error)}`);
+  }
 }

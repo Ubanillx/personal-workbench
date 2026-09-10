@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess } from "node:child_process";
+import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import net from "node:net";
 import type { ContractCase, Role } from "./cases";
 import { TOKENS, type Fixture } from "./fixture";
@@ -63,22 +63,31 @@ export async function findFreePort(): Promise<number> {
   });
 }
 
-export async function startServer(options: { entry: string; fixture: Fixture; port: number }): Promise<{
+export async function startServer(options: { entry?: string; serveNpm?: string; fixture: Fixture; port: number }): Promise<{
   stop: () => Promise<void>;
   output: () => string;
 }> {
-  const child: ChildProcess = spawn(process.execPath, ["--import", "tsx", options.entry], {
-    cwd: process.cwd(),
-    env: {
-      ...process.env,
-      NODE_ENV: "production",
-      HOST: "127.0.0.1",
-      PORT: String(options.port),
-      DATABASE_PATH: options.fixture.databasePath,
-      UPLOADS_DIR: options.fixture.uploadsDir,
-    },
-    stdio: ["ignore", "pipe", "pipe"],
-  });
+  const env = {
+    ...process.env,
+    NODE_ENV: "production",
+    HOST: "127.0.0.1",
+    PORT: String(options.port),
+    DATABASE_PATH: options.fixture.databasePath,
+    UPLOADS_DIR: options.fixture.uploadsDir,
+  };
+  // serveNpm：被测实现用一个 npm script 启动（例如 React Router 8 的 rr:start —— 由 react-router-serve
+  // 适配器监听端口，而 build/server/index.js 本身只导出请求处理器、不会监听）。
+  // 只接受脚本名，不接受整条命令行：npm 在 Windows 下会把带空格的参数拆开。
+  const npmCommand = process.platform === "win32" ? "npm.cmd" : "npm";
+  const child: ChildProcess = options.serveNpm
+    ? // Windows 下不经 shell 无法 spawn .cmd（Node 对 CVE-2024-27980 的修复），
+      // 这里的参数只有脚本名、不含空格，因此走 shell 是安全的
+      spawn(npmCommand, ["run", options.serveNpm], { cwd: process.cwd(), env, stdio: ["ignore", "pipe", "pipe"], shell: true })
+    : spawn(process.execPath, ["--import", "tsx", options.entry ?? "server/src/index.ts"], {
+        cwd: process.cwd(),
+        env,
+        stdio: ["ignore", "pipe", "pipe"],
+      });
   let log = "";
   child.stdout?.on("data", (chunk: Buffer) => (log += chunk.toString("utf8")));
   child.stderr?.on("data", (chunk: Buffer) => (log += chunk.toString("utf8")));
@@ -106,6 +115,13 @@ export async function startServer(options: { entry: string; fixture: Fixture; po
     output: () => log,
     stop: async () => {
       if (child.exitCode !== null) return;
+      // 走 shell 启动时，child 是 shell 进程，真正的服务是它的孙进程；
+      // Windows 上必须用 taskkill /T 杀整棵进程树，否则它会继续占用夹具 SQLite 文件。
+      if (process.platform === "win32" && child.pid !== undefined) {
+        spawnSync("taskkill", ["/pid", String(child.pid), "/T", "/F"], { stdio: "ignore" });
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        return;
+      }
       child.kill("SIGTERM");
       const exited = await Promise.race([
         new Promise<boolean>((resolve) => child.once("exit", () => resolve(true))),
