@@ -62,7 +62,7 @@ const NAV: NavItem[] = [
 ];
 
 /** Phase 3 逐页迁移：只有已迁移的路径出现在导航里，避免点了 404 */
-const MIGRATED_PATHS = new Set(["/"]);
+const MIGRATED_PATHS = new Set(["/", "/tasks", "/todos", "/notes", "/inbox", "/reports", "/collaboration", "/files", "/review"]);
 
 const ROLE_LABEL = { owner: "主人", assistant: "助理", viewer: "查看者" } as const;
 const ROLE_COLOR: Record<"owner" | "assistant" | "viewer", string> = { owner: "blue", assistant: "green", viewer: "default" };

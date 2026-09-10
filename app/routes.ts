@@ -13,6 +13,14 @@ export default [
   index("routes/dashboard.tsx"),
   route("access", "routes/access.tsx"),
   route("logout", "routes/logout.ts"),
+  route("tasks", "routes/tasks.tsx"),
+  route("todos", "routes/todos.tsx"),
+  route("notes", "routes/notes.tsx"),
+  route("inbox", "routes/inbox.tsx"),
+  route("reports", "routes/reports.tsx"),
+  route("collaboration", "routes/collaboration.tsx"),
+  route("files", "routes/files.tsx"),
+  route("review", "routes/review.tsx"),
 
   // 健康检查
   route("api/ping", "routes/api.ping.ts"),
