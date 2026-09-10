@@ -128,9 +128,22 @@ npm run contract:compare -- --serve-npm rr:start --only "auth.,access-info."
 
 **工具侧已修的坑**：`build/server/index.js` 只导出请求处理器、单独运行会立即退出（exit 0），必须由 `react-router-serve` 监听端口 → 新增 `--serve-npm <脚本名>`；Windows 下 spawn `.cmd` 需要 `shell:true`，于是 `stop()` 改用 `taskkill /T` 杀整棵进程树，否则孙进程会继续占用夹具 SQLite 导致清理失败。
 
-### Phase 3 · 前端迁移（预计 1.5–2 天）
+### Phase 3 · 前端迁移（进行中）
 
-8 个页面搬到文件路由；`apiClient` 的职责拆给 loader/action；表单改 action 提交；保留现有 UI 与交互。
+8 个页面从 `web/src/pages`（antd v6 版）搬进 `app/routes/`，用 loader/action 取代 `apiClient`，并重写测试。
+
+**参考实现已完成（2026-09-10）**：`app/root.tsx`（antd 外壳 + 导航 + 通知 + 退出）、`app/routes/access.tsx`（登录）、`app/routes/logout.ts`、`app/routes/dashboard.tsx`（概览）。验收工具 `npm run smoke:ui` **14/14 通过**：SSR 渲染登录页、登录下发会话、会话对 API 与页面同时生效、外壳含导航与数据、页面 action 新增待办、退出后会话失效。
+
+**Phase 3 的六条约定（后续页面必须照此实现）**
+
+1. **页面路由**：`app/routes/<page>.tsx`，导出 `loader`（取数）、可选 `action`（表单提交）、默认导出的 antd 组件。
+2. **取数不绕 HTTP**：loader 直接调用共享服务（`app/lib/<域>.server.ts`），**不要**在前端 fetch 自己的 API；页面与资源路由共用同一份实现，从根上杜绝两套逻辑漂移（参考 `app/lib/dashboard.server.ts`）。
+3. **写操作两条合法路径**：① RR8 `<Form method="post">` → 本页 `action` 读 formData → 调共享服务（表单是 form-urlencoded，不能直接打收 JSON 的 API 路由）；② 需要 JSON 响应的交互（如通知已读）用 `fetch("/api/...")`，因为那条 API 已是同一份服务实现。
+4. **刷新数据用 `useRevalidator()`**，不要自己再维护一份 state 副本。
+5. **认证**：页面用 `requireUserOrRedirect(request)`（未登录重定向 `/access?redirectTo=…`）；API 仍用 `requireAuth/requireOwner`（401/403 JSON）。两者语义不同，不要混用。
+6. **索引路由的表单必须带 `?index`**：RR8 的 `<Form>` 会自动补；手写 fetch 时必须自己加，否则会被父级 layout 路由吞掉并返回 405。
+
+**接缝**：共享服务只能放在 `app/lib/*.server.ts`（路由文件不得有额外导出）；页面注册在 `app/routes.ts`、导航开关在 `app/root.tsx` 的 `MIGRATED_PATHS`，二者由主线统一维护，页面批次不要改。
 
 **验收**：页面功能与旧版一致（人工逐页走查）；测试重写完成。
 

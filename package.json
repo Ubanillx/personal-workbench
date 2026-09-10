@@ -26,6 +26,8 @@
     "rr:start": "react-router-serve build/server/index.js",
     "contract:capture": "\"%npm_node_execpath%\" --import tsx tools/contract/capture.ts",
     "contract:compare": "\"%npm_node_execpath%\" --import tsx tools/contract/compare.ts",
+    "contract:fixture": "\"%npm_node_execpath%\" --import tsx tools/contract/make-fixture.ts",
+    "smoke:ui": "\"%npm_node_execpath%\" --import tsx tools/contract/smoke-ui.ts",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",
     "format": "prettier --write .",

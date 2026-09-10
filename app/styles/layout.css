@@ -1,0 +1,135 @@
+/* antd 版布局辅助类：只放 antd 组件不便表达的结构性样式，视觉细节交给 Design Token */
+.center-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 100vh;
+  padding: 24px;
+}
+
+.app-shell {
+  min-height: 100vh;
+}
+
+.app-sider {
+  border-right: 1px solid #dfe5ed;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 16px 12px;
+}
+
+.brand-avatar {
+  background: #185fa5;
+  flex: none;
+}
+
+.brand-copy {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+
+.brand-sub {
+  font-size: 12px;
+}
+
+.app-menu {
+  border-inline-end: none;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 56px;
+  padding: 0 16px;
+  border-bottom: 1px solid #dfe5ed;
+}
+
+.app-content {
+  padding: 20px 24px 32px;
+}
+
+.dev-banner {
+  margin-bottom: 16px;
+}
+
+.page-stack {
+  width: 100%;
+}
+
+.page-head {
+  justify-content: space-between;
+  width: 100%;
+}
+
+.page-title {
+  margin: 0 !important;
+}
+
+.status-card,
+.fill-card {
+  height: 100%;
+}
+
+.list-block {
+  width: 100%;
+}
+
+.list-row {
+  justify-content: space-between;
+  width: 100%;
+}
+
+.quick-add {
+  width: 100%;
+}
+
+.quick-add-item {
+  flex: 1;
+}
+
+.notification-entry {
+  display: flex;
+  flex-direction: column;
+  max-width: 280px;
+}
+
+.notification-message {
+  font-size: 12px;
+}
+
+.access-card {
+  width: 100%;
+  max-width: 420px;
+}
+
+.access-stack {
+  width: 100%;
+}
+
+.access-brand {
+  text-align: center;
+}
+
+.access-title {
+  margin: 4px 0 0 !important;
+}
+
+.access-hint {
+  border-inline-end: none;
+  background: transparent;
+}
+
+.field-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}

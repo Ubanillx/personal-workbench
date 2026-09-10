@@ -4,15 +4,15 @@ import { reportRoutes } from "./routes.reports";
 import { taskRoutes } from "./routes.tasks";
 
 /**
- * 资源路由（只有 loader/action、没有默认导出的组件）即 API 端点。
- *
- * Phase 2 分四批把 48 个端点从 server/src/routes 搬过来，每批用
- * `npm run contract:compare -- --serve-npm rr:start --only <域名>` 验收。
- * 批次 B/C/D 各自写在 routes.tasks.ts / routes.people.ts / routes.reports.ts 里，
- * 避免并行迁移时争抢本文件。
+ * 资源路由（只有 loader/action、没有默认导出的组件）即 API 端点；
+ * 带组件的路由即页面。Phase 3 逐页把 web/src 的 antd 页面搬进来，
+ * 每搬完一页就把路径加入 app/root.tsx 的 MIGRATED_PATHS。
  */
 export default [
-  index("routes/home.tsx"),
+  // 页面（Phase 3）
+  index("routes/dashboard.tsx"),
+  route("access", "routes/access.tsx"),
+  route("logout", "routes/logout.ts"),
 
   // 健康检查
   route("api/ping", "routes/api.ping.ts"),
