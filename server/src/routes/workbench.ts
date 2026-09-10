@@ -651,7 +651,7 @@ export async function registerWorkbenchRoutes(app: FastifyInstance, options: Opt
       cond.push("t.status=?");
       params.push(q.status);
     }
-    const tasks = rows(db, `${SELECT_TASK} WHERE ${cond.join(" AND ")} ORDER BY t.updated_at DESC`, ...params).map(task);
+    const tasks = rows(db, `${SELECT_TASK} WHERE ${cond.join(" AND ")} ORDER BY t.updated_at DESC`, ...params).map(toTaskView);
     const completed = tasks.filter((t: any) => t.status === "completed").length;
     const overdue = tasks.filter(
       (t: any) => t.dueDate && t.dueDate < new Date().toISOString().slice(0, 10) && t.status !== "completed",
@@ -678,6 +678,8 @@ export async function registerWorkbenchRoutes(app: FastifyInstance, options: Opt
       : [];
     return reply.send(
       ok(
+        // 草稿字段不固定：必须原样保留客户端提交的其它字段，因此这里刻意展开
+        // oxlint-disable-next-line oxc/no-map-spread
         drafts.slice(0, 100).map((item) => {
           const title = String(item.title ?? "").trim();
           const fingerprint = inboxFingerprint(item, title);
@@ -751,7 +753,7 @@ export async function registerWorkbenchRoutes(app: FastifyInstance, options: Opt
   });
 }
 
-type TaskView = ReturnType<typeof task>;
+type TaskView = ReturnType<typeof toTaskView>;
 function auth(request: FastifyRequest, db: Db, cookie: string): User | null {
   const raw = request.cookies[cookie];
   if (!raw) return null;
@@ -803,7 +805,7 @@ function session(db: Db, userId: string): string {
   return raw;
 }
 function visible(db: Db, user: User, includeArchived: boolean, status?: string, assignee?: string): TaskView[] {
-  const all = rows(db, `${SELECT_TASK}${includeArchived ? "" : " WHERE t.archived_at IS NULL"} ORDER BY t.updated_at DESC`).map(task);
+  const all = rows(db, `${SELECT_TASK}${includeArchived ? "" : " WHERE t.archived_at IS NULL"} ORDER BY t.updated_at DESC`).map(toTaskView);
   return all.filter((t) => {
     if (!(
       user.role === "owner" ||
@@ -828,14 +830,14 @@ function visible(db: Db, user: User, includeArchived: boolean, status?: string, 
 }
 function findTask(db: Db, id: string): TaskView | null {
   const row = one(db, `${SELECT_TASK} WHERE t.id=?`, id);
-  return row ? task(row) : null;
+  return row ? toTaskView(row) : null;
 }
 function canView(t: TaskView, user: User): boolean {
   return (
     user.role === "owner" || (user.role === "assistant" && t.ownerId === user.id) || (user.role === "viewer" && t.ownerRole === "assistant")
   );
 }
-function task(row: Record<string, unknown>): any {
+function toTaskView(row: Record<string, unknown>): any {
   return {
     id: String(row.id),
     title: String(row.title),
@@ -931,7 +933,7 @@ function notifyOverdueTasks(db: Db): void {
     db,
     `${SELECT_TASK} WHERE t.archived_at IS NULL AND t.due_date IS NOT NULL AND t.due_date < ? AND t.status <> 'completed' AND t.overdue_notified_at IS NULL`,
     today,
-  ).map(task) as TaskView[];
+  ).map(toTaskView) as TaskView[];
   for (const item of overdue) {
     const recipients = [item.ownerId, "owner"].filter((value): value is string => Boolean(value));
     for (const recipient of new Set(recipients))

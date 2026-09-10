@@ -338,7 +338,12 @@ function extensionOf(filename: string): string {
 // oxlint-disable-next-line no-control-regex
 const CONTROL_CHARS = /[\u0000-\u001f/\\]/gu;
 function sanitizeName(filename: string): string {
-  return path.basename(filename ?? "").replace(CONTROL_CHARS, "").slice(0, 200) || "未命名文件";
+  return (
+    path
+      .basename(filename ?? "")
+      .replace(CONTROL_CHARS, "")
+      .slice(0, 200) || "未命名文件"
+  );
 }
 function extFromStoredName(storedName: string): string {
   return path.extname(storedName).toLowerCase();
