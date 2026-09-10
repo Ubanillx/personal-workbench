@@ -6,30 +6,30 @@ import {
   App as AntdApp,
   Button,
   Card,
-  Col,
   DatePicker,
-  Descriptions,
-  Divider,
   Empty,
+  Flex,
   Form,
   Input,
-  Listy,
-  Modal,
-  Row,
   Select,
   Space,
-  Spin,
+  Table,
   Tag,
   Typography,
   Upload,
-  type DescriptionsProps,
+  type TableProps,
   type UploadFile,
 } from "antd";
 import { DownloadOutlined, ReloadOutlined, UploadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
+import type { UserRole } from "../../shared/types/domain";
+import { confirmAction, RowActions } from "../components/crud-actions";
+import { useListParams } from "../components/crud-hooks";
+import { FormModal } from "../components/crud-modal";
+import { TableToolbar } from "../components/crud-toolbar";
+import { PageHeader } from "../components/page-header";
 import { listReportOwnersFor, listReportsFor } from "../lib/reports.server";
 import { requireUserOrRedirect } from "../lib/ui.server";
-import type { UserRole } from "../../shared/types/domain";
 
 type ReportDocTypeLike = "weekly_report" | "summary" | "other";
 type ReportStatusLike = "submitted" | "approved" | "returned";
@@ -48,25 +48,32 @@ type ReportLike = {
 };
 type MeLike = { id: string; name: string; role: UserRole; orgId: string | null; orgName: string | null };
 type OwnerLike = { id: string; name: string; orgName: string | null };
+type UploadValues = {
+  ownerId?: string;
+  period?: [dayjs.Dayjs, dayjs.Dayjs];
+  docType?: ReportDocTypeLike;
+  note?: string;
+  file?: UploadFile[];
+};
 
-const docTypeLabels: Record<ReportDocTypeLike, string> = { weekly_report: "周报", summary: "总结", other: "其他" };
-const statusLabels: Record<ReportStatusLike, string> = { submitted: "已提交", approved: "已通过", returned: "已退回" };
-const statusColors: Record<ReportStatusLike, string> = { submitted: "blue", approved: "green", returned: "red" };
+const DOC_TYPE_LABEL: Record<ReportDocTypeLike, string> = { weekly_report: "周报", summary: "总结", other: "其他" };
+const STATUS_LABEL: Record<ReportStatusLike, string> = { submitted: "待审核", approved: "已通过", returned: "已退回" };
+const STATUS_COLOR: Record<ReportStatusLike, string> = { submitted: "processing", approved: "green", returned: "red" };
 const ACCEPTED_DOCS = ".xlsx,.xls,.docx,.doc";
 
-const typeOptions = [
+const DOC_TYPE_OPTIONS = [
   { value: "all", label: "全部类型" },
   { value: "weekly_report", label: "周报" },
   { value: "summary", label: "总结" },
   { value: "other", label: "其他" },
 ];
-const statusOptions = [
+const STATUS_OPTIONS = [
   { value: "all", label: "全部状态" },
-  { value: "submitted", label: "已提交" },
+  { value: "submitted", label: "待审核" },
   { value: "approved", label: "已通过" },
   { value: "returned", label: "已退回" },
 ];
-const docTypeOptions: Array<{ value: ReportDocTypeLike; label: string }> = [
+const UPLOAD_DOC_TYPE_OPTIONS = [
   { value: "weekly_report", label: "周报" },
   { value: "summary", label: "总结" },
   { value: "other", label: "其他" },
@@ -118,19 +125,26 @@ async function postForm(path: string, form: FormData): Promise<ReportLike> {
 }
 
 export default function ReportsRoute(): React.ReactElement {
-  const { message } = AntdApp.useApp();
+  const { message, modal } = AntdApp.useApp();
   const { user, reports, owners } = useLoaderData<typeof loader>();
   const navigation = useNavigation();
   const revalidator = useRevalidator();
+  const list = useListParams();
+  const [uploadForm] = Form.useForm<UploadValues>();
+  const [returnForm] = Form.useForm<{ note?: string }>();
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [returnTarget, setReturnTarget] = useState<ReportLike | null>(null);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
-  const [type, setType] = useState("all");
-  const [status, setStatus] = useState("all");
-  const [owner, setOwner] = useState("all");
-  const busy = navigation.state !== "idle" || revalidator.state !== "idle";
+  const [rowBusy, setRowBusy] = useState("");
+  const busy = navigation.state !== "idle" || revalidator.state !== "idle" || uploading;
   // 管理员与组织管理者可以指派/筛选归属人，普通用户只能提交自己的
   const canPickOwner = user.role !== "member";
 
-  const filtered = useMemo(
+  const type = list.get("type", "all");
+  const status = list.get("status", "all");
+  const owner = list.get("owner", "all");
+  const rows = useMemo(
     () =>
       reports.filter(
         (report) =>
@@ -144,372 +158,391 @@ export default function ReportsRoute(): React.ReactElement {
     () => [{ value: "all", label: "全部成员" }, ...owners.map((item) => ({ value: item.id, label: ownerLabel(user, item) }))],
     [owners, user],
   );
-
+  const filtered = type !== "all" || status !== "all" || owner !== "all";
   const refresh = (): void => {
     void revalidator.revalidate();
   };
-  const shownError = error;
+
+  /** 行内动作统一走这里：忙碌标记 + 统一的错误提示 + 成功后刷新列表 */
+  const run = (id: string, fn: () => Promise<ReportLike>, notice: string): void => {
+    setError("");
+    setRowBusy(id);
+    void fn()
+      .then(() => {
+        void message.success(notice);
+        refresh();
+      })
+      .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "操作失败"))
+      .finally(() => setRowBusy(""));
+  };
+
+  const submitUpload = (values: UploadValues): void => {
+    const file = values.file?.[0]?.originFileObj;
+    const range = values.period;
+    if (!file || !range?.[0] || !range[1]) return;
+    setError("");
+    setUploading(true);
+    const body = new FormData();
+    body.append("periodStart", range[0].format("YYYY-MM-DD"));
+    body.append("periodEnd", range[1].format("YYYY-MM-DD"));
+    body.append("docType", values.docType ?? "weekly_report");
+    body.append("note", (values.note ?? "").trim());
+    body.append("ownerId", canPickOwner ? (values.ownerId ?? "") : user.id);
+    body.append("file", file);
+    void postForm("/api/reports", body)
+      .then(() => {
+        void message.success("已上传并提交审核");
+        setUploadOpen(false);
+        refresh();
+      })
+      .catch((reason: unknown) => setError(reason instanceof Error ? reason.message : "上传失败"))
+      .finally(() => setUploading(false));
+  };
+
+  const columns: TableProps<ReportLike>["columns"] = [
+    {
+      title: "归属人",
+      dataIndex: "ownerName",
+      key: "ownerName",
+      width: 150,
+      render: (_value, report) => <Typography.Text strong>{report.ownerName ?? "未分配"}</Typography.Text>,
+    },
+    {
+      title: "类型",
+      dataIndex: "docType",
+      key: "docType",
+      width: 100,
+      filters: UPLOAD_DOC_TYPE_OPTIONS.map((item) => ({ text: item.label, value: item.value })),
+      onFilter: (value, report) => report.docType === value,
+      render: (_value, report) => (
+        <Tag color="blue" variant="filled">
+          {DOC_TYPE_LABEL[report.docType]}
+        </Tag>
+      ),
+    },
+    {
+      title: "周期",
+      key: "period",
+      width: 200,
+      sorter: (a, b) => a.periodStart.localeCompare(b.periodStart),
+      render: (_value, report) => `${report.periodStart} ~ ${report.periodEnd}`,
+    },
+    {
+      title: "备注",
+      dataIndex: "note",
+      key: "note",
+      render: (_value, report) => (
+        <Space orientation="vertical" size={0}>
+          <Typography.Text>{report.note || "—"}</Typography.Text>
+          {report.reviewNote ? <Typography.Text type="secondary">审核批注：{report.reviewNote}</Typography.Text> : null}
+        </Space>
+      ),
+    },
+    {
+      title: "文档",
+      key: "files",
+      width: 220,
+      render: (_value, report) =>
+        report.files.length ? (
+          <Space orientation="vertical" size={2}>
+            {report.files.map((item) => (
+              <Typography.Link key={item.id} href={`/api/reports/${report.id}/file/${item.version}`}>
+                v{item.version} · {item.originalName}
+              </Typography.Link>
+            ))}
+          </Space>
+        ) : (
+          <Typography.Text type="secondary">暂无文档</Typography.Text>
+        ),
+    },
+    {
+      title: "状态",
+      dataIndex: "status",
+      key: "status",
+      width: 110,
+      render: (_value, report) => (
+        <Tag color={STATUS_COLOR[report.status]} variant="filled">
+          {STATUS_LABEL[report.status]}
+        </Tag>
+      ),
+    },
+    {
+      title: "操作",
+      key: "actions",
+      width: 200,
+      align: "right",
+      render: (_value, report) => {
+        const latest = report.files.at(-1);
+        const canReview = canPickOwner;
+        const isOwnerOfReport = report.ownerId === user.id;
+        const canResubmit = report.status === "returned" && (canReview || isOwnerOfReport);
+        const rowDisabled = rowBusy === report.id || busy;
+        return (
+          <RowActions
+            disabled={rowDisabled}
+            extra={
+              report.status === "submitted" && canReview ? (
+                <Button
+                  size="small"
+                  color="primary"
+                  variant="solid"
+                  onClick={() =>
+                    confirmAction(modal, {
+                      title: `通过 ${report.ownerName ?? "该成员"} 的${DOC_TYPE_LABEL[report.docType]}？`,
+                      content: "通过后该文档进入已通过状态，如需修改需重新上传。",
+                      okText: "通过",
+                      onOk: () => run(report.id, () => postJson(`/api/reports/${report.id}/approve`), "已通过审核"),
+                    })
+                  }
+                >
+                  通过
+                </Button>
+              ) : canResubmit ? (
+                <Upload
+                  accept={ACCEPTED_DOCS}
+                  maxCount={1}
+                  showUploadList={false}
+                  disabled={rowDisabled}
+                  beforeUpload={(file) => {
+                    const body = new FormData();
+                    body.append("file", file);
+                    run(report.id, () => postForm(`/api/reports/${report.id}/file`, body), "已重新提交");
+                    return false;
+                  }}
+                >
+                  <Button size="small" icon={<UploadOutlined />} disabled={rowDisabled}>
+                    重新上传
+                  </Button>
+                </Upload>
+              ) : latest ? (
+                <Button
+                  size="small"
+                  color="default"
+                  variant="text"
+                  href={`/api/reports/${report.id}/file/${latest.version}`}
+                  icon={<DownloadOutlined />}
+                >
+                  下载
+                </Button>
+              ) : null
+            }
+            items={
+              [
+                latest
+                  ? {
+                      key: "download",
+                      label: `下载 v${latest.version}`,
+                      icon: <DownloadOutlined />,
+                      onClick: () => window.open(`/api/reports/${report.id}/file/${latest.version}`, "_blank"),
+                    }
+                  : null,
+                report.status === "submitted" && canReview
+                  ? {
+                      key: "return",
+                      label: "退回修改",
+                      onClick: () => setReturnTarget(report),
+                    }
+                  : null,
+              ].filter((item) => item !== null) as NonNullable<Parameters<typeof RowActions>[0]["items"]>
+            }
+          />
+        );
+      },
+    },
+  ];
 
   return (
-    <Space orientation="vertical" size="large" className="page-stack">
-      <Space align="center" className="page-head" size="middle">
-        <div>
-          <Typography.Text type="secondary">WEEKLY REPORTS</Typography.Text>
-          <Typography.Title level={3} className="page-title">
-            周报 / 总结
-          </Typography.Title>
-          <Typography.Text type="secondary">存放成员的每周周报与总结文档（Excel / Word），上传后由管理员或组织管理者审核。</Typography.Text>
-        </div>
-        <Button icon={<ReloadOutlined />} onClick={refresh} loading={busy}>
-          刷新
-        </Button>
-      </Space>
+    <Flex vertical gap="large" className="page-stack">
+      <PageHeader
+        title="周报/总结"
+        description="提交工作周报与总结，查看审核结果。"
+        extra={
+          <>
+            <Button icon={<ReloadOutlined />} onClick={refresh} loading={busy}>
+              刷新
+            </Button>
+            <Button
+              color="primary"
+              variant="solid"
+              icon={<UploadOutlined />}
+              onClick={() => {
+                setError("");
+                setUploadOpen(true);
+              }}
+            >
+              上传周报
+            </Button>
+          </>
+        }
+      />
 
-      {shownError ? (
+      {error ? (
         <Alert
           type="error"
           showIcon
-          title={shownError}
+          title={error}
           action={
-            <Button size="small" onClick={refresh}>
-              重试
+            <Button size="small" onClick={() => setError("")}>
+              知道了
             </Button>
           }
         />
       ) : null}
 
-      <UploadForm
-        me={user}
-        owners={owners}
-        onDone={(asProxy) => {
-          void message.success(asProxy ? "已上传并提交审核" : "已提交审核");
-          refresh();
-        }}
-        onError={setError}
-      />
-
-      <Card variant="outlined" title="周报列表" className="fill-card">
-        <Space orientation="vertical" size="middle" className="page-stack">
-          <Space wrap size="small">
-            <Select value={type} onChange={setType} options={typeOptions} style={{ width: 132 }} />
-            <Select value={status} onChange={setStatus} options={statusOptions} style={{ width: 132 }} />
-            {canPickOwner ? <Select value={owner} onChange={setOwner} options={ownerOptions} style={{ width: 160 }} /> : null}
-          </Space>
-
-          {navigation.state === "loading" ? (
-            <Spin description="正在加载周报…" />
-          ) : filtered.length ? (
-            <Listy<ReportLike>
-              items={filtered}
-              rowKey="id"
-              itemRender={(report) => (
-                <ReportItem
-                  report={report}
-                  me={user}
-                  onChanged={refresh}
-                  onError={setError}
-                  onNotice={(text) => void message.success(text)}
-                />
-              )}
+      <Card variant="outlined">
+        <Flex vertical gap="middle">
+          <TableToolbar
+            extra={
+              <Typography.Text type="secondary">
+                共 {rows.length} 份{filtered ? `（总计 ${reports.length} 份）` : ""}
+              </Typography.Text>
+            }
+          >
+            <Select
+              value={type}
+              options={DOC_TYPE_OPTIONS}
+              style={{ width: 140 }}
+              onChange={(value: string) => list.patch({ type: value === "all" ? null : value })}
             />
-          ) : (
-            <Empty
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description={
-                <Space orientation="vertical" size={2}>
-                  <Typography.Text strong>暂无周报</Typography.Text>
-                  <Typography.Text type="secondary">上传第一份周报或总结开始使用。</Typography.Text>
-                </Space>
-              }
+            <Select
+              value={status}
+              options={STATUS_OPTIONS}
+              style={{ width: 140 }}
+              onChange={(value: string) => list.patch({ status: value === "all" ? null : value })}
             />
-          )}
-        </Space>
-      </Card>
-    </Space>
-  );
-}
-
-function UploadForm({
-  me,
-  owners,
-  onDone,
-  onError,
-}: {
-  me: MeLike;
-  owners: OwnerLike[];
-  onDone: (asProxy: boolean) => void;
-  onError: (message: string) => void;
-}): React.ReactElement {
-  const [ownerId, setOwnerId] = useState("");
-  const [periodStart, setPeriodStart] = useState("");
-  const [periodEnd, setPeriodEnd] = useState("");
-  const [docType, setDocType] = useState<ReportDocTypeLike>("weekly_report");
-  const [note, setNote] = useState("");
-  const [fileList, setFileList] = useState<UploadFile[]>([]);
-  const [busy, setBusy] = useState(false);
-  // 管理员与组织管理者可以代传（服务端按组织范围校验归属人），普通用户只能提交自己的
-  const canPickOwner = me.role !== "member";
-  // Upload 由本页手动提交（beforeUpload 返回 false），因此文件从 fileList 的 originFileObj 取
-  const rawFile = fileList[0]?.originFileObj ?? null;
-
-  const submit = (): void => {
-    if (!rawFile || !periodStart || !periodEnd || busy) return;
-    if (canPickOwner && !ownerId) {
-      onError("请选择归属人");
-      return;
-    }
-    setBusy(true);
-    const form = new FormData();
-    form.append("periodStart", periodStart);
-    form.append("periodEnd", periodEnd);
-    form.append("docType", docType);
-    form.append("note", note.trim());
-    form.append("ownerId", canPickOwner ? ownerId : me.id);
-    form.append("file", rawFile);
-    void postForm("/api/reports", form)
-      .then(() => {
-        onDone(canPickOwner);
-        setOwnerId("");
-        setPeriodStart("");
-        setPeriodEnd("");
-        setDocType("weekly_report");
-        setNote("");
-        setFileList([]);
-      })
-      .catch((reason: unknown) => onError(reason instanceof Error ? reason.message : "上传失败"))
-      .finally(() => setBusy(false));
-  };
-
-  return (
-    <Card variant="outlined" title="上传周报 / 总结">
-      <Form layout="vertical" onFinish={submit}>
-        <Row gutter={[16, 0]}>
-          {canPickOwner ? (
-            <Col xs={24} sm={12} lg={6}>
-              <Form.Item label="归属人" required>
-                <Select
-                  value={ownerId || null}
-                  onChange={(value: string) => setOwnerId(value)}
-                  placeholder="选择归属人"
-                  options={owners.map((item) => ({ value: item.id, label: ownerLabel(me, item) }))}
-                  style={{ width: "100%" }}
-                />
-              </Form.Item>
-            </Col>
-          ) : null}
-          <Col xs={24} sm={12} lg={6}>
-            <Form.Item label="周期开始" required>
-              <DatePicker
-                value={periodStart ? dayjs(periodStart) : null}
-                onChange={(date) => setPeriodStart(date ? date.format("YYYY-MM-DD") : "")}
-                placeholder="周期开始"
-                style={{ width: "100%" }}
-              />
-            </Form.Item>
-          </Col>
-          <Col xs={24} sm={12} lg={6}>
-            <Form.Item label="周期结束" required>
-              <DatePicker
-                value={periodEnd ? dayjs(periodEnd) : null}
-                onChange={(date) => setPeriodEnd(date ? date.format("YYYY-MM-DD") : "")}
-                placeholder="周期结束"
-                style={{ width: "100%" }}
-              />
-            </Form.Item>
-          </Col>
-          <Col xs={24} sm={12} lg={6}>
-            <Form.Item label="类型">
+            {canPickOwner ? (
               <Select
-                value={docType}
-                onChange={(value: ReportDocTypeLike) => setDocType(value)}
-                options={docTypeOptions}
-                style={{ width: "100%" }}
+                value={owner}
+                options={ownerOptions}
+                style={{ width: 180 }}
+                onChange={(value: string) => list.patch({ owner: value === "all" ? null : value })}
               />
-            </Form.Item>
-          </Col>
-          <Col xs={24} sm={14} lg={18}>
-            <Form.Item label="备注">
-              <Input value={note} onChange={(event) => setNote(event.target.value)} placeholder="备注（可选）" allowClear />
-            </Form.Item>
-          </Col>
-          <Col xs={24} sm={10} lg={6}>
-            <Form.Item label="文档" required>
-              <Upload
-                accept={ACCEPTED_DOCS}
-                maxCount={1}
-                fileList={fileList}
-                beforeUpload={() => false}
-                onChange={({ fileList: nextFileList }) => setFileList(nextFileList)}
-                disabled={busy}
-              >
-                <Button icon={<UploadOutlined />} disabled={busy}>
-                  选择文档
-                </Button>
-              </Upload>
-            </Form.Item>
-          </Col>
-        </Row>
-        <Button
-          color="primary"
-          variant="solid"
-          htmlType="submit"
-          icon={<UploadOutlined />}
-          loading={busy}
-          disabled={!rawFile || !periodStart || !periodEnd || busy || (canPickOwner && !ownerId)}
-        >
-          {busy ? "上传中…" : "上传并提交"}
-        </Button>
-      </Form>
-    </Card>
-  );
-}
+            ) : null}
+            {filtered ? (
+              <Button color="default" variant="text" onClick={() => list.reset()}>
+                重置
+              </Button>
+            ) : null}
+          </TableToolbar>
 
-function ReportItem({
-  report,
-  me,
-  onChanged,
-  onError,
-  onNotice,
-}: {
-  report: ReportLike;
-  me: MeLike;
-  onChanged: () => void;
-  onError: (message: string) => void;
-  onNotice: (message: string) => void;
-}): React.ReactElement {
-  const [busy, setBusy] = useState(false);
-  const [returnOpen, setReturnOpen] = useState(false);
-  const [returnNote, setReturnNote] = useState("");
-  // 管理员与组织管理者可以审批/退回本组织周报；普通用户只能看自己提交的
-  const canReview = me.role !== "member";
-  const isOwnerOfReport = report.ownerId === me.id;
-  const canResubmit = report.status === "returned" && (canReview || isOwnerOfReport);
-  const latest = report.files[report.files.length - 1];
+          <Table<ReportLike>
+            rowKey="id"
+            size="middle"
+            columns={columns}
+            dataSource={rows}
+            loading={busy && !uploading}
+            scroll={{ x: 1120 }}
+            pagination={{
+              pageSize: 10,
+              showSizeChanger: true,
+              showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条 / 共 ${total} 条`,
+            }}
+            locale={{
+              emptyText: (
+                <Empty
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  description={
+                    <Space orientation="vertical" size={2}>
+                      <Typography.Text strong>{filtered ? "没有符合条件的周报" : "暂无周报"}</Typography.Text>
+                      <Typography.Text type="secondary">
+                        {filtered ? "调整筛选条件，或重置后查看全部。" : "点击右上角「上传周报」提交第一份文档。"}
+                      </Typography.Text>
+                    </Space>
+                  }
+                >
+                  {filtered ? (
+                    <Button onClick={() => list.reset()}>重置筛选</Button>
+                  ) : (
+                    <Button
+                      onClick={() => {
+                        setError("");
+                        setUploadOpen(true);
+                      }}
+                    >
+                      上传周报
+                    </Button>
+                  )}
+                </Empty>
+              ),
+            }}
+          />
+        </Flex>
+      </Card>
 
-  const run = (fn: () => Promise<ReportLike>): void => {
-    if (busy) return;
-    setBusy(true);
-    void fn()
-      .then(() => onChanged())
-      .catch((reason: unknown) => onError(reason instanceof Error ? reason.message : "操作失败"))
-      .finally(() => setBusy(false));
-  };
-
-  const items: DescriptionsProps["items"] = [
-    { key: "period", label: "周期", children: `${report.periodStart} ~ ${report.periodEnd}` },
-    ...(report.note ? [{ key: "note", label: "备注", children: report.note }] : []),
-    ...(report.reviewNote ? [{ key: "reviewNote", label: "审核批注", children: report.reviewNote }] : []),
-    ...(report.files.length
-      ? [
-          {
-            key: "files",
-            label: "文档",
-            children: (
-              <Space wrap size="small" separator={<Divider orientation="vertical" />}>
-                {report.files.map((item) => (
-                  <Typography.Link key={item.id} href={`/api/reports/${report.id}/file/${item.version}`}>
-                    v{item.version} · {item.originalName}
-                  </Typography.Link>
-                ))}
-              </Space>
-            ),
-          },
-        ]
-      : []),
-  ];
-
-  return (
-    <Space orientation="vertical" size="small" className="list-block">
-      <Space align="center" className="list-row" size="small">
-        <Typography.Text strong>
-          {report.ownerName ?? "未分配"} · {docTypeLabels[report.docType]}
-        </Typography.Text>
-        <Tag variant="filled" color={statusColors[report.status]}>
-          {statusLabels[report.status]}
-        </Tag>
-      </Space>
-      <Descriptions size="small" column={1} colon={false} items={items} />
-      <Space wrap size="small">
-        {canReview && report.status === "submitted" ? (
-          <>
-            <Button disabled={busy} onClick={() => run(() => postJson(`/api/reports/${report.id}/approve`))}>
-              通过
-            </Button>
-            <Button disabled={busy} onClick={() => setReturnOpen(true)}>
-              退回
-            </Button>
-          </>
-        ) : null}
-        {canResubmit ? <ResubmitButton report={report} onChanged={onChanged} onError={onError} onNotice={onNotice} /> : null}
-        {latest ? (
-          <Button href={`/api/reports/${report.id}/file/${latest.version}`} icon={<DownloadOutlined />}>
-            下载
-          </Button>
-        ) : null}
-      </Space>
-      <Modal
-        open={returnOpen}
-        title="请填写退回原因"
-        okText="确认退回"
-        cancelText="取消"
-        destroyOnHidden
-        okButtonProps={{ disabled: !returnNote.trim() }}
-        onOk={() => {
-          const nextNote = returnNote.trim();
-          if (!nextNote) return;
-          setReturnOpen(false);
-          setReturnNote("");
-          run(() => postJson(`/api/reports/${report.id}/return`, { note: nextNote }));
+      <FormModal
+        open={uploadOpen}
+        title="上传周报 / 总结"
+        okText="上传并提交"
+        width={620}
+        form={uploadForm}
+        submitting={uploading}
+        error={error}
+        initialValues={{
+          docType: "weekly_report",
+          ownerId: canPickOwner ? "" : user.id,
+          period: [dayjs().startOf("week"), dayjs().endOf("week")],
+          file: [],
         }}
-        onCancel={() => {
-          setReturnOpen(false);
-          setReturnNote("");
+        onCancel={() => setUploadOpen(false)}
+        onFinish={submitUpload}
+      >
+        {canPickOwner ? (
+          <Form.Item name="ownerId" label="归属人" rules={[{ required: true, message: "请选择归属人" }]}>
+            <Select
+              placeholder="选择归属人"
+              showSearch={{ optionFilterProp: "label" }}
+              options={owners.map((item) => ({ value: item.id, label: ownerLabel(user, item) }))}
+            />
+          </Form.Item>
+        ) : null}
+        <Form.Item name="period" label="周期" rules={[{ required: true, message: "请选择周期" }]}>
+          <DatePicker.RangePicker style={{ width: "100%" }} format="YYYY-MM-DD" />
+        </Form.Item>
+        <Flex gap="middle" wrap>
+          <Form.Item name="docType" label="类型" style={{ minWidth: 160, flex: 1 }}>
+            <Select options={UPLOAD_DOC_TYPE_OPTIONS} />
+          </Form.Item>
+          <Form.Item name="note" label="备注" style={{ minWidth: 220, flex: 2 }}>
+            <Input placeholder="例如：第八周（可选）" maxLength={80} />
+          </Form.Item>
+        </Flex>
+        <Form.Item
+          name="file"
+          label="文档"
+          valuePropName="fileList"
+          getValueFromEvent={(event: { fileList?: UploadFile[] } | UploadFile[]) =>
+            Array.isArray(event) ? event : (event?.fileList ?? [])
+          }
+          rules={[{ required: true, message: "请选择要上传的文档" }]}
+          tooltip="支持 .xlsx / .xls / .docx / .doc，单次一份"
+        >
+          <Upload accept={ACCEPTED_DOCS} maxCount={1} beforeUpload={() => false}>
+            <Button icon={<UploadOutlined />}>选择文档</Button>
+          </Upload>
+        </Form.Item>
+      </FormModal>
+
+      <FormModal
+        open={returnTarget !== null}
+        title={`退回「${returnTarget?.ownerName ?? "该成员"}」的${returnTarget ? DOC_TYPE_LABEL[returnTarget.docType] : ""}`}
+        okText="确认退回"
+        form={returnForm}
+        formKey={returnTarget?.id ?? "none"}
+        initialValues={{ note: "" }}
+        onCancel={() => setReturnTarget(null)}
+        onFinish={(values) => {
+          const target = returnTarget;
+          const note = values.note?.trim() ?? "";
+          if (!target || !note) return;
+          setReturnTarget(null);
+          run(target.id, () => postJson(`/api/reports/${target.id}/return`, { note }), "已退回");
         }}
       >
-        <Input value={returnNote} onChange={(event) => setReturnNote(event.target.value)} maxLength={200} placeholder="退回原因" />
-      </Modal>
-    </Space>
-  );
-}
-
-function ResubmitButton({
-  report,
-  onChanged,
-  onError,
-  onNotice,
-}: {
-  report: ReportLike;
-  onChanged: () => void;
-  onError: (message: string) => void;
-  onNotice: (message: string) => void;
-}): React.ReactElement {
-  const [busy, setBusy] = useState(false);
-
-  const choose = (file: File): void => {
-    setBusy(true);
-    const form = new FormData();
-    form.append("file", file);
-    void postForm(`/api/reports/${report.id}/file`, form)
-      .then(() => {
-        onChanged();
-        onNotice("已重新提交");
-      })
-      .catch((reason: unknown) => onError(reason instanceof Error ? reason.message : "重新上传失败"))
-      .finally(() => setBusy(false));
-  };
-
-  return (
-    <Upload
-      accept={ACCEPTED_DOCS}
-      maxCount={1}
-      showUploadList={false}
-      disabled={busy}
-      beforeUpload={(next) => {
-        choose(next);
-        return false;
-      }}
-    >
-      <Button loading={busy}>重新上传</Button>
-    </Upload>
+        <Alert type="warning" showIcon title="退回后提交人需要重新上传文档，退回原因会写入审核批注并通知对方。" />
+        <Form.Item name="note" label="退回原因" rules={[{ required: true, message: "请填写退回原因" }]} style={{ marginTop: 16 }}>
+          <Input.TextArea rows={3} maxLength={200} showCount placeholder="例如：缺少本周客户拜访记录，请补充后重新提交" />
+        </Form.Item>
+      </FormModal>
+    </Flex>
   );
 }

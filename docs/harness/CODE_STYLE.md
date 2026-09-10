@@ -183,7 +183,56 @@ const { message, modal, notification } = AntdApp.useApp();
 ### 10.6 交付前新增一项门禁
 
 ```bash
-npx antd lint app         # 必须 No issues found（当前 73 文件全过）
+npx antd lint app         # 必须 No issues found（当前 96 文件全过）
 ```
 
 它不替代 `npm run lint`（oxlint），两者都要过。
+
+### 10.7 列表页 / CRUD 交互规范（2026-09 页面重构后）
+
+所有「列表 + 增删改」页面（`/tasks`、`/todos`、`/notes`、`/files`、`/organization`、`/admin`、`/reports`）
+统一采用同一套骨架，共享组件集中在 `app/components/`：
+
+| 组件 / Hook        | 职责                                                                        |
+| ------------------ | --------------------------------------------------------------------------- |
+| `page-header.tsx`  | 页头：栏目标识 + 标题（`level={4}`）+ 一句话说明；右侧 `extra` 放页级动作   |
+| `crud-toolbar.tsx` | `TableToolbar`（左筛选 / 右动作）与 `SelectionAlert`（批量操作条）          |
+| `crud-modal.tsx`   | `FormModal`：新建与编辑共用的表单弹窗（含服务端错误展示）                   |
+| `crud-actions.tsx` | `RowActions`（行内动作 + 「更多」下拉）、`confirmAction`、`confirmDanger`   |
+| `crud-hooks.ts`    | `useCrudFeedback`（成功 toast + 自动关弹窗）、`useListParams`（筛选进 URL） |
+
+必须遵守的交互约定：
+
+1. **结构**：`PageHeader` → 列表 `Card`（内含 `TableToolbar` + 可选 `SelectionAlert` + `Table`）→ 表单 `FormModal` / 详情 `Drawer`。
+2. **录入**：新建与编辑一律走 `FormModal`，页面上不出现常驻「裸表单」；查看详情用 `Drawer` 只读展示，编辑再从抽屉里点按钮打开弹窗。
+3. **筛选**：筛选与搜索条件写进 URL（`useListParams`），可刷新、可分享、可回退；搜索框用 `Input.Search` 并只在回车/点击时提交。
+4. **行操作**：每行最多 1 个高频文字按钮，其余（编辑、归档、删除…）收进「更多」下拉；危险项 `danger: true`。
+5. **批量**：表格启用 `rowSelection` + `SelectionAlert`，批量动作逐条调用**同一个**服务函数并汇总成功/失败数，不新写 SQL。
+6. **反馈**：成功用 `useCrudFeedback` 弹全局提示并关闭弹窗；失败**必须**渲染成常驻 `Alert`（页面顶部与弹窗顶部各一处），不要只弹 toast——SSR 冒烟测试也正是靠 HTML 里的错误文案做断言。
+7. **确认**：破坏性操作（删除 / 归档 / 解散 / 停用）用 `confirmDanger`，文案要写清影响范围；普通操作（通过、启用、恢复）用 `confirmAction`，不用原生 `window.confirm`。
+8. **表格**：稳定 `rowKey`、`size="middle"`、受控 `loading`、分页带 `showTotal`、`locale.emptyText` 用带引导动作的 `Empty`、需要时给 `sorter` 与列 `filters`。
+9. **契约不变**：页面 `action` 只做 `intent → 服务函数` 映射与文案包装，业务规则全部留在 `app/lib/*.server.ts`；改写 UI 不得绕过域校验，也不得改变既有表单字段名（`content` / `todoDate` / `name` / `filePath` / `category` / `orgId` 等）。
+
+## 11. 批量改文件的编码陷阱（2026-09 事故复盘）
+
+源码是 **UTF-8 无 BOM**，而 Windows PowerShell **5.1** 的 `Get-Content` / `Set-Content` 默认走 **ANSI（GBK/936）**：
+
+```powershell
+# ❌ 5.1 下这条会把整个文件的中文读成乱码，并在写回时丢字节（每个中文字符串结尾都可能被吃掉引号）
+(Get-Content $file -Raw).Replace(...) | Set-Content $file -Encoding utf8
+```
+
+实测（同一段 UTF-8 中文 `E4 B8 AD E6 96 87 EF BC 8C` 读→写一轮）：
+
+| 解释器                         | 结果                                   |
+| ------------------------------ | -------------------------------------- |
+| Windows PowerShell 5.1（默认） | 丢字节（`，` 的尾字节被吃）            |
+| PowerShell 7.x                 | 内容无损（`Encoding.Default = utf-8`） |
+
+规定：
+
+1. **改文件内容一律用编辑工具**（read / edit / write），不要用 shell 重定向写源码；
+2. 必须脚本化处理文本时，用 PowerShell 7 的**绝对路径**调用，例如
+   `& "$env:ProgramFiles\PowerShell\7\pwsh.exe" -NoProfile -File script.ps1`（本机 PS7 未加入 PATH，harness 的 `pwsh` 仍解析到 5.1）；
+3. 在 5.1 里读写文件必须显式指定编码：`Get-Content -Encoding UTF8`、`Set-Content -Encoding UTF8`（`.NET` 侧则用 `New-Object System.Text.UTF8Encoding($false)` 避免 BOM）；
+4. 事故可逆：5.1 的破坏是「UTF-8 字节按 GBK 解码后再按 UTF-8 写出」，可用 `[Text.Encoding]::GetEncoding(936).GetBytes()` 反向还原，只有解码失败的少数位置会丢字符（`U+FFFD` + `?`），此时以 `build/server/index.js`（事故前的构建产物）里的字符串为准逐条回填并全量比对。

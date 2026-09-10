@@ -1,4 +1,12 @@
 /* antd 版布局辅助类：只放 antd 组件不便表达的结构性样式，视觉细节交给 Design Token */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
 .center-screen {
   display: flex;
   flex-direction: column;
@@ -54,6 +62,7 @@
 
 .app-content {
   padding: 20px 24px 32px;
+  min-width: 0;
 }
 
 .dev-banner {
@@ -69,8 +78,43 @@
   width: 100%;
 }
 
+/* 标题区左半部分：允许在窄屏下收缩换行，长说明不会把主操作按钮挤出可视区 */
+.page-head-copy {
+  min-width: 0;
+  flex: 1 1 min(320px, 100%);
+  max-width: 100%;
+}
+
+/* 栏目标识（WORK / TODAY 之类）：12px 大写小字，仅作区域提示，不与标题抢层级 */
+.page-eyebrow {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .page-title {
   margin: 0 !important;
+}
+
+/* 列表工具栏：筛选区左、动作区右，撑满卡片宽度 */
+.table-toolbar {
+  width: 100%;
+}
+
+/* 表格里的「链接式」操作：去掉按钮内边距与固定高度，视觉等同文本链接，但保留键盘可达性 */
+.link-button {
+  height: auto;
+  padding: 0;
+}
+
+/* 行内操作区：包一层容器以便阻断行级点击（避免点操作按钮同时打开详情） */
+.row-actions {
+  display: inline-flex;
+}
+
+/* 表单弹窗顶部的服务端错误提示：与表单内容保持一个基础间距（4px 栅格） */
+.form-modal-alert {
+  margin-bottom: 16px;
 }
 
 .status-card,
@@ -89,10 +133,58 @@
 
 .quick-add {
   width: 100%;
+  gap: 8px 0;
 }
 
 .quick-add-item {
-  flex: 1;
+  flex: 1 1 140px;
+  min-width: 0;
+}
+
+.account-name {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.account-details {
+  display: inline-flex;
+  align-items: center;
+}
+.header-actions {
+  flex-shrink: 0;
+}
+
+@media (max-width: 991px) {
+  .app-sider {
+    position: fixed !important;
+    top: 56px;
+    bottom: 0;
+    left: 0;
+    z-index: 1000;
+    overflow: auto;
+  }
+}
+
+@media (max-width: 575px) {
+  .app-content {
+    padding: 16px 12px 24px;
+  }
+  .app-header {
+    padding: 0 8px;
+    gap: 4px;
+  }
+  .account-details,
+  .account-name {
+    display: none;
+  }
+  .table-toolbar > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .quick-add-item {
+    flex-basis: 100%;
+    margin-inline-end: 0;
+  }
 }
 
 .notification-entry {

@@ -1,7 +1,10 @@
 import type React from "react";
-import { useActionData, useLoaderData, useNavigation, useRevalidator, useSubmit } from "react-router";
+import { Link, useActionData, useLoaderData, useNavigation, useRevalidator, useSubmit } from "react-router";
 import { Alert, Button, Card, Col, Empty, Form, Input, Listy, Progress, Row, Select, Space, Statistic, Tag, Typography } from "antd";
 import { CheckCircleOutlined, ClockCircleOutlined, EditOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
+import { PageHeader } from "../components/page-header";
+import { useCrudFeedback } from "../components/crud-hooks";
+import dayjs from "dayjs";
 import { dashboardData, dashboardScopeLabel, dashboardTodoOrgs } from "../lib/dashboard.server";
 import { readPayload } from "../lib/form.server";
 import { roleLabel } from "../lib/session.server";
@@ -36,10 +39,10 @@ export async function action({ request }: { request: Request }) {
   const payload = await readPayload(request);
   const result = createTodoRecord(user, {
     content: payload.content,
-    todoDate: new Date().toISOString().slice(0, 10),
+    todoDate: payload.todoDate || dayjs().format("YYYY-MM-DD"),
     orgId: payload.orgId || new URL(request.url).searchParams.get("org"),
   });
-  return { error: result.ok ? "" : result.message };
+  return result.ok ? { ok: true as const, notice: "待办已添加" } : { error: result.message };
 }
 
 export default function DashboardRoute(): React.ReactElement {
@@ -48,8 +51,9 @@ export default function DashboardRoute(): React.ReactElement {
   const navigation = useNavigation();
   const revalidator = useRevalidator();
   const submit = useSubmit();
+  const [quickForm] = Form.useForm();
   const busy = navigation.state !== "idle" || revalidator.state !== "idle";
-  const error = actionData?.error ?? "";
+  const { error } = useCrudFeedback(actionData, () => quickForm.resetFields(["content"]));
   const tasks = data.tasks as unknown as Array<{ id: string; title: string; progress: number }>;
   const todos = data.todos as unknown as Array<{ id: string; content: string; isCompleted: number | boolean }>;
   // 管理员的写入目标组织：默认选中第一个可用组织（表单只在有可选项时才渲染这一列）
@@ -57,41 +61,20 @@ export default function DashboardRoute(): React.ReactElement {
 
   return (
     <Space orientation="vertical" size="large" className="page-stack">
-      <Space align="center" className="page-head" size="middle">
-        <div>
-          <Typography.Title level={3} className="page-title">
-            每日概览
-          </Typography.Title>
-          <Typography.Text type="secondary">任务、待办和随手记已接入 SQLite，并按组织隔离。</Typography.Text>
-        </div>
-        <Button icon={<ReloadOutlined />} onClick={() => revalidator.revalidate()} loading={busy}>
-          刷新
-        </Button>
-      </Space>
-
-      <Card
-        variant="outlined"
-        className="status-card"
-        title={
-          <Space size="small">
-            <Tag color="green">已连接</Tag>
-            <Typography.Text strong>工作台状态</Typography.Text>
-          </Space>
+      <PageHeader
+        title="每日概览"
+        description={`查看任务与待办，掌握工作进展。${data.user.role === "admin" ? "当前展示全部组织。" : ""}`}
+        extra={
+          <Button icon={<ReloadOutlined />} onClick={() => void revalidator.revalidate()} loading={busy}>
+            刷新
+          </Button>
         }
-      >
-        <Space orientation="vertical" size={4}>
-          <Typography.Text type="secondary">{`已连接，当前用户：${data.user.name}`}</Typography.Text>
-          <Space size="small" align="center" wrap>
-            <Tag color="blue">{data.roleLabel}</Tag>
-            <Typography.Text type="secondary">{`数据范围：${data.scopeLabel}`}</Typography.Text>
-          </Space>
-        </Space>
-      </Card>
+      />
 
       <Row gutter={[16, 16]}>
         <Col xs={24} sm={8}>
           <Card variant="outlined">
-            <Statistic title="进行中任务" value={data.stats.activeTasks} prefix={<ClockCircleOutlined />} />
+            <Statistic title="未完成任务" value={data.stats.activeTasks} prefix={<ClockCircleOutlined />} />
           </Card>
         </Col>
         <Col xs={24} sm={8}>
@@ -108,14 +91,14 @@ export default function DashboardRoute(): React.ReactElement {
 
       <Row gutter={[16, 16]}>
         <Col xs={24} lg={13}>
-          <Card title="最近任务" variant="outlined" className="fill-card">
+          <Card title="最近任务" extra={<Link to="/tasks">查看全部</Link>} variant="outlined" className="fill-card">
             {tasks.length ? (
               <Listy
                 items={tasks.slice(0, 6)}
                 rowKey="id"
                 itemRender={(task) => (
                   <Space orientation="vertical" size={2} className="list-block">
-                    <Typography.Text>{task.title}</Typography.Text>
+                    <Link to={`/tasks?task=${task.id}`}>{task.title}</Link>
                     <Progress percent={task.progress} size="small" status="active" />
                   </Space>
                 )}
@@ -126,30 +109,39 @@ export default function DashboardRoute(): React.ReactElement {
           </Card>
         </Col>
         <Col xs={24} lg={11}>
-          <Card title="待办清单" variant="outlined" className="fill-card">
+          <Card title="待办清单" extra={<Link to="/todos">查看全部</Link>} variant="outlined" className="fill-card">
             <Space orientation="vertical" size="middle" className="page-stack">
               {error ? <Alert type="error" showIcon title={error} /> : null}
               {/* 待办快捷新增走既有共享服务（同一份逻辑），成功后由 loader 重新校验刷新；
                   管理员不隶属组织，必须先在表单里选一个写入目标（records.server 的硬要求） */}
               <Form
+                form={quickForm}
                 layout="inline"
                 className="quick-add"
                 onFinish={(values: { content?: string; orgId?: string }) => {
                   const content = values.content?.trim();
                   if (!content || busy) return;
                   submit(
-                    { content, todoDate: new Date().toISOString().slice(0, 10), ...(values.orgId ? { orgId: values.orgId } : {}) },
+                    { content, todoDate: dayjs().format("YYYY-MM-DD"), ...(values.orgId ? { orgId: values.orgId } : {}) },
                     { method: "post", encType: "application/json" },
                   );
                 }}
               >
                 {data.todoOrgs.length ? (
                   <Form.Item name="orgId" className="quick-add-item" initialValue={defaultOrgId}>
-                    <Select placeholder="选择组织" options={data.todoOrgs.map((org) => ({ value: org.id, label: org.name }))} />
+                    <Select
+                      aria-label="待办所属组织"
+                      placeholder="选择组织"
+                      options={data.todoOrgs.map((org) => ({ value: org.id, label: org.name }))}
+                    />
                   </Form.Item>
                 ) : null}
-                <Form.Item name="content" className="quick-add-item">
-                  <Input placeholder="添加今日待办" allowClear />
+                <Form.Item
+                  name="content"
+                  className="quick-add-item"
+                  rules={[{ required: true, whitespace: true, message: "请输入待办内容" }]}
+                >
+                  <Input aria-label="添加今日待办" placeholder="添加今日待办" maxLength={200} allowClear />
                 </Form.Item>
                 <Form.Item>
                   <Button color="primary" variant="solid" htmlType="submit" icon={<PlusOutlined />} disabled={busy}>

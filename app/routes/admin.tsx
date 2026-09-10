@@ -1,5 +1,5 @@
 import type React from "react";
-import { useEffect } from "react";
+import { useMemo, useState } from "react";
 import { useActionData, useLoaderData, useNavigation, useRevalidator, useSearchParams, useSubmit } from "react-router";
 import {
   Alert,
@@ -10,24 +10,31 @@ import {
   Flex,
   Form as AntdForm,
   Input,
-  Popconfirm,
   Select,
   Space,
   Table,
   Tag,
   Typography,
+  type MenuProps,
   type TableProps,
 } from "antd";
-import { PlusOutlined, ReloadOutlined } from "@ant-design/icons";
+import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined, UserAddOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import type { Organization, OrganizationStatus, UserRole } from "../../shared/types/domain";
+import { confirmDanger, RowActions } from "../components/crud-actions";
+import { useCrudFeedback } from "../components/crud-hooks";
+import { FormModal } from "../components/crud-modal";
+import { TableToolbar } from "../components/crud-toolbar";
+import { PageHeader } from "../components/page-header";
 import { readPayload } from "../lib/form.server";
 import {
   archiveOrganization,
   createOrganization,
+  inviteMember,
   listAllAccounts,
   listOrganizations,
   restoreOrganization,
+  updateOrganization,
   type OrgFailure,
   type OrgSuccess,
 } from "../lib/organization.server";
@@ -36,7 +43,7 @@ import { requireAdminOrRedirect } from "../lib/ui.server";
 /**
  * 全局管理页（docs/harness/ACCOUNTS_AND_ORGS.md §8）：**仅管理员**。
  *
- * 内容：组织总览（创建 / 解散=归档 / 恢复）、账号总览（按组织筛选）、无组织账号清单。
+ * 内容：组织总览（创建 / 编辑 / 解散=归档 / 恢复）、账号总览（按组织、角色、状态筛选；无组织账号可就地拉入组织）。
  * 刻意**不提供**密码重置与「提升为管理员」入口——密码只能在本机用 `npm run user:passwd` 重置（D-23），
  * 管理员账号只由本机 CLI 管理（§4 第 4 条不变式）。
  *
@@ -44,6 +51,7 @@ import { requireAdminOrRedirect } from "../lib/ui.server";
  */
 
 const ROLE_LABEL: Record<UserRole, string> = { admin: "管理员", manager: "组织管理者", member: "普通用户" };
+const ROLE_COLOR: Record<UserRole, string> = { admin: "blue", manager: "green", member: "default" };
 const STATUS_LABEL: Record<OrganizationStatus, string> = { active: "正常", archived: "已解散" };
 const STATUS_COLOR: Record<OrganizationStatus, string> = { active: "green", archived: "default" };
 const FILTER_ALL = "all";
@@ -107,10 +115,15 @@ export async function action({ request }: { request: Request }): Promise<ActionR
   switch (intent) {
     case "create":
       return toActionResult(createOrganization(user, { name: payload.name, description }), "组织已创建");
+    case "rename":
+      return toActionResult(updateOrganization(user, orgId, { name: payload.name, description }), "组织信息已保存");
     case "archive":
       return toActionResult(archiveOrganization(user, orgId), "组织已解散：成员已退回「未加入」状态，数据保留");
     case "restore":
       return toActionResult(restoreOrganization(user, orgId), "组织已恢复：成员需要重新申请或由管理者拉入");
+    case "invite":
+      // 把无组织账号直接拉进指定组织（与 /organization 页共用同一份规则）
+      return toActionResult(inviteMember(user, orgId, String(payload.accountId ?? "")), "已把该账号拉入组织");
     default:
       return { error: "未知操作" };
   }
@@ -123,18 +136,25 @@ export default function AdminRoute(): React.ReactElement {
   const revalidator = useRevalidator();
   const submit = useSubmit();
   const [params, setParams] = useSearchParams();
+  const { modal } = AntdApp.useApp();
   const [createForm] = AntdForm.useForm<{ name?: string; description?: string }>();
-  const { message } = AntdApp.useApp();
+  const [editForm] = AntdForm.useForm<{ name?: string; description?: string }>();
+  const [inviteForm] = AntdForm.useForm<{ accountId?: string; orgId?: string }>();
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editing, setEditing] = useState<Organization | null>(null);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [keyword, setKeyword] = useState("");
+  const [roleFilter, setRoleFilter] = useState("all");
+  const [stateFilter, setStateFilter] = useState("all");
 
+  const { error } = useCrudFeedback(actionData, () => {
+    setCreateOpen(false);
+    setEditing(null);
+    setInviteOpen(false);
+  });
   const busy = navigation.state !== "idle";
-  const error = actionData && "error" in actionData ? actionData.error : "";
+  const activeOrganizations = data.organizations.filter((org) => org.status === "active");
 
-  // 依赖整个 actionData 对象：连续做两次同样的操作也要各弹一次提示
-  useEffect(() => {
-    if (actionData && "ok" in actionData) void message.success(actionData.notice);
-  }, [actionData, message]);
-
-  /** 所有写操作：action + useSubmit（action 完成后 RR8 自动重跑 loader，页面拿到新数据） */
   const post = (payload: Record<string, unknown>): void => {
     submit(payload as Parameters<typeof submit>[0], { method: "post", encType: "application/json" });
   };
@@ -146,11 +166,24 @@ export default function AdminRoute(): React.ReactElement {
     setParams(next, { replace: true });
   };
 
+  const accounts = useMemo(
+    () =>
+      data.accounts.filter((account) => {
+        if (keyword && !`${account.name}${account.username}${account.email}`.includes(keyword)) return false;
+        if (roleFilter !== "all" && account.role !== roleFilter) return false;
+        if (stateFilter === "active" && account.isActive !== 1) return false;
+        if (stateFilter === "inactive" && account.isActive === 1) return false;
+        return true;
+      }),
+    [data.accounts, keyword, roleFilter, stateFilter],
+  );
+
   const orgColumns: TableProps<Organization>["columns"] = [
     {
       title: "组织名称",
       dataIndex: "name",
       key: "name",
+      sorter: (a, b) => a.name.localeCompare(b.name, "zh-Hans-CN"),
       render: (_value, org) => <Typography.Text strong>{org.name}</Typography.Text>,
     },
     { title: "说明", dataIndex: "description", key: "description", render: (_value, org) => org.description || "—" },
@@ -158,72 +191,116 @@ export default function AdminRoute(): React.ReactElement {
       title: "状态",
       dataIndex: "status",
       key: "status",
+      width: 110,
+      filters: [
+        { text: "正常", value: "active" },
+        { text: "已解散", value: "archived" },
+      ],
+      onFilter: (value, org) => org.status === value,
       render: (_value, org) => (
         <Tag color={STATUS_COLOR[org.status]} variant="filled">
           {STATUS_LABEL[org.status]}
         </Tag>
       ),
     },
-    { title: "成员", dataIndex: "memberCount", key: "memberCount", render: (_value, org) => `${org.memberCount ?? 0} 人` },
+    {
+      title: "成员",
+      dataIndex: "memberCount",
+      key: "memberCount",
+      width: 100,
+      sorter: (a, b) => (a.memberCount ?? 0) - (b.memberCount ?? 0),
+      render: (_value, org) => `${org.memberCount ?? 0} 人`,
+    },
     {
       title: "创建时间",
       dataIndex: "createdAt",
       key: "createdAt",
+      width: 170,
+      sorter: (a, b) => String(a.createdAt).localeCompare(String(b.createdAt)),
       render: (_value, org) => dayjs(org.createdAt).format("YYYY-MM-DD HH:mm"),
     },
     {
       title: "操作",
       key: "actions",
-      render: (_value, org) =>
-        org.status === "archived" ? (
-          <Popconfirm
-            title={`恢复组织「${org.name}」？`}
-            description="恢复后组织重新可用，但成员不会自动回来，需要重新申请或由管理者拉入。"
-            okText="恢复"
-            cancelText="取消"
-            onConfirm={() => post({ intent: "restore", orgId: org.id })}
-          >
-            <Button size="small" disabled={busy}>
-              恢复
-            </Button>
-          </Popconfirm>
-        ) : (
-          <Popconfirm
-            title={`解散组织「${org.name}」？`}
-            description="成员会被退回未加入状态，数据保留但不可访问；只有管理员能恢复。"
-            okText="解散"
-            cancelText="取消"
-            okButtonProps={{ danger: true }}
-            onConfirm={() => post({ intent: "archive", orgId: org.id })}
-          >
-            <Button size="small" color="danger" variant="outlined" disabled={busy}>
-              解散（归档）
-            </Button>
-          </Popconfirm>
-        ),
+      width: 170,
+      align: "right",
+      render: (_value, org) => {
+        const items: MenuProps["items"] = [
+          {
+            key: "edit",
+            label: "编辑组织信息",
+            icon: <EditOutlined />,
+            onClick: () => setEditing(org),
+          },
+          { type: "divider" },
+          org.status === "archived"
+            ? {
+                key: "restore",
+                label: "恢复组织",
+                onClick: () => post({ intent: "restore", orgId: org.id }),
+              }
+            : {
+                key: "archive",
+                label: "解散（归档）",
+                danger: true,
+                icon: <DeleteOutlined />,
+                onClick: () =>
+                  confirmDanger(modal, {
+                    title: `解散组织「${org.name}」？`,
+                    content: "成员会被退回未加入状态，数据保留但不可访问；之后只有管理员能恢复。",
+                    okText: "解散",
+                    onOk: () => post({ intent: "archive", orgId: org.id }),
+                  }),
+              },
+        ];
+        return (
+          <RowActions
+            disabled={busy}
+            extra={
+              org.status === "archived" ? (
+                <Button size="small" color="default" variant="text" onClick={() => post({ intent: "restore", orgId: org.id })}>
+                  恢复
+                </Button>
+              ) : (
+                <Button size="small" color="default" variant="text" href={`/organization?org=${org.id}`}>
+                  管理成员
+                </Button>
+              )
+            }
+            items={items}
+          />
+        );
+      },
     },
   ];
 
   const accountColumns: TableProps<AccountRow>["columns"] = [
+    {
+      title: "姓名",
+      dataIndex: "name",
+      key: "name",
+      sorter: (a, b) => a.name.localeCompare(b.name, "zh-Hans-CN"),
+      render: (_value, account) => (
+        <Space size={4}>
+          <Typography.Text strong>{account.name}</Typography.Text>
+          {account.id === data.me.id ? <Tag color="blue">当前登录账号</Tag> : null}
+        </Space>
+      ),
+    },
     {
       title: "用户名",
       dataIndex: "username",
       key: "username",
       render: (_value, account) => <Typography.Text code>{account.username}</Typography.Text>,
     },
-    {
-      title: "姓名",
-      dataIndex: "name",
-      key: "name",
-      render: (_value, account) => <Typography.Text strong>{account.name}</Typography.Text>,
-    },
     { title: "邮箱", dataIndex: "email", key: "email" },
     {
       title: "角色",
       dataIndex: "role",
       key: "role",
+      width: 130,
       render: (_value, account) => (
-        <Tag color={account.role === "admin" ? "blue" : account.role === "manager" ? "green" : "default"} variant="filled">
+        <Tag color={ROLE_COLOR[account.role]} variant="filled">
           {ROLE_LABEL[account.role]}
         </Tag>
       ),
@@ -232,43 +309,41 @@ export default function AdminRoute(): React.ReactElement {
       title: "所属组织",
       dataIndex: "orgName",
       key: "orgName",
+      width: 160,
       render: (_value, account) => account.orgName ?? <Typography.Text type="secondary">未加入</Typography.Text>,
     },
     {
       title: "状态",
       dataIndex: "isActive",
       key: "isActive",
+      width: 110,
       render: (_value, account) => (
         <Tag color={account.isActive === 1 ? "green" : "default"} variant="filled">
           {account.isActive === 1 ? "启用中" : "已停用"}
         </Tag>
       ),
     },
-  ];
-
-  const unassignedColumns: TableProps<AccountRow>["columns"] = [
     {
-      title: "姓名",
-      dataIndex: "name",
-      key: "name",
-      render: (_value, account) => <Typography.Text strong>{account.name}</Typography.Text>,
-    },
-    {
-      title: "用户名",
-      dataIndex: "username",
-      key: "username",
-      render: (_value, account) => <Typography.Text code>{account.username}</Typography.Text>,
-    },
-    { title: "邮箱", dataIndex: "email", key: "email" },
-    {
-      title: "状态",
-      dataIndex: "isActive",
-      key: "isActive",
-      render: (_value, account) => (
-        <Tag color={account.isActive === 1 ? "green" : "default"} variant="filled">
-          {account.isActive === 1 ? "启用中" : "已停用"}
-        </Tag>
-      ),
+      title: "操作",
+      key: "actions",
+      width: 140,
+      align: "right",
+      render: (_value, account) =>
+        account.orgId === null && account.role !== "admin" ? (
+          <Button
+            size="small"
+            icon={<UserAddOutlined />}
+            disabled={busy || activeOrganizations.length === 0}
+            onClick={() => {
+              inviteForm.setFieldsValue({ accountId: account.id, orgId: activeOrganizations.at(0)?.id ?? "" });
+              setInviteOpen(true);
+            }}
+          >
+            拉入组织
+          </Button>
+        ) : (
+          <Typography.Text type="secondary">—</Typography.Text>
+        ),
     },
   ];
 
@@ -279,104 +354,207 @@ export default function AdminRoute(): React.ReactElement {
   ];
 
   return (
-    <Space orientation="vertical" size="large" className="page-stack">
-      <div>
-        <Typography.Text type="secondary">ADMIN</Typography.Text>
-        <Typography.Title level={3} className="page-title">
-          全局管理
-        </Typography.Title>
-        <Typography.Text type="secondary">
-          管理员是全局角色（不隶属任何组织）：这里管理组织与账号总览。账号密码只能在本机用{" "}
-          <Typography.Text code>npm run user:passwd</Typography.Text> 重置，管理员账号同样只由本机 CLI 管理。
-        </Typography.Text>
-      </div>
-
-      {error && (
-        <Alert
-          type="error"
-          showIcon
-          title={error}
-          action={
-            <Button size="small" icon={<ReloadOutlined />} onClick={() => void revalidator.revalidate()}>
+    <Flex vertical gap="large" className="page-stack">
+      <PageHeader
+        title="全局管理"
+        description="管理全部组织，查看账号与成员归属。"
+        extra={
+          <>
+            <Button icon={<ReloadOutlined />} onClick={() => revalidator.revalidate()} loading={busy}>
               刷新
             </Button>
-          }
-        />
-      )}
-
-      <Card variant="outlined" title="创建组织">
-        <AntdForm
-          form={createForm}
-          layout="inline"
-          onFinish={(values: { name?: string; description?: string }) => {
-            const name = values.name?.trim() ?? "";
-            if (!name || busy) return;
-            post({ intent: "create", name, description: values.description ?? "" });
-            createForm.resetFields();
-          }}
-        >
-          <AntdForm.Item name="name" rules={[{ required: true, message: "请输入组织名称" }]}>
-            <Input maxLength={40} placeholder="组织名称（2-40 个字符）" style={{ width: 260 }} />
-          </AntdForm.Item>
-          <AntdForm.Item name="description">
-            <Input maxLength={200} placeholder="组织说明（可选）" style={{ width: 320 }} />
-          </AntdForm.Item>
-          <AntdForm.Item>
-            <Button color="primary" variant="solid" htmlType="submit" icon={<PlusOutlined />} disabled={busy}>
-              创建组织
+            <Button color="primary" variant="solid" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
+              新建组织
             </Button>
-          </AntdForm.Item>
-        </AntdForm>
-      </Card>
+          </>
+        }
+      />
 
-      <Card variant="outlined" title={`组织总览（${data.organizations.length} 个）`}>
-        {data.organizations.length ? (
-          <Table<Organization> rowKey="id" columns={orgColumns} dataSource={data.organizations} pagination={false} />
-        ) : (
-          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有任何组织，先用上面的表单创建一个。" />
-        )}
-      </Card>
+      {error ? <Alert type="error" showIcon title={error} /> : null}
 
-      <Card variant="outlined" title="无组织账号">
-        <Space orientation="vertical" size="small" className="list-block">
-          <Typography.Text type="secondary">
-            这些账号还没有加入任何组织：可以到「组织管理」页选中目标组织后用「拉人入组」直接加入，或等他们在「加入组织」页提交申请。
-          </Typography.Text>
-          {data.unassigned.length ? (
-            <>
-              <Table<AccountRow> rowKey="id" columns={unassignedColumns} dataSource={data.unassigned} pagination={false} />
-              <Flex gap="small" wrap>
-                <Button href="/organization">去组织管理页拉人入组</Button>
-              </Flex>
-            </>
-          ) : (
-            <Typography.Text type="secondary">当前没有无组织账号。</Typography.Text>
-          )}
-        </Space>
+      <Card
+        variant="outlined"
+        title={`组织总览（${data.organizations.length} 个）`}
+        extra={<Typography.Text type="secondary">解散 = 归档，可恢复</Typography.Text>}
+      >
+        <Table<Organization>
+          rowKey="id"
+          size="middle"
+          columns={orgColumns}
+          dataSource={data.organizations}
+          loading={busy}
+          scroll={{ x: 960 }}
+          pagination={{
+            pageSize: 10,
+            showSizeChanger: true,
+            showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条 / 共 ${total} 条`,
+          }}
+          locale={{
+            emptyText: (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有任何组织">
+                <Button color="primary" variant="solid" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
+                  新建组织
+                </Button>
+              </Empty>
+            ),
+          }}
+        />
       </Card>
 
       <Card
         variant="outlined"
         title="账号总览"
         extra={
-          <Flex align="center" gap="small" wrap>
-            <Typography.Text type="secondary">按组织筛选</Typography.Text>
-            <Select value={data.filter} onChange={setFilter} style={{ width: 240 }} options={orgOptions} />
-          </Flex>
+          <Typography.Text type="secondary">
+            共 {data.accountTotal} 个账号 · 无组织 {data.unassigned.length} 个
+          </Typography.Text>
         }
       >
-        <Space orientation="vertical" size="small" className="list-block">
+        <Flex vertical gap="middle">
+          <TableToolbar
+            extra={
+              <Typography.Text type="secondary">
+                显示 {accounts.length} / {data.accounts.length} 个
+              </Typography.Text>
+            }
+          >
+            <Input.Search
+              allowClear
+              placeholder="搜索姓名 / 用户名 / 邮箱"
+              style={{ width: 260 }}
+              value={keyword}
+              onChange={(event) => setKeyword(event.target.value)}
+              onSearch={(value) => setKeyword(value.trim())}
+            />
+            <Select value={data.filter} onChange={setFilter} style={{ width: 220 }} options={orgOptions} />
+            <Select
+              value={roleFilter}
+              style={{ width: 140 }}
+              onChange={setRoleFilter}
+              options={[
+                { value: "all", label: "全部角色" },
+                { value: "admin", label: "管理员" },
+                { value: "manager", label: "组织管理者" },
+                { value: "member", label: "普通用户" },
+              ]}
+            />
+            <Select
+              value={stateFilter}
+              style={{ width: 140 }}
+              onChange={setStateFilter}
+              options={[
+                { value: "all", label: "全部状态" },
+                { value: "active", label: "启用中" },
+                { value: "inactive", label: "已停用" },
+              ]}
+            />
+            {keyword || roleFilter !== "all" || stateFilter !== "all" || data.filter !== FILTER_ALL ? (
+              <Button
+                color="default"
+                variant="text"
+                onClick={() => {
+                  setKeyword("");
+                  setRoleFilter("all");
+                  setStateFilter("all");
+                  setFilter(FILTER_ALL);
+                }}
+              >
+                重置
+              </Button>
+            ) : null}
+          </TableToolbar>
+
           <Table<AccountRow>
             rowKey="id"
+            size="middle"
             columns={accountColumns}
-            dataSource={data.accounts}
-            pagination={{ pageSize: 20, showSizeChanger: false }}
+            dataSource={accounts}
+            loading={busy}
+            scroll={{ x: 1040 }}
+            pagination={{
+              pageSize: 10,
+              showSizeChanger: true,
+              showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条 / 共 ${total} 条`,
+            }}
+            locale={{
+              emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有符合条件的账号" />,
+            }}
           />
-          <Typography.Text type="secondary">
-            共 {data.accounts.length} 个账号（全库 {data.accountTotal} 个）。
-          </Typography.Text>
-        </Space>
+        </Flex>
       </Card>
-    </Space>
+
+      <FormModal
+        open={createOpen}
+        title="新建组织"
+        okText="创建"
+        form={createForm}
+        submitting={busy}
+        error={error}
+        onCancel={() => setCreateOpen(false)}
+        onFinish={(values) => {
+          const name = values.name?.trim() ?? "";
+          if (!name) return;
+          post({ intent: "create", name, description: values.description ?? "" });
+        }}
+      >
+        <AntdForm.Item name="name" label="组织名称" rules={[{ required: true, message: "请输入组织名称" }]}>
+          <Input maxLength={40} showCount placeholder="2-40 个字符，例如：华东销售组" />
+        </AntdForm.Item>
+        <AntdForm.Item name="description" label="组织说明">
+          <Input.TextArea rows={3} maxLength={200} showCount placeholder="可选：这个组织负责什么" />
+        </AntdForm.Item>
+      </FormModal>
+
+      <FormModal
+        open={editing !== null}
+        title={`编辑组织信息：${editing?.name ?? ""}`}
+        form={editForm}
+        submitting={busy}
+        error={error}
+        formKey={editing?.id ?? "none"}
+        initialValues={{ name: editing?.name ?? "", description: editing?.description ?? "" }}
+        onCancel={() => setEditing(null)}
+        onFinish={(values) => {
+          if (!editing) return;
+          const name = values.name?.trim() ?? "";
+          if (!name) return;
+          post({ intent: "rename", orgId: editing.id, name, description: values.description ?? "" });
+        }}
+      >
+        <AntdForm.Item name="name" label="组织名称" rules={[{ required: true, message: "请输入组织名称" }]}>
+          <Input maxLength={40} showCount />
+        </AntdForm.Item>
+        <AntdForm.Item name="description" label="组织说明">
+          <Input.TextArea rows={3} maxLength={200} showCount />
+        </AntdForm.Item>
+      </FormModal>
+
+      <FormModal
+        open={inviteOpen}
+        title="把账号拉入组织"
+        okText="拉入组织"
+        width={520}
+        form={inviteForm}
+        submitting={busy}
+        error={error}
+        onCancel={() => setInviteOpen(false)}
+        onFinish={(values) => {
+          if (!values.accountId || !values.orgId) return;
+          post({ intent: "invite", accountId: values.accountId, orgId: values.orgId });
+        }}
+      >
+        <AntdForm.Item name="accountId" label="账号" rules={[{ required: true, message: "请选择账号" }]}>
+          <Select
+            showSearch={{ optionFilterProp: "label" }}
+            placeholder="选择无组织账号"
+            options={data.unassigned.map((account) => ({ value: account.id, label: `${account.name}（${account.username}）` }))}
+          />
+        </AntdForm.Item>
+        <AntdForm.Item name="orgId" label="目标组织" rules={[{ required: true, message: "请选择目标组织" }]}>
+          <Select placeholder="选择组织" options={activeOrganizations.map((org) => ({ value: org.id, label: org.name }))} />
+        </AntdForm.Item>
+        <Alert type="info" showIcon title="被拉入的账号会收到站内通知，权限随组织生效。" />
+      </FormModal>
+    </Flex>
   );
 }

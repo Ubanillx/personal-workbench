@@ -79,16 +79,19 @@ async function loginAs(base: string, account: { username: string; password: stri
  * 每个页面在夹具库下必然渲染出的**页面正文**特征串：用来验证 loader 真的取到数据并渲染，
  * 而不是只返回 200 空壳。注意不能用导航标签（外壳里也有），要用页面正文或夹具数据里的独有内容。
  * `/collaboration` 在账号改造后从「长期令牌」改成组织成员展示，因此标记改为成员相关内容。
+ *
+ * 每个页面除了夹具数据，还带一个「新版列表页骨架」的结构标记（页头主操作或工具栏搜索框），
+ * 这样页面被改回空壳、或统一骨架被拆掉时，冒烟测试会立刻报出来。
  */
 const PAGE_MARKERS: Record<string, string[]> = {
-  "/tasks": ["逾期任务", "待验收任务"],
-  "/todos": ["跟进报价"],
-  "/notes": ["会议要点"],
-  "/inbox": ["粘贴聊天记录"],
-  "/reports": ["第八周", "上传周报"],
+  "/tasks": ["逾期任务", "待验收任务", "新建任务", "搜索任务标题或负责人"],
+  "/todos": ["跟进报价", "新建待办", "搜索待办内容"],
+  "/notes": ["会议要点", "新建记录", "搜索记录内容"],
+  "/inbox": ["粘贴聊天记录", "解析消息"],
+  "/reports": ["第八周", "上传周报", "全部类型"],
   "/collaboration": ["成员"],
-  "/files": ["报价单模板"],
-  "/review": ["任务明细"],
+  "/files": ["报价单模板", "添加文件", "搜索文件名称或路径"],
+  "/review": ["任务明细", "完成率"],
 };
 
 const DEFAULT_PAGES = "/tasks,/todos,/notes,/inbox,/reports,/collaboration,/files,/review";
@@ -202,7 +205,7 @@ async function main(): Promise<void> {
     const home = await fetch(`${base}/`, { headers: { cookie } });
     const homeHtml = await home.text();
     check("带会话 GET / 返回 200", home.status === 200, `status=${home.status}`);
-    for (const needle of ["每日概览", "进行中任务", "待办清单", "退出"]) {
+    for (const needle of ["每日概览", "未完成任务", "待办清单", "退出"]) {
       check(`首页含「${needle}」`, homeHtml.includes(needle));
     }
 
@@ -375,6 +378,12 @@ async function main(): Promise<void> {
         );
       }
     }
+
+    // 回顾统计：「全部」筛选不能被解释为 owner_id='' 或日期上界=''。
+    const reviewAll = await pageHtml("/review?range=all", cookie);
+    check("回顾统计全部时间包含不同负责人的任务", reviewAll.includes("待办任务") && reviewAll.includes("成员乙的任务"));
+    const reviewOwner = await pageHtml(`/review?range=all&ownerId=${IDS.userMemberA}`, cookie);
+    check("回顾统计可按负责人筛选", reviewOwner.includes("待办任务") && !reviewOwner.includes("成员乙的任务"));
 
     // 7) 退出登录并确认会话失效
     const logout = await fetch(`${base}/logout`, { method: "POST", redirect: "manual", headers: { cookie } });

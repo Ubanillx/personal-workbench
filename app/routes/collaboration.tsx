@@ -4,6 +4,7 @@ import { Alert, Button, Card, Descriptions, Empty, Flex, Space, Table, Tag, Typo
 import { ReloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import type { OrganizationStatus, UserRole } from "../../shared/types/domain";
+import { PageHeader } from "../components/page-header";
 import { accessInfoPayload } from "../lib/access.server";
 import { listAllAccounts, listJoinRequests, listMembers, listOrganizations } from "../lib/organization.server";
 import { requireManagerOrRedirect } from "../lib/ui.server";
@@ -155,34 +156,21 @@ export default function CollaborationRoute(): React.ReactElement {
 
   return (
     <Space orientation="vertical" size="large" className="page-stack">
-      <div>
-        <Typography.Text type="secondary">COLLABORATION</Typography.Text>
-        <Typography.Title level={3} className="page-title">
-          协作管理
-        </Typography.Title>
-        <Typography.Text type="secondary">
-          这里是协作概览：旧的令牌登录已经取消（access_tokens 表已删除），成员与组织的增删改统一在「组织管理」页办理，本页只做只读展示。
-        </Typography.Text>
-      </div>
-
-      <Alert
-        type="info"
-        showIcon
-        title={
-          data.isAdmin
-            ? `当前身份：管理员（全局角色，不隶属组织）· ${data.me.name}`
-            : `当前身份：${ROLE_LABEL[data.me.role]} · ${data.me.name} · 组织「${data.current?.name ?? data.me.orgName ?? "未加入"}」`
-        }
-        description={
-          data.isAdmin
-            ? "管理员可以查看全部组织与账号，创建/解散/恢复组织在「全局管理」页，成员与申请在「组织管理」页。"
-            : "你可以查看本组织成员；审批申请、停用账号、调整角色、拉人入组都在「组织管理」页。密码由本人在登录后自助修改，忘记密码需在本机用 CLI 重置。"
-        }
-        action={
+      <PageHeader
+        title="协作管理"
+        description="查看组织与成员，前往组织管理处理成员和申请。"
+        extra={
           <Button icon={<ReloadOutlined />} onClick={() => void revalidator.revalidate()}>
             刷新
           </Button>
         }
+      />
+
+      <Alert
+        type="info"
+        showIcon
+        title={data.isAdmin ? "全部组织" : `当前组织：${data.current?.name ?? data.me.orgName ?? "未加入"}`}
+        description={data.isAdmin ? "组织与账号设置请前往全局管理。" : "成员调整与申请审批请前往组织管理。"}
       />
 
       {data.current ? (
@@ -209,13 +197,24 @@ export default function CollaborationRoute(): React.ReactElement {
 
             <Flex gap="small" wrap>
               <Button color="primary" variant="solid" href="/organization">
-                去组织管理页
+                管理成员
               </Button>
               <Button href="/join">查看我的申请</Button>
             </Flex>
 
             {data.members.length ? (
-              <Table<MemberRow> rowKey="id" columns={memberColumns} dataSource={data.members} pagination={false} />
+              <Table<MemberRow>
+                rowKey="id"
+                size="middle"
+                columns={memberColumns}
+                dataSource={data.members}
+                pagination={{
+                  pageSize: 10,
+                  showSizeChanger: false,
+                  showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条 / 共 ${total} 条`,
+                }}
+                scroll={{ x: 720 }}
+              />
             ) : (
               <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="本组织还没有成员" />
             )}
@@ -224,24 +223,34 @@ export default function CollaborationRoute(): React.ReactElement {
       ) : (
         <Card variant="outlined" title="组织概览">
           <Space orientation="vertical" size="middle" className="page-stack">
-            <Typography.Text type="secondary">管理员不隶属任何组织，这里是全部组织的只读概览。</Typography.Text>
             {data.organizations.length ? (
-              <Table rowKey="id" columns={orgColumns} dataSource={data.organizations} pagination={false} />
+              <Table
+                rowKey="id"
+                size="middle"
+                columns={orgColumns}
+                dataSource={data.organizations}
+                pagination={{
+                  pageSize: 10,
+                  showSizeChanger: false,
+                  showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条 / 共 ${total} 条`,
+                }}
+                scroll={{ x: 760 }}
+              />
             ) : (
               <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有任何组织" />
             )}
             <Flex gap="small" wrap>
               <Button color="primary" variant="solid" href="/organization">
-                去组织管理页
+                管理成员
               </Button>
-              <Button href="/admin">去全局管理页</Button>
+              <Button href="/admin">管理组织</Button>
             </Flex>
           </Space>
         </Card>
       )}
 
       {data.access && (
-        <Card variant="outlined" title="局域网访问地址（仅管理员可见）">
+        <Card variant="outlined" title="访问地址">
           <Space orientation="vertical" size="small" className="list-block">
             <Flex align="center" gap="small" wrap>
               <Typography.Text type="secondary">本机</Typography.Text>
@@ -249,7 +258,10 @@ export default function CollaborationRoute(): React.ReactElement {
                 {data.access.localUrl}
               </Typography.Text>
             </Flex>
-            {data.access.lanUrls.length ? (
+            {data.access.host !== "127.0.0.1" &&
+            data.access.host !== "localhost" &&
+            data.access.host !== "::1" &&
+            data.access.lanUrls.length ? (
               data.access.lanUrls.map((url) => (
                 <Flex key={url} align="center" gap="small" wrap>
                   <Typography.Text type="secondary">局域网</Typography.Text>
@@ -259,11 +271,8 @@ export default function CollaborationRoute(): React.ReactElement {
                 </Flex>
               ))
             ) : (
-              <Typography.Text type="secondary">
-                未检测到局域网地址：需要以 <Typography.Text code>npm run start:lan</Typography.Text>（HOST=0.0.0.0）启动才会显示。
-              </Typography.Text>
+              <Typography.Text type="secondary">当前仅支持本机访问。如需团队访问，请联系工作台维护人员开启局域网服务。</Typography.Text>
             )}
-            <Typography.Text type="secondary">{data.access.warning}</Typography.Text>
           </Space>
         </Card>
       )}
@@ -271,15 +280,17 @@ export default function CollaborationRoute(): React.ReactElement {
       {data.isAdmin && (
         <Card variant="outlined" title="账号概览">
           <Space orientation="vertical" size="small" className="list-block">
-            <Typography.Text type="secondary">
-              全部账号（含管理员与未加入组织的账号）。账号密码只能在本机用 <Typography.Text code>npm run user:passwd</Typography.Text>{" "}
-              重置。
-            </Typography.Text>
             <Table<MemberRow>
               rowKey="id"
+              size="middle"
               columns={accountColumns}
               dataSource={data.accounts}
-              pagination={{ pageSize: 20, showSizeChanger: false }}
+              scroll={{ x: 820 }}
+              pagination={{
+                pageSize: 10,
+                showSizeChanger: true,
+                showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条 / 共 ${total} 条`,
+              }}
             />
           </Space>
         </Card>

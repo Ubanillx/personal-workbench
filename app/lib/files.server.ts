@@ -67,6 +67,31 @@ export function createFileRecord(
   return done(created, 201);
 }
 
+/** 编辑文件索引（名称 / 路径 / 分类）：不存在或跨组织都返回 404 */
+export function updateFileRecord(
+  user: User,
+  id: string,
+  input: { name?: unknown; filePath?: unknown; category?: unknown },
+): RecordResult<Record<string, unknown>> {
+  const current = locateFile(user, id);
+  if (!current) return notFoundResult();
+  const name = String(input.name ?? current.name).trim();
+  const filePath = String(input.filePath ?? current.filePath).trim();
+  if (!name || !filePath) return failed("VALIDATION_ERROR", "文件名称和路径不能为空", 400);
+  run(
+    db(),
+    "UPDATE important_files SET name=?,file_path=?,category=?,updated_at=? WHERE id=?",
+    name,
+    filePath,
+    String(input.category ?? current.category).trim(),
+    now(),
+    id,
+  );
+  const updated = locateFile(user, id);
+  if (!updated) return notFoundResult();
+  return done(updated);
+}
+
 /** 删除文件索引：不存在或跨组织都返回 404（旧实现「不存在也回 200」会让跨组织请求与不存在可区分） */
 export function deleteFileRecord(user: User, id: string): RecordResult<null> {
   if (!locateFile(user, id)) return notFoundResult();

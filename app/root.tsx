@@ -1,4 +1,5 @@
 import type React from "react";
+import { useState } from "react";
 import { Links, Meta, NavLink, Outlet, Scripts, ScrollRestoration, useLoaderData, useLocation, useNavigate } from "react-router";
 import {
   App as AntdApp,
@@ -28,6 +29,7 @@ import {
   FolderOpenOutlined,
   InboxOutlined,
   LogoutOutlined,
+  MenuOutlined,
   SettingOutlined,
   TeamOutlined,
   UnorderedListOutlined,
@@ -40,12 +42,26 @@ import "./styles/layout.css";
 
 dayjs.locale("zh-cn");
 
-/** 沿用旧版手写样式的品牌色（#185fa5），其余交给 antd 默认体系 */
+/**
+ * 主题基线：品牌色沿用旧版手写样式的 #185fa5，其余按 Ant Design v6 的设计语言取值——
+ * 控件高 32px、基础圆角 6px、浮层（卡片/弹窗）圆角 8px、表格表头 #fafafa，
+ * 一律通过 Design Token 表达，不覆盖 antd 内部类名（见 docs/harness/CODE_STYLE.md §10.5）。
+ */
 const workbenchTheme: ThemeConfig = {
-  token: { colorPrimary: "#185fa5", colorInfo: "#185fa5", borderRadius: 6, fontSize: 14, controlHeight: 34 },
+  token: {
+    colorPrimary: "#185fa5",
+    colorInfo: "#185fa5",
+    borderRadius: 6,
+    borderRadiusLG: 8,
+    fontSize: 14,
+    controlHeight: 32,
+  },
   components: {
-    Layout: { headerBg: "#ffffff", siderBg: "#ffffff", bodyBg: "#f5f7fa" },
-    Menu: { itemBg: "transparent", itemSelectedBg: "#e7f1fb", itemSelectedColor: "#185fa5" },
+    Layout: { headerBg: "#ffffff", siderBg: "#ffffff", bodyBg: "#f5f7fa", headerHeight: 56, headerPadding: "0 16px" },
+    Menu: { itemBg: "transparent", itemSelectedBg: "#e7f1fb", itemSelectedColor: "#185fa5", itemBorderRadius: 6, itemMarginInline: 8 },
+    Table: { headerBg: "#fafafa", headerColor: "#1f1f1f", cellPaddingBlock: 12, cellPaddingInline: 16 },
+    Card: { headerFontSize: 15 },
+    Modal: { titleFontSize: 16 },
   },
 };
 
@@ -143,6 +159,8 @@ export default function Root() {
 function AuthenticatedShell({ user, notifications }: { user: SessionUser; notifications: UnreadNotification[] }): React.ReactElement {
   const location = useLocation();
   const navigate = useNavigate();
+  const [mobile, setMobile] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
 
   const navItems = user.role === "admin" || user.orgId ? NAV : [NAV_JOIN_ONLY];
   const items: MenuProps["items"] = navItems
@@ -189,43 +207,83 @@ function AuthenticatedShell({ user, notifications }: { user: SessionUser; notifi
 
   return (
     <AntdLayout className="app-shell">
-      <AntdLayout.Sider theme="light" width={228} className="app-sider" breakpoint="lg" collapsedWidth={0}>
+      <AntdLayout.Sider
+        theme="light"
+        width={228}
+        className="app-sider"
+        breakpoint="lg"
+        collapsedWidth={0}
+        collapsed={collapsed}
+        trigger={null}
+        onBreakpoint={(broken) => {
+          setMobile(broken);
+          setCollapsed(broken);
+        }}
+      >
         <div className="brand">
           <Avatar shape="square" size={36} className="brand-avatar">
             台
           </Avatar>
           <div className="brand-copy">
             <Typography.Text strong>个人工作台</Typography.Text>
-            <Typography.Text type="secondary" className="brand-sub">
-              Node 全栈版
-            </Typography.Text>
           </div>
         </div>
-        <Menu mode="inline" items={items} selectedKeys={[selected]} onClick={({ key }) => navigate(key)} className="app-menu" />
+        <Menu
+          mode="inline"
+          items={items}
+          selectedKeys={[selected]}
+          onClick={({ key }) => {
+            navigate(key);
+            if (mobile) setCollapsed(true);
+          }}
+          className="app-menu"
+        />
       </AntdLayout.Sider>
       <AntdLayout>
         <AntdLayout.Header className="app-header">
           <Space size="middle" align="center">
+            {mobile ? (
+              <Button
+                color="default"
+                variant="text"
+                icon={<MenuOutlined />}
+                aria-label={collapsed ? "展开导航" : "收起导航"}
+                aria-expanded={!collapsed}
+                onClick={() => setCollapsed(!collapsed)}
+              />
+            ) : null}
             <NavLink to="/" style={{ color: "inherit" }}>
               <Typography.Text strong>每日概览</Typography.Text>
             </NavLink>
           </Space>
-          <Space size="middle" align="center">
+          <Space size="small" align="center" className="header-actions">
             <Dropdown menu={{ items: notificationItems }} trigger={["click"]} placement="bottomRight">
               <Badge count={notifications.length} size="small" offset={[-2, 2]}>
-                <Button variant="text" icon={<BellOutlined />} aria-label="通知" />
+                <Button color="default" variant="text" icon={<BellOutlined />} aria-label="通知" />
               </Badge>
             </Dropdown>
-            <Space size="small" align="center">
-              <Avatar size="small" className="brand-avatar">
-                {user.name.slice(0, 1)}
-              </Avatar>
-              <Typography.Text>{user.name}</Typography.Text>
+            <Dropdown
+              trigger={["click"]}
+              menu={{
+                items: [
+                  { key: "password", label: "修改密码", onClick: () => navigate("/password") },
+                  { key: "join", label: "组织与申请", onClick: () => navigate("/join") },
+                ],
+              }}
+            >
+              <Button color="default" variant="text" aria-label="账号菜单">
+                <Avatar size="small" className="brand-avatar">
+                  {user.name.slice(0, 1)}
+                </Avatar>
+                <span className="account-name">{user.name}</span>
+              </Button>
+            </Dropdown>
+            <span className="account-details">
               <Tag color={ROLE_COLOR[user.role]}>{ROLE_LABEL[user.role]}</Tag>
               {user.orgName ? <Tag>{user.orgName}</Tag> : null}
-            </Space>
+            </span>
             <form method="post" action="/logout">
-              <Button variant="text" icon={<LogoutOutlined />} htmlType="submit">
+              <Button color="default" variant="text" icon={<LogoutOutlined />} htmlType="submit">
                 退出
               </Button>
             </form>
