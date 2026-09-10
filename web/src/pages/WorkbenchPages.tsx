@@ -1,6 +1,29 @@
 import type React from "react";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import {
+  Alert,
+  App as AntdApp,
+  Button,
+  Card,
+  Checkbox,
+  DatePicker,
+  Drawer,
+  Empty,
+  Form,
+  Input,
+  Listy,
+  Popconfirm,
+  Progress,
+  Select,
+  Slider,
+  Space,
+  Tag,
+  Timeline,
+  Typography,
+} from "antd";
+import { DeleteOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
+import dayjs from "dayjs";
 import type { Note, Task, Todo, UserRole } from "../../../shared/types/domain";
 import {
   addTaskComment,
@@ -38,15 +61,24 @@ const eventLabels: Record<string, string> = {
   task_archived: "归档",
   task_restored: "恢复",
 };
+const timelineColors: Record<string, string> = { task_approved: "green", task_returned: "red", task_archived: "gray" };
+const priorityOptions: Array<{ value: Task["priority"]; label: string }> = [
+  { value: "P0", label: "P0" },
+  { value: "P1", label: "P1" },
+  { value: "P2", label: "P2" },
+];
+const statusOptions: Array<{ value: string; label: string }> = [
+  { value: "all", label: "全部状态" },
+  ...(Object.entries(labels) as Array<[Task["status"], string]>).map(([value, label]) => ({ value, label })),
+];
+const RETURN_NOTE_DEFAULT = "请补充完成情况后重新提交";
 type Me = { id: string; role: UserRole };
 
 export function TasksPage(): React.ReactElement {
+  const { modal } = AntdApp.useApp();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [members, setMembers] = useState<Collaborator[]>([]);
   const [me, setMe] = useState<Me | null>(null);
-  const [title, setTitle] = useState("");
-  const [priority, setPriority] = useState<Task["priority"]>("P1");
-  const [ownerId, setOwnerId] = useState("");
   const [status, setStatus] = useState("all");
   const [assignee, setAssignee] = useState("all");
   const [archived, setArchived] = useState(false);
@@ -54,6 +86,8 @@ export function TasksPage(): React.ReactElement {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [form] = Form.useForm<{ title?: string; priority?: Task["priority"]; ownerId?: string }>();
+  const titleValue = Form.useWatch("title", form);
   const [params, setParams] = useSearchParams();
   const load = (): void => {
     setLoading(true);
@@ -92,94 +126,112 @@ export function TasksPage(): React.ReactElement {
       ),
     [tasks, status, assignee, me],
   );
-  const create = (event: React.FormEvent): void => {
-    event.preventDefault();
-    if (!title.trim() || busy) return;
+  const create = (values: { title?: string; priority?: Task["priority"]; ownerId?: string }): void => {
+    const title = values.title?.trim();
+    if (!title || busy) return;
     setBusy(true);
-    void createTask({ title: title.trim(), priority, ownerId: ownerId || "unassigned" })
+    void createTask({ title, priority: values.priority ?? "P1", ownerId: values.ownerId || "unassigned" })
       .then((task) => {
         setTasks((items) => [task, ...items]);
-        setTitle("");
+        form.setFieldValue("title", "");
       })
       .catch((e: unknown) => setError(e instanceof Error ? e.message : "创建失败"))
       .finally(() => setBusy(false));
   };
   if (loading)
     return (
-      <section className="page-section">
-        <div className="loading-inline">正在加载任务…</div>
-      </section>
+      <Space orientation="vertical" size="large" className="page-stack">
+        <Typography.Text type="secondary">正在加载任务…</Typography.Text>
+      </Space>
     );
   return (
-    <section className="page-section">
-      <div className="eyebrow">WORK</div>
-      <h1>任务进展</h1>
-      <p className="page-subtitle">派发、进度、验收和沟通都保留在同一条时间线中。</p>
-      <form className="create-row" onSubmit={create}>
-        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="新任务标题" />
-        <select value={priority} onChange={(e) => setPriority(e.target.value as Task["priority"])}>
-          <option>P0</option>
-          <option>P1</option>
-          <option>P2</option>
-        </select>
-        {me?.role === "owner" && <AssigneeSelect value={ownerId} members={members} onChange={setOwnerId} />}
-        <button disabled={!title.trim() || busy}>{busy ? "创建中…" : "创建任务"}</button>
-      </form>
-      <div className="filter-row">
-        <select value={status} onChange={(e) => setStatus(e.target.value)}>
-          <option value="all">全部状态</option>
-          {Object.entries(labels).map(([key, value]) => (
-            <option key={key} value={key}>
-              {value}
-            </option>
-          ))}
-        </select>
-        <select value={assignee} onChange={(e) => setAssignee(e.target.value)}>
-          <option value="all">全部负责人</option>
-          <option value="mine">我的任务</option>
-          <option value="unassigned">未分配</option>
-          {me?.role === "owner" &&
-            members
-              .filter((m) => m.role !== "viewer")
-              .map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name}
-                </option>
-              ))}
-        </select>
+    <Space orientation="vertical" size="large" className="page-stack">
+      <Space orientation="vertical" size={0}>
+        <Typography.Text type="secondary">WORK</Typography.Text>
+        <Typography.Title level={3} className="page-title">
+          任务进展
+        </Typography.Title>
+        <Typography.Text type="secondary">派发、进度、验收和沟通都保留在同一条时间线中。</Typography.Text>
+      </Space>
+
+      <Form form={form} layout="inline" onFinish={create} className="quick-add" initialValues={{ priority: "P1", ownerId: "" }}>
+        <Form.Item name="title" className="quick-add-item">
+          <Input placeholder="新任务标题" allowClear />
+        </Form.Item>
+        <Form.Item name="priority">
+          <Select options={priorityOptions} style={{ width: 88 }} />
+        </Form.Item>
         {me?.role === "owner" && (
-          <label>
-            <input type="checkbox" checked={archived} onChange={(e) => setArchived(e.target.checked)} /> 显示归档
-          </label>
+          <Form.Item name="ownerId">
+            <AssigneeSelect members={members} />
+          </Form.Item>
         )}
-      </div>
+        <Form.Item>
+          <Button color="primary" variant="solid" htmlType="submit" icon={<PlusOutlined />} disabled={!titleValue?.trim() || busy}>
+            {busy ? "创建中…" : "创建任务"}
+          </Button>
+        </Form.Item>
+      </Form>
+
+      <Space wrap size="small">
+        <Select value={status} onChange={(value: string) => setStatus(value)} options={statusOptions} style={{ width: 140 }} />
+        <Select
+          value={assignee}
+          onChange={(value: string) => setAssignee(value)}
+          style={{ width: 160 }}
+          options={[
+            { value: "all", label: "全部负责人" },
+            { value: "mine", label: "我的任务" },
+            { value: "unassigned", label: "未分配" },
+            ...(me?.role === "owner" ? members.filter((m) => m.role !== "viewer").map((m) => ({ value: m.id, label: m.name })) : []),
+          ]}
+        />
+        {me?.role === "owner" && (
+          <Checkbox checked={archived} onChange={(e) => setArchived(e.target.checked)}>
+            显示归档
+          </Checkbox>
+        )}
+      </Space>
+
       {error && (
-        <div className="error-panel">
-          {error}
-          <button className="secondary" onClick={load}>
-            重试
-          </button>
-        </div>
+        <Alert
+          type="error"
+          showIcon
+          title={error}
+          action={
+            <Button size="small" icon={<ReloadOutlined />} onClick={load}>
+              重试
+            </Button>
+          }
+        />
       )}
-      <div className="collection">
-        {filtered.length ? (
-          filtered.map((task) => (
-            <TaskCard
-              key={task.id}
+
+      {filtered.length ? (
+        <Listy
+          items={filtered}
+          rowKey="id"
+          itemRender={(task) => (
+            <TaskRow
               task={task}
               onOpen={() => {
                 setSelected(task);
                 void markNotificationsRead({ taskId: task.id });
               }}
             />
-          ))
-        ) : (
-          <div className="empty-panel">
-            <strong>没有符合条件的任务</strong>
-            <p>调整筛选条件，或先创建一条任务。</p>
-          </div>
-        )}
-      </div>
+          )}
+        />
+      ) : (
+        <Empty
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+          description={
+            <Space orientation="vertical" size={2}>
+              <Typography.Text strong>没有符合条件的任务</Typography.Text>
+              <Typography.Text type="secondary">调整筛选条件，或先创建一条任务。</Typography.Text>
+            </Space>
+          }
+        />
+      )}
+
       {selected && (
         <TaskDetail
           task={selected}
@@ -194,9 +246,10 @@ export function TasksPage(): React.ReactElement {
             setTasks((items) => items.filter((item) => item.id !== id));
             setSelected(null);
           }}
+          onConfirm={(options) => modal.confirm(options)}
         />
       )}
-    </section>
+    </Space>
   );
 }
 
@@ -205,43 +258,47 @@ function AssigneeSelect({
   members,
   onChange,
 }: {
-  value: string;
+  value?: string;
   members: Collaborator[];
-  onChange: (value: string) => void;
+  onChange?: (value: string) => void;
 }): React.ReactElement {
   return (
-    <select value={value} onChange={(e) => onChange(e.target.value)}>
-      <option value="">未分配</option>
-      <option value="owner">主人</option>
-      {members
-        .filter((m) => m.role === "assistant" && m.isActive)
-        .map((m) => (
-          <option value={m.id} key={m.id}>
-            {m.name}
-          </option>
-        ))}
-    </select>
+    <Select
+      value={value ?? ""}
+      onChange={(next: string) => onChange?.(next)}
+      style={{ width: 140 }}
+      options={[
+        { value: "", label: "未分配" },
+        { value: "owner", label: "主人" },
+        ...members.filter((m) => m.role === "assistant" && m.isActive).map((m) => ({ value: m.id, label: m.name })),
+      ]}
+    />
   );
 }
-function TaskCard({ task, onOpen }: { task: Task; onOpen: () => void }): React.ReactElement {
+
+function TaskRow({ task, onOpen }: { task: Task; onOpen: () => void }): React.ReactElement {
   const overdue = Boolean(task.dueDate && task.dueDate < new Date().toISOString().slice(0, 10) && task.status !== "completed");
   return (
-    <article className={`item-card task-item ${overdue ? "overdue-card" : ""}`}>
-      <button className="task-main" onClick={onOpen}>
-        <strong>{task.title}</strong>
-        <p>
-          {task.ownerName ?? "未分配"} · {task.priority} · {labels[task.status]}
-          {overdue ? " · 已逾期" : ""}
-          {task.archivedAt ? " · 已归档" : ""}
-        </p>
-        <div className="progress-track">
-          <span style={{ width: `${task.progress}%` }} />
-        </div>
-      </button>
-      <span>{task.progress}%</span>
-    </article>
+    <Space align="center" size="middle" className="list-row">
+      <Button variant="text" color="default" onClick={onOpen} style={{ flex: 1, height: "auto", padding: "4px 0", textAlign: "left" }}>
+        <Space orientation="vertical" size={2} className="list-block">
+          <Typography.Text strong>{task.title}</Typography.Text>
+          <Space size={4} wrap>
+            <Typography.Text type="secondary">
+              {task.ownerName ?? "未分配"} · {task.priority} · {labels[task.status]}
+            </Typography.Text>
+            {overdue && <Tag color="red">已逾期</Tag>}
+            {task.archivedAt && <Tag>已归档</Tag>}
+          </Space>
+          <Progress percent={task.progress} size="small" showInfo={false} />
+        </Space>
+      </Button>
+      <Typography.Text strong>{task.progress}%</Typography.Text>
+    </Space>
   );
 }
+
+type ConfirmOptions = Parameters<ReturnType<typeof AntdApp.useApp>["modal"]["confirm"]>[0];
 
 function TaskDetail({
   task,
@@ -250,6 +307,7 @@ function TaskDetail({
   onClose,
   onChanged,
   onRemoved,
+  onConfirm,
 }: {
   task: Task;
   me: Me | null;
@@ -257,6 +315,7 @@ function TaskDetail({
   onClose: () => void;
   onChanged: (task: Task) => void;
   onRemoved: (id: string) => void;
+  onConfirm: (options: ConfirmOptions) => void;
 }): React.ReactElement {
   const [activity, setActivity] = useState<ActivityItem[]>([]);
   const [note, setNote] = useState("");
@@ -289,154 +348,213 @@ function TaskDetail({
       .catch((e: unknown) => setError(e instanceof Error ? e.message : "操作失败"))
       .finally(() => setBusy(false));
   };
+  const remove = (fn: () => Promise<null>, failure: string): void => {
+    setBusy(true);
+    void fn()
+      .then(() => onRemoved(task.id))
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : failure))
+      .finally(() => setBusy(false));
+  };
   return (
-    <div className="detail-backdrop" role="dialog" aria-modal="true">
-      <aside className="detail-panel">
-        <div className="detail-head">
-          <div>
-            <div className="eyebrow">TASK DETAIL</div>
-            <h2>{task.title}</h2>
-          </div>
-          <button className="icon-button" onClick={onClose}>
-            ×
-          </button>
-        </div>
-        {error && <div className="error-panel">{error}</div>}
+    <Drawer
+      open
+      placement="right"
+      size={560}
+      onClose={onClose}
+      title={
+        <Space orientation="vertical" size={0}>
+          <Typography.Text type="secondary">TASK DETAIL</Typography.Text>
+          <Typography.Text strong>{task.title}</Typography.Text>
+        </Space>
+      }
+    >
+      <Space orientation="vertical" size="middle" className="page-stack">
+        {error && <Alert type="error" showIcon title={error} />}
+
         {owner && !task.archivedAt && (
-          <section className="task-edit">
-            <h3>任务信息与改派</h3>
-            <input value={title} onChange={(e) => setTitle(e.target.value)} />
-            <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="任务说明" />
-            <div className="form-grid">
-              <select value={priority} onChange={(e) => setPriority(e.target.value as Task["priority"])}>
-                <option>P0</option>
-                <option>P1</option>
-                <option>P2</option>
-              </select>
-              <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
-              <AssigneeSelect value={ownerId} members={members} onChange={setOwnerId} />
-            </div>
-            <button
-              disabled={busy || !title.trim()}
+          <Card
+            variant="outlined"
+            title="任务信息与改派"
+            extra={
+              <Button
+                color="primary"
+                variant="solid"
+                disabled={busy || !title.trim()}
+                onClick={() =>
+                  run(() =>
+                    updateTask(task.id, {
+                      title: title.trim(),
+                      description,
+                      priority,
+                      dueDate: dueDate || null,
+                      ownerId: ownerId || "unassigned",
+                    }),
+                  )
+                }
+              >
+                保存并改派
+              </Button>
+            }
+          >
+            <Space orientation="vertical" size="small" className="page-stack">
+              <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="任务标题" />
+              <Input.TextArea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="任务说明" rows={3} />
+              <Space wrap size="small">
+                <Select
+                  value={priority}
+                  onChange={(value: Task["priority"]) => setPriority(value)}
+                  options={priorityOptions}
+                  style={{ width: 88 }}
+                />
+                <DatePicker
+                  format="YYYY-MM-DD"
+                  placeholder="截止日期"
+                  {...(dueDate ? { value: dayjs(dueDate) } : {})}
+                  onChange={(date) => setDueDate(date ? date.format("YYYY-MM-DD") : "")}
+                />
+                <AssigneeSelect value={ownerId} members={members} onChange={setOwnerId} />
+              </Space>
+            </Space>
+          </Card>
+        )}
+
+        <Space orientation="vertical" size={2}>
+          <Typography.Text type="secondary">
+            负责人：{task.ownerName ?? "未分配"} · {task.priority} · {labels[task.status]}
+            {task.dueDate ? ` · 截止 ${task.dueDate}` : ""}
+          </Typography.Text>
+          <Space align="center" size="small">
+            <Typography.Text strong>{task.progress}%</Typography.Text>
+            <Progress percent={task.progress} size="small" showInfo={false} style={{ width: 240 }} />
+          </Space>
+        </Space>
+
+        {canProgress && (
+          <Card variant="outlined" title="汇报进度">
+            <Space orientation="vertical" size="small" className="page-stack">
+              <Slider min={0} max={100} value={progress} onChange={setProgress} />
+              <Space wrap size="small">
+                <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="可选：进展说明" style={{ width: 240 }} />
+                <Button
+                  disabled={busy || (progress === task.progress && !note.trim())}
+                  onClick={() => run(() => postTaskProgress(task.id, { progress, ...(note.trim() ? { note: note.trim() } : {}) }))}
+                >
+                  保存 {progress}%
+                </Button>
+              </Space>
+            </Space>
+          </Card>
+        )}
+
+        {task.status === "pending_review" && owner && (
+          <Space wrap size="small">
+            <Button
+              color="primary"
+              variant="solid"
+              disabled={busy}
               onClick={() =>
-                run(() =>
-                  updateTask(task.id, {
-                    title: title.trim(),
-                    description,
-                    priority,
-                    dueDate: dueDate || null,
-                    ownerId: ownerId || "unassigned",
-                  }),
-                )
+                onConfirm({
+                  title: "确认通过验收吗？",
+                  okText: "通过验收",
+                  cancelText: "取消",
+                  onOk: () => run(() => approveTask(task.id)),
+                })
               }
             >
-              保存并改派
-            </button>
-          </section>
-        )}
-        <p className="detail-meta">
-          负责人：{task.ownerName ?? "未分配"} · {task.priority} · {labels[task.status]}
-          {task.dueDate ? ` · 截止 ${task.dueDate}` : ""}
-        </p>
-        <div className="detail-progress">
-          <strong>{task.progress}%</strong>
-          <div className="progress-track">
-            <span style={{ width: `${task.progress}%` }} />
-          </div>
-        </div>
-        {canProgress && (
-          <div className="progress-editor">
-            <input type="range" min="0" max="100" value={progress} onChange={(e) => setProgress(Number(e.target.value))} />
-            <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="可选：进展说明" />
-            <button
-              disabled={busy || (progress === task.progress && !note.trim())}
-              onClick={() => run(() => postTaskProgress(task.id, { progress, ...(note.trim() ? { note: note.trim() } : {}) }))}
-            >
-              保存 {progress}%
-            </button>
-          </div>
-        )}
-        {task.status === "pending_review" && owner && (
-          <div className="review-actions">
-            <button disabled={busy} onClick={() => window.confirm("确认通过验收吗？") && run(() => approveTask(task.id))}>
               通过验收
-            </button>
-            <button
-              className="secondary"
+            </Button>
+            <Button
               disabled={busy}
               onClick={() => {
-                const reason = window.prompt("退回说明", "请补充完成情况后重新提交");
-                if (reason !== null) run(() => returnTask(task.id, reason));
+                let reason = RETURN_NOTE_DEFAULT;
+                onConfirm({
+                  title: "退回说明",
+                  okText: "退回修改",
+                  cancelText: "取消",
+                  content: <Input.TextArea defaultValue={RETURN_NOTE_DEFAULT} onChange={(e) => (reason = e.target.value)} rows={3} />,
+                  onOk: () => run(() => returnTask(task.id, reason)),
+                });
               }}
             >
               退回修改
-            </button>
-          </div>
+            </Button>
+          </Space>
         )}
+
         {owner && (
-          <div className="owner-actions">
+          <Space wrap size="small">
             {task.archivedAt ? (
               <>
-                <button className="secondary" onClick={() => run(() => restoreTask(task.id))}>
+                <Button icon={<ReloadOutlined />} onClick={() => run(() => restoreTask(task.id))}>
                   恢复任务
-                </button>
-                <button
-                  className="danger-button"
-                  onClick={() => {
-                    if (window.confirm("彻底删除后无法恢复，继续吗？")) {
-                      setBusy(true);
-                      void deleteTask(task.id)
-                        .then(() => onRemoved(task.id))
-                        .catch((e: unknown) => setError(e instanceof Error ? e.message : "删除失败"))
-                        .finally(() => setBusy(false));
-                    }
-                  }}
+                </Button>
+                <Button
+                  color="danger"
+                  variant="outlined"
+                  disabled={busy}
+                  onClick={() =>
+                    onConfirm({
+                      title: "彻底删除后无法恢复，继续吗？",
+                      okText: "彻底删除",
+                      cancelText: "取消",
+                      okButtonProps: { danger: true },
+                      onOk: () => remove(() => deleteTask(task.id), "删除失败"),
+                    })
+                  }
                 >
                   彻底删除
-                </button>
+                </Button>
               </>
             ) : (
-              <button
-                className="danger-button"
-                onClick={() => {
-                  if (window.confirm("归档后可恢复，确定吗？")) {
-                    setBusy(true);
-                    void archiveTask(task.id)
-                      .then(() => onRemoved(task.id))
-                      .catch((e: unknown) => setError(e instanceof Error ? e.message : "归档失败"))
-                      .finally(() => setBusy(false));
-                  }
-                }}
+              <Button
+                color="danger"
+                variant="outlined"
+                disabled={busy}
+                onClick={() =>
+                  onConfirm({
+                    title: "归档后可恢复，确定吗？",
+                    okText: "归档",
+                    cancelText: "取消",
+                    onOk: () => remove(() => archiveTask(task.id), "归档失败"),
+                  })
+                }
               >
                 归档任务
-              </button>
+              </Button>
             )}
-          </div>
+          </Space>
         )}
-        <h3>协作时间线</h3>
-        <div className="activity-list">
+
+        <Card variant="outlined" title="协作时间线">
           {activity.length ? (
-            activity.map((item) => (
-              <div className="activity-item" key={`${item.kind}-${item.id}`}>
-                <strong>
-                  {item.authorName ?? "系统"}
-                  {eventLabels[item.kind] ? ` · ${eventLabels[item.kind]}` : ""}
-                </strong>
-                <small>{new Date(item.createdAt).toLocaleString()}</small>
-                <p>
-                  {item.content}
-                  {item.progress !== null && `（${item.progress}%）`}
-                </p>
-              </div>
-            ))
+            <Timeline
+              items={activity.map((item) => ({
+                key: `${item.kind}-${item.id}`,
+                title: new Date(item.createdAt).toLocaleString(),
+                color: timelineColors[item.kind] ?? "blue",
+                content: (
+                  <Space orientation="vertical" size={2} className="list-block">
+                    <Typography.Text strong>
+                      {item.authorName ?? "系统"}
+                      {eventLabels[item.kind] ? ` · ${eventLabels[item.kind]}` : ""}
+                    </Typography.Text>
+                    <Typography.Text>
+                      {item.content}
+                      {item.progress !== null && `（${item.progress}%）`}
+                    </Typography.Text>
+                  </Space>
+                ),
+              }))}
+            />
           ) : (
-            <p className="muted">暂无记录</p>
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无记录" />
           )}
-        </div>
-        <form
-          className="comment-form"
-          onSubmit={(e) => {
-            e.preventDefault();
+        </Card>
+
+        <Form
+          layout="inline"
+          className="quick-add"
+          onFinish={() => {
             if (!comment.trim() || busy) return;
             setBusy(true);
             void addTaskComment(task.id, comment.trim())
@@ -448,18 +566,26 @@ function TaskDetail({
               .finally(() => setBusy(false));
           }}
         >
-          <input value={comment} onChange={(e) => setComment(e.target.value)} placeholder="添加评论" />
-          <button disabled={!comment.trim() || busy}>发送</button>
-        </form>
-      </aside>
-    </div>
+          <Form.Item className="quick-add-item">
+            <Input value={comment} onChange={(e) => setComment(e.target.value)} placeholder="添加评论" allowClear />
+          </Form.Item>
+          <Form.Item>
+            <Button color="primary" variant="solid" htmlType="submit" disabled={!comment.trim() || busy}>
+              发送
+            </Button>
+          </Form.Item>
+        </Form>
+      </Space>
+    </Drawer>
   );
 }
 
 export function TodosPage(): React.ReactElement {
   const [items, setItems] = useState<Todo[]>([]);
-  const [value, setValue] = useState("");
   const [error, setError] = useState("");
+  const [form] = Form.useForm<{ content?: string }>();
+  const contentValue = Form.useWatch("content", form);
+  const [busy, setBusy] = useState(false);
   const load = (): void => {
     void getTodos()
       .then(setItems)
@@ -467,75 +593,105 @@ export function TodosPage(): React.ReactElement {
   };
   useEffect(load, []);
   return (
-    <section className="page-section">
-      <div className="eyebrow">TODAY</div>
-      <h1>待办清单</h1>
-      {error ? (
-        <div className="error-panel">
-          {error}
-          <button className="secondary" onClick={load}>
-            重试
-          </button>
-        </div>
-      ) : (
-        <>
-          <form
-            className="create-row"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (!value.trim()) return;
-              void createTodo({ content: value.trim(), todoDate: new Date().toISOString().slice(0, 10) }).then((item) => {
-                setItems((all) => [item, ...all]);
-                setValue("");
-              });
-            }}
-          >
-            <input value={value} onChange={(e) => setValue(e.target.value)} placeholder="添加一条今日待办" />
-            <button disabled={!value.trim()}>添加</button>
-          </form>
-          <div className="collection">
-            {items.length ? (
-              items.map((item) => (
-                <article className="item-card" key={item.id}>
-                  <label className="check-row">
-                    <input
-                      type="checkbox"
-                      checked={item.isCompleted}
-                      onChange={(e) =>
-                        void updateTodo(item.id, { isCompleted: e.target.checked }).then((updated) =>
-                          setItems((all) => all.map((x) => (x.id === updated.id ? updated : x))),
-                        )
-                      }
-                    />
-                    <span className={item.isCompleted ? "completed" : ""}>{item.content}</span>
-                  </label>
-                  <button
-                    className="icon-button danger"
-                    onClick={() =>
-                      window.confirm("确定删除吗？") &&
-                      void deleteTodo(item.id).then(() => setItems((all) => all.filter((x) => x.id !== item.id)))
-                    }
-                  >
-                    ×
-                  </button>
-                </article>
-              ))
-            ) : (
-              <div className="empty-panel">
-                <strong>暂无待办</strong>
-                <p>添加一条今天要完成的事情。</p>
-              </div>
-            )}
-          </div>
-        </>
+    <Space orientation="vertical" size="large" className="page-stack">
+      <Space orientation="vertical" size={0}>
+        <Typography.Text type="secondary">TODAY</Typography.Text>
+        <Typography.Title level={3} className="page-title">
+          待办清单
+        </Typography.Title>
+      </Space>
+
+      {error && (
+        <Alert
+          type="error"
+          showIcon
+          title={error}
+          action={
+            <Button size="small" icon={<ReloadOutlined />} onClick={load}>
+              重试
+            </Button>
+          }
+        />
       )}
-    </section>
+
+      <Form
+        form={form}
+        layout="inline"
+        className="quick-add"
+        onFinish={(values: { content?: string }) => {
+          const content = values.content?.trim();
+          if (!content || busy) return;
+          setBusy(true);
+          void createTodo({ content, todoDate: new Date().toISOString().slice(0, 10) })
+            .then((item) => {
+              setItems((all) => [item, ...all]);
+              form.resetFields();
+            })
+            .catch((e: unknown) => setError(e instanceof Error ? e.message : "添加失败"))
+            .finally(() => setBusy(false));
+        }}
+      >
+        <Form.Item name="content" className="quick-add-item">
+          <Input placeholder="添加一条今日待办" allowClear />
+        </Form.Item>
+        <Form.Item>
+          <Button color="primary" variant="solid" htmlType="submit" icon={<PlusOutlined />} disabled={!contentValue?.trim() || busy}>
+            添加
+          </Button>
+        </Form.Item>
+      </Form>
+
+      {items.length ? (
+        <Listy
+          items={items}
+          rowKey="id"
+          itemRender={(item) => (
+            <Space align="center" size="middle" className="list-row">
+              <Checkbox
+                checked={item.isCompleted}
+                onChange={(e) =>
+                  void updateTodo(item.id, { isCompleted: e.target.checked }).then((updated) =>
+                    setItems((all) => all.map((x) => (x.id === updated.id ? updated : x))),
+                  )
+                }
+              >
+                <Typography.Text delete={item.isCompleted} {...(item.isCompleted ? { type: "secondary" as const } : {})}>
+                  {item.content}
+                </Typography.Text>
+              </Checkbox>
+              <Popconfirm
+                title="确定删除吗？"
+                okText="删除"
+                cancelText="取消"
+                okButtonProps={{ danger: true }}
+                onConfirm={() => void deleteTodo(item.id).then(() => setItems((all) => all.filter((x) => x.id !== item.id)))}
+              >
+                <Button color="danger" variant="text" icon={<DeleteOutlined />} aria-label="删除待办" />
+              </Popconfirm>
+            </Space>
+          )}
+        />
+      ) : (
+        <Empty
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+          description={
+            <Space orientation="vertical" size={2}>
+              <Typography.Text strong>暂无待办</Typography.Text>
+              <Typography.Text type="secondary">添加一条今天要完成的事情。</Typography.Text>
+            </Space>
+          }
+        />
+      )}
+    </Space>
   );
 }
+
 export function NotesPage(): React.ReactElement {
   const [items, setItems] = useState<Note[]>([]);
-  const [value, setValue] = useState("");
   const [error, setError] = useState("");
+  const [form] = Form.useForm<{ content?: string }>();
+  const contentValue = Form.useWatch("content", form);
+  const [busy, setBusy] = useState(false);
   const load = (): void => {
     void getNotes()
       .then(setItems)
@@ -543,57 +699,83 @@ export function NotesPage(): React.ReactElement {
   };
   useEffect(load, []);
   return (
-    <section className="page-section">
-      <div className="eyebrow">CAPTURE</div>
-      <h1>随手记</h1>
-      {error ? (
-        <div className="error-panel">
-          {error}
-          <button className="secondary" onClick={load}>
-            重试
-          </button>
-        </div>
-      ) : (
-        <>
-          <form
-            className="note-form"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (!value.trim()) return;
-              void createNote({ content: value.trim() }).then((item) => {
-                setItems((all) => [item, ...all]);
-                setValue("");
-              });
-            }}
-          >
-            <textarea value={value} onChange={(e) => setValue(e.target.value)} placeholder="记录想法、会议要点或临时事项" />
-            <button disabled={!value.trim()}>保存记录</button>
-          </form>
-          <div className="collection">
-            {items.length ? (
-              items.map((item) => (
-                <article className="note-card" key={item.id}>
-                  <p>{item.content}</p>
-                  <button
-                    className="icon-button danger"
-                    onClick={() =>
-                      window.confirm("确定删除吗？") &&
-                      void deleteNote(item.id).then(() => setItems((all) => all.filter((x) => x.id !== item.id)))
-                    }
-                  >
-                    ×
-                  </button>
-                </article>
-              ))
-            ) : (
-              <div className="empty-panel">
-                <strong>暂无随手记</strong>
-                <p>记录会议要点或临时想法。</p>
-              </div>
-            )}
-          </div>
-        </>
+    <Space orientation="vertical" size="large" className="page-stack">
+      <Space orientation="vertical" size={0}>
+        <Typography.Text type="secondary">CAPTURE</Typography.Text>
+        <Typography.Title level={3} className="page-title">
+          随手记
+        </Typography.Title>
+      </Space>
+
+      {error && (
+        <Alert
+          type="error"
+          showIcon
+          title={error}
+          action={
+            <Button size="small" icon={<ReloadOutlined />} onClick={load}>
+              重试
+            </Button>
+          }
+        />
       )}
-    </section>
+
+      <Form
+        form={form}
+        className="page-stack"
+        onFinish={(values: { content?: string }) => {
+          const content = values.content?.trim();
+          if (!content || busy) return;
+          setBusy(true);
+          void createNote({ content })
+            .then((item) => {
+              setItems((all) => [item, ...all]);
+              form.resetFields();
+            })
+            .catch((e: unknown) => setError(e instanceof Error ? e.message : "保存失败"))
+            .finally(() => setBusy(false));
+        }}
+      >
+        <Form.Item name="content" className="quick-add-item">
+          <Input.TextArea placeholder="记录想法、会议要点或临时事项" rows={3} allowClear />
+        </Form.Item>
+        <Form.Item>
+          <Button color="primary" variant="solid" htmlType="submit" disabled={!contentValue?.trim() || busy}>
+            保存记录
+          </Button>
+        </Form.Item>
+      </Form>
+
+      {items.length ? (
+        <Listy
+          items={items}
+          rowKey="id"
+          itemRender={(item) => (
+            <Space align="start" size="middle" className="list-row">
+              <Typography.Paragraph style={{ margin: 0, flex: 1 }}>{item.content}</Typography.Paragraph>
+              <Popconfirm
+                title="确定删除吗？"
+                okText="删除"
+                cancelText="取消"
+                okButtonProps={{ danger: true }}
+                onConfirm={() => void deleteNote(item.id).then(() => setItems((all) => all.filter((x) => x.id !== item.id)))}
+              >
+                <Button color="danger" variant="text" icon={<DeleteOutlined />} aria-label="删除随手记" />
+              </Popconfirm>
+            </Space>
+          )}
+        />
+      ) : (
+        <Empty
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+          description={
+            <Space orientation="vertical" size={2}>
+              <Typography.Text strong>暂无随手记</Typography.Text>
+              <Typography.Text type="secondary">记录会议要点或临时想法。</Typography.Text>
+            </Space>
+          }
+        />
+      )}
+    </Space>
   );
 }
