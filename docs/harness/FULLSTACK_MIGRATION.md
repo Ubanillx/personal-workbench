@@ -85,9 +85,13 @@
 1. **npmmirror 上的 `@react-router/dev@8.3.1` 包不完整**（缺 `module-sync-enabled/index.mjs`），构建报 `ERR_MODULE_NOT_FOUND`，且失败过程会触发 npm 清理把该包整个删掉。解法：`npm install -D @react-router/dev@8.3.1 --registry=https://registry.npmjs.org`。
 2. 本工具的 `pwsh` 实际是 **Windows PowerShell 5.1**（不支持 `??` 等 PS7 语法，`Get-Content` 按 GBK 解码 UTF-8）→ 脚本避免 PS7 语法，读写仓库文件一律用文件工具。
 
-### Phase 2 · 48 个端点迁移（预计 2–3 天）
+### Phase 2 · 48 个端点迁移（已完成 2026-09-10）
 
-`workbench.ts` 39 个 + `report.ts` 7 个 + `health.ts` 2 个搬成框架 route，Fastify 退役。
+`workbench.ts` 39 个 + `report.ts` 7 个 + `health.ts` 2 个已全部搬成框架资源路由。
+
+**完成证据**：新旧两套实现**各自**通过全量 golden 回放 **139/139 一致**（exit 0）；oxlint 0/0（102 文件）、typecheck（server+web+tools+app）通过、`npm test` 16/16、新旧两套 build 均通过、format:check 无漂移；`data/workbench.sqlite` 全程 size/mtime 未变。
+
+**"Fastify 退役"的口径**：API 层已**不再依赖 Fastify**——48 个端点全部由 RR8 资源路由提供且行为等价。但**物理移除/归档放在 Phase 4**：Phase 3 之前新工程还没有 UI（只有占位首页），此刻切换默认启动会让日常使用失去界面。所以 Phase 2 的"退役"是依赖层面，删除层面归 Phase 4。
 
 **验收**：`contract:compare` 对**新**实现回放 100% 一致；`lint`、`typecheck`、`test`、`build` 全绿。
 
