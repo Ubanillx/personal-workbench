@@ -4,7 +4,7 @@
   "categories": {
     "correctness": "error"
   },
-  "ignorePatterns": ["node_modules/**", "dist-server/**", "web/dist/**", "_archive/**", "data/**"],
+  "ignorePatterns": ["node_modules/**", "dist-server/**", "web/dist/**", "build/**", ".react-router/**", "_archive/**", "data/**"],
   "rules": {
     "no-console": "off",
     "typescript/no-explicit-any": "off",

@@ -2,6 +2,8 @@
 node_modules/
 dist-server/
 web/dist/
+build/
+.react-router/
 
 # 归档的旧实现（含旧代码风格，不参与格式化）
 _archive/

@@ -109,6 +109,12 @@ npm run contract:compare -- --serve-npm rr:start --only "auth.,access-info."
 
 **路由组织**：各批次只改自己的片段文件（`app/routes.tasks.ts` / `routes.people.ts` / `routes.reports.ts`），由 `app/routes.ts` 统一展开——并行迁移不会争抢同一文件。共享辅助函数在 `app/lib/{http,session,db,tasks}.server.ts`。
 
+**RR8 的三条硬约束（迁移时踩到才明确）**
+
+1. **`action` 负责该路径的所有非 GET 方法**：`PATCH /api/todos/:id` 与 `DELETE /api/todos/:id` 必须写在同一个路由文件里、在 `action` 内按 `request.method` 分派；拆成两个文件会互相覆盖。
+2. **只含服务端代码的模块必须用 `.server.ts` 后缀**，否则构建报 `Server-only module referenced by client`（客户端包会试图引入 `node:sqlite`、`node:crypto`）。资源路由只跑在服务端，可放心导入这些模块。
+3. **`db.prepare(...)` 的参数类型是 `SQLInputValue[]`**，不接受 `unknown[]`，helper 内需显式 cast（`params as SQLInputValue[]`）。
+
 **工具侧已修的坑**：`build/server/index.js` 只导出请求处理器、单独运行会立即退出（exit 0），必须由 `react-router-serve` 监听端口 → 新增 `--serve-npm <脚本名>`；Windows 下 spawn `.cmd` 需要 `shell:true`，于是 `stop()` 改用 `taskkill /T` 杀整棵进程树，否则孙进程会继续占用夹具 SQLite 导致清理失败。
 
 ### Phase 3 · 前端迁移（预计 1.5–2 天）
