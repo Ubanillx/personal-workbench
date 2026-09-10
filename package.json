@@ -35,7 +35,7 @@
     "format:check": "prettier --check .",
     "test": "npm run test:db && npm run test:api && npm run test:ui",
     "test:api": "\"%npm_node_execpath%\" --import tsx tools/contract/compare.ts --serve-npm rr:start",
-    "test:ui": "\"%npm_node_execpath%\" --import tsx tools/contract/smoke-ui.ts",
+    "test:ui": "\"%npm_node_execpath%\" --import tsx tools/contract/smoke-ui.ts --require-migrated",
     "test:db": "\"%npm_node_execpath%\" --import tsx --test test/db/backup.test.ts test/db/json-migration.test.ts test/db/migration-backup.test.ts test/db/owner-token.test.ts",
     "owner:reset": "\"%npm_node_execpath%\" --import tsx server/src/cli/reset-owner-token.ts",
     "db:backup": "\"%npm_node_execpath%\" --import tsx server/src/cli/backup-sqlite.ts"

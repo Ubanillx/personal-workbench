@@ -1,7 +1,6 @@
 import { appConfig } from "../lib/context.server";
-import { db, now, run } from "../lib/db.server";
 import { fail, ok } from "../lib/http.server";
-import { findNote } from "../lib/records.server";
+import { deleteNoteRecord, updateNoteRecord } from "../lib/notes.server";
 import { requireOwner } from "../lib/session.server";
 
 /**
@@ -15,20 +14,12 @@ export async function action({ request, params }: { request: Request; params: { 
   const id = params.id;
 
   if (request.method === "DELETE") {
-    run(db(), "DELETE FROM notes WHERE id=?", id);
+    deleteNoteRecord(id);
     return ok(null);
   }
 
-  const current = findNote(id);
-  if (!current) return fail("NOT_FOUND", "笔记不存在", 404);
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
-  run(
-    db(),
-    "UPDATE notes SET content=?,is_pinned=?,updated_at=? WHERE id=?",
-    String(body.content ?? current.content),
-    body.isPinned === undefined ? Number(current.isPinned) : body.isPinned ? 1 : 0,
-    now(),
-    id,
-  );
-  return ok(findNote(id));
+  const updated = updateNoteRecord(id, body);
+  if (!updated) return fail("NOT_FOUND", "笔记不存在", 404);
+  return ok(updated);
 }

@@ -7,6 +7,7 @@ import {
   extensionOf,
   handleUploadError,
   isAllowedExt,
+  listReportsFor,
   normalizeDocType,
   notifyReport,
   persistFile,
@@ -20,15 +21,13 @@ import {
 } from "../lib/reports.server";
 import { requireAuth } from "../lib/session.server";
 
-/** GET /api/reports —— 主人看全部，助理只看自己的；查看者 403 */
+/** GET /api/reports —— 主人看全部，助理只看自己的；查看者 403（列表逻辑与页面 loader 共用） */
 export async function loader({ request }: { request: Request }): Promise<Response> {
   const auth = requireAuth(request, appConfig().sessionCookieName);
   if (!auth.ok) return auth.response;
   const user = auth.user;
   if (user.role === "viewer") return fail("FORBIDDEN", "查看者不能访问周报", 403);
-  const repo = reportRepository();
-  const reports = user.role === "owner" ? repo.findAll() : repo.findByOwner(user.id);
-  return ok(reports.map((report) => toView(report, repo)));
+  return ok(listReportsFor(user));
 }
 
 /** POST /api/reports —— multipart 建单（字段：periodStart/periodEnd/docType/note/ownerId + file） */

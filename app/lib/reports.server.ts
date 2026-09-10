@@ -4,7 +4,7 @@ import path from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { ReportRepository, type ReportDocType, type ReportRecord } from "../../server/src/db/repositories/report-repository";
 import { appConfig } from "./context.server";
-import { db, now, one, run, type User } from "./db.server";
+import { db, now, one, rows, run, type User } from "./db.server";
 import { fail } from "./http.server";
 import { requireAuth } from "./session.server";
 
@@ -39,6 +39,21 @@ export function reportRepository(): ReportRepository {
 
 export function toView(report: ReportRecord, repo: ReportRepository): Record<string, unknown> {
   return { ...report, files: repo.listFiles(report.id) };
+}
+
+/**
+ * 周报列表：主人看全部，助理只看自己的。
+ * 页面 loader 与 GET /api/reports 共用这一份实现（调用方负责各自的 viewer 处理）。
+ */
+export function listReportsFor(user: User): Record<string, unknown>[] {
+  const repo = reportRepository();
+  const reports = user.role === "owner" ? repo.findAll() : repo.findByOwner(user.id);
+  return reports.map((report) => toView(report, repo));
+}
+
+/** 上传表单里"归属人"下拉的数据源：启用中的助理（与旧 UI 过滤 getUsers() 的结果一致） */
+export function listActiveAssistants(): Array<{ id: string; name: string }> {
+  return rows<{ id: string; name: string }>(db(), "SELECT id,name FROM users WHERE role='assistant' AND is_active=1 ORDER BY name");
 }
 
 /**

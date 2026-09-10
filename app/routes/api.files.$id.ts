@@ -1,5 +1,5 @@
 import { appConfig } from "../lib/context.server";
-import { db, run } from "../lib/db.server";
+import { deleteFileRecord } from "../lib/files.server";
 import { ok } from "../lib/http.server";
 import { requireOwner } from "../lib/session.server";
 
@@ -7,6 +7,6 @@ import { requireOwner } from "../lib/session.server";
 export async function action({ request, params }: { request: Request; params: { id: string } }): Promise<Response> {
   const auth = requireOwner(request, appConfig().sessionCookieName);
   if (!auth.ok) return auth.response;
-  run(db(), "DELETE FROM important_files WHERE id=?", params.id);
+  deleteFileRecord(params.id);
   return ok(null);
 }
