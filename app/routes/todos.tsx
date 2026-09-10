@@ -8,30 +8,41 @@ import { requireUserOrRedirect } from "../lib/ui.server";
 
 type TodoRow = { id: string; content: string; todoDate: string | null; isCompleted: number | boolean; completedAt: string | null };
 
+/**
+ * 待办按组织隔离（§14.2）：登录即可用（不再有「主人专属」这一档角色），
+ * 未加入组织的账号由 requireUserOrRedirect 送回 /join（D-34），跨组织数据在域里就已经过滤掉。
+ * `?org=` 是管理员（D-28）的筛选器接缝：既是列表过滤，也是管理员新增时的目标组织。
+ */
 export async function loader({ request }: { request: Request }) {
   const user = requireUserOrRedirect(request);
-  // 待办是主人专属（与 API 的 requireOwner 一致）；非主人看到同样的提示，而不是空白页
-  if (user.role !== "owner") return { items: [] as TodoRow[], forbidden: true };
-  return { items: listTodos() as unknown as TodoRow[], forbidden: false };
+  // 组织筛选器只对管理员有意义（D-28），与 /tasks 页的写法一致
+  const orgFilter = user.role === "admin" ? new URL(request.url).searchParams.get("org") : null;
+  return { items: listTodos(user, orgFilter) as unknown as TodoRow[] };
 }
 
 export async function action({ request }: { request: Request }) {
   const user = requireUserOrRedirect(request);
-  if (user.role !== "owner") return { error: "只有主人可以访问此功能" };
   const payload = await readPayload(request);
   const intent = String(payload.intent ?? "");
   if (intent === "create") {
-    const created = createTodoRecord(String(payload.content ?? ""), payload.todoDate ?? new Date().toISOString().slice(0, 10));
-    return created ? { ok: true } : { error: "待办内容不能为空" };
+    // 组织归属由 app/lib/todos.server.ts 解析：成员/管理者写本组织；
+    // 管理员是全局角色，目标组织先看表单字段，再看页面上的组织筛选器 ?org=（D-28 的接缝）
+    const created = createTodoRecord(user, {
+      content: payload.content,
+      todoDate: payload.todoDate ?? new Date().toISOString().slice(0, 10),
+      orgId: payload.orgId || new URL(request.url).searchParams.get("org"),
+    });
+    return created.ok ? { ok: true } : { error: created.message };
   }
   const id = String(payload.id ?? "");
   if (intent === "toggle") {
-    const updated = updateTodoRecord(id, { isCompleted: Boolean(payload.isCompleted) });
-    return updated ? { ok: true } : { error: "待办不存在" };
+    const updated = updateTodoRecord(user, id, { isCompleted: Boolean(payload.isCompleted) });
+    return updated.ok ? { ok: true } : { error: updated.message };
   }
   if (intent === "delete") {
-    deleteTodoRecord(id);
-    return { ok: true };
+    // 不存在与跨组织给出同一句提示（页面不泄露资源是否存在）
+    const removed = deleteTodoRecord(user, id);
+    return removed.ok ? { ok: true } : { error: removed.message };
   }
   return { error: "未知操作" };
 }
@@ -54,11 +65,11 @@ export default function TodosRoute(): React.ReactElement {
         </Typography.Title>
       </Space>
 
-      {(error || data.forbidden) && (
+      {error && (
         <Alert
           type="error"
           showIcon
-          title={error || "只有主人可以访问此功能"}
+          title={error}
           action={
             <Button size="small" icon={<ReloadOutlined />} onClick={() => revalidator.revalidate()}>
               重试
@@ -67,29 +78,27 @@ export default function TodosRoute(): React.ReactElement {
         />
       )}
 
-      {!data.forbidden && (
-        <Form
-          layout="inline"
-          className="quick-add"
-          onFinish={(values: { content?: string }) => {
-            const content = values.content?.trim();
-            if (!content || busy) return;
-            submit(
-              { intent: "create", content, todoDate: new Date().toISOString().slice(0, 10) },
-              { method: "post", encType: "application/json" },
-            );
-          }}
-        >
-          <Form.Item name="content" className="quick-add-item">
-            <Input placeholder="添加一条今日待办" allowClear />
-          </Form.Item>
-          <Form.Item>
-            <Button color="primary" variant="solid" htmlType="submit" icon={<PlusOutlined />} disabled={busy}>
-              添加
-            </Button>
-          </Form.Item>
-        </Form>
-      )}
+      <Form
+        layout="inline"
+        className="quick-add"
+        onFinish={(values: { content?: string }) => {
+          const content = values.content?.trim();
+          if (!content || busy) return;
+          submit(
+            { intent: "create", content, todoDate: new Date().toISOString().slice(0, 10) },
+            { method: "post", encType: "application/json" },
+          );
+        }}
+      >
+        <Form.Item name="content" className="quick-add-item">
+          <Input placeholder="添加一条今日待办" allowClear />
+        </Form.Item>
+        <Form.Item>
+          <Button color="primary" variant="solid" htmlType="submit" icon={<PlusOutlined />} disabled={busy}>
+            添加
+          </Button>
+        </Form.Item>
+      </Form>
 
       {data.items.length ? (
         <Listy
@@ -124,17 +133,15 @@ export default function TodosRoute(): React.ReactElement {
           )}
         />
       ) : (
-        !data.forbidden && (
-          <Empty
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
-            description={
-              <Space orientation="vertical" size={2}>
-                <Typography.Text strong>暂无待办</Typography.Text>
-                <Typography.Text type="secondary">添加一条今天要完成的事情。</Typography.Text>
-              </Space>
-            }
-          />
-        )
+        <Empty
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+          description={
+            <Space orientation="vertical" size={2}>
+              <Typography.Text strong>暂无待办</Typography.Text>
+              <Typography.Text type="secondary">添加一条今天要完成的事情。</Typography.Text>
+            </Space>
+          }
+        />
       )}
     </Space>
   );

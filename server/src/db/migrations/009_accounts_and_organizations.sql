@@ -42,6 +42,9 @@ CREATE INDEX IF NOT EXISTS idx_join_requests_user
   ON organization_join_requests(user_id, created_at);
 
 -- ---------------------------------------------------------------- 2. 初始组织（D-29）
+--
+-- 只在「已经存在主人账号」的库上建：全新库（测试用的空库）不该凭空多出一个组织，
+-- 而且没有主人时 created_by 会是 NULL，违反 NOT NULL 约束 —— 那会让**每一次全新初始化都失败**。
 
 INSERT INTO organizations (id, name, description, status, created_by, created_at, updated_at, archived_at)
 SELECT
@@ -49,11 +52,15 @@ SELECT
   '默认组织',
   '迁移时自动创建：收纳改造前的全部账号与业务数据，可改名',
   'active',
-  (SELECT id FROM users WHERE role = 'owner' ORDER BY created_at, id LIMIT 1),
+  u.id,
   strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
   strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
   NULL
-WHERE NOT EXISTS (SELECT 1 FROM organizations WHERE id = 'org-default');
+FROM users u
+WHERE u.role = 'owner'
+  AND NOT EXISTS (SELECT 1 FROM organizations WHERE id = 'org-default')
+ORDER BY u.created_at, u.id
+LIMIT 1;
 
 -- ---------------------------------------------------------------- 3. 重建 users
 
@@ -69,8 +76,12 @@ CREATE TABLE users_new (
   is_active            INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
   created_at           TEXT NOT NULL,
   updated_at           TEXT NOT NULL,
-  -- 管理员是全局角色，不隶属组织；组织管理者与普通用户必须有组织
-  CHECK (role = 'admin' OR org_id IS NOT NULL)
+  -- 「组织管理者必须有组织」「管理员不得隶属组织」是数据模型级的真不变量，让数据库兜住；
+  -- 但**普通成员可以没有组织**：注册（D-20）产生的就是「member + org_id 为 NULL」的账号，
+  -- 解散组织（D-33）、被移出组织、同意退出（D-32）也都会把人退回这个状态。
+  -- 初版写成 `CHECK (role='admin' OR org_id IS NOT NULL)` 会让上面四条路径全部失败，已改。
+  CHECK (role <> 'manager' OR org_id IS NOT NULL),
+  CHECK (role <> 'admin' OR org_id IS NULL)
 );
 
 INSERT INTO users_new (id, username, email, name, role, org_id, password_hash, must_change_password, is_active, created_at, updated_at)
@@ -145,6 +156,37 @@ DROP TABLE task_comments;
 ALTER TABLE task_comments_new RENAME TO task_comments;
 
 CREATE INDEX IF NOT EXISTS idx_task_comments_task_id_created_at ON task_comments(task_id, created_at);
+
+-- ---------------------------------------------------------------- 6. 重建 notifications（event_type 的 CHECK 要容纳组织事件）
+
+CREATE TABLE notifications_new (
+  id           TEXT PRIMARY KEY,
+  recipient_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  actor_id     TEXT REFERENCES users(id) ON DELETE SET NULL,
+  task_id      TEXT REFERENCES tasks(id) ON DELETE CASCADE,
+  report_id    TEXT REFERENCES weekly_reports(id) ON DELETE CASCADE,
+  event_type   TEXT NOT NULL CHECK (event_type IN (
+    'task_assigned', 'task_reassigned', 'task_commented', 'task_progress',
+    'task_submitted', 'task_approved', 'task_returned', 'task_overdue',
+    'report_submitted', 'report_approved', 'report_returned',
+    'org_invited', 'org_join_approved', 'org_join_rejected', 'org_removed'
+  )),
+  title        TEXT NOT NULL,
+  message      TEXT NOT NULL,
+  is_read      INTEGER NOT NULL DEFAULT 0 CHECK (is_read IN (0, 1)),
+  created_at   TEXT NOT NULL,
+  read_at      TEXT
+);
+
+INSERT INTO notifications_new (id, recipient_id, actor_id, task_id, report_id, event_type, title, message, is_read, created_at, read_at)
+SELECT id, recipient_id, actor_id, task_id, report_id, event_type, title, message, is_read, created_at, read_at FROM notifications;
+
+DROP TABLE notifications;
+ALTER TABLE notifications_new RENAME TO notifications;
+
+CREATE INDEX IF NOT EXISTS idx_notifications_recipient_read ON notifications(recipient_id, is_read, created_at);
+CREATE INDEX IF NOT EXISTS idx_notifications_task ON notifications(task_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_notifications_report ON notifications(report_id);
 
 -- ---------------------------------------------------------------- 5. 五张业务表加 org_id
 

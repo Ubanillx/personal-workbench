@@ -1,7 +1,11 @@
-import { db, isStatus, rows } from "./db.server";
-import { SELECT_TASK, toTaskView } from "./tasks.server";
+import { db, isStatus, rows, type User } from "./db.server";
+import { SELECT_TASK, toTaskView, visibilityClauses } from "./tasks.server";
 
-/** 回顾统计共享逻辑：页面 loader 与 /api/review 资源路由共用（筛选与统计口径与旧实现逐字一致） */
+/**
+ * 回顾统计共享逻辑：页面 loader 与 /api/review 资源路由共用（筛选与统计口径与旧实现逐字一致）。
+ * 组织隔离复用 tasks.server 的 visibilityClauses（§14.3）：admin 全部组织、manager 本组织、
+ * 私密任务只对创建它的组织管理者可见；member 与未加入组织的账号看不到任何数据。
+ */
 
 export type ReviewFilters = {
   from?: string | null;
@@ -12,10 +16,11 @@ export type ReviewFilters = {
 
 export type ReviewSummary = { total: number; completed: number; active: number; overdue: number; completionRate: number };
 
-export function reviewData(filters: ReviewFilters): { tasks: unknown[]; summary: ReviewSummary } {
+export function reviewData(user: User, filters: ReviewFilters): { tasks: unknown[]; summary: ReviewSummary } {
   const database = db();
-  const cond = ["t.archived_at IS NULL"];
-  const params: string[] = [];
+  const scope = visibilityClauses(user);
+  const cond = ["t.archived_at IS NULL", ...scope.clauses];
+  const params: string[] = [...scope.params];
   const { from, to, ownerId, status } = filters;
   if (from !== undefined && from !== null) {
     cond.push("substr(t.updated_at,1,10)>=?");

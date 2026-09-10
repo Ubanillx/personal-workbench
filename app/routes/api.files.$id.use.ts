@@ -1,15 +1,14 @@
 import { appConfig } from "../lib/context.server";
-import { fileExists, markFileUsedRecord } from "../lib/files.server";
-import { fail, ok } from "../lib/http.server";
-import { findFile } from "../lib/records.server";
-import { requireOwner } from "../lib/session.server";
+import { markFileUsedRecord } from "../lib/files.server";
+import { ok } from "../lib/http.server";
+import { failureResponse } from "../lib/records.server";
+import { requireManager } from "../lib/session.server";
 
-/** POST /api/files/:id/use —— 标记最近使用 */
+/** POST /api/files/:id/use —— 标记最近使用；文件库限管理员与组织管理者（§4），不存在与跨组织一律 404 */
 export async function action({ request, params }: { request: Request; params: { id: string } }): Promise<Response> {
-  const auth = requireOwner(request, appConfig().sessionCookieName);
+  const auth = requireManager(request, appConfig().sessionCookieName);
   if (!auth.ok) return auth.response;
-  const id = params.id;
-  if (!fileExists(id)) return fail("NOT_FOUND", "文件不存在", 404);
-  markFileUsedRecord(id);
-  return ok(findFile(id));
+  const used = markFileUsedRecord(auth.user, params.id);
+  if (!used.ok) return failureResponse(used);
+  return ok(used.data);
 }

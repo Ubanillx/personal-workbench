@@ -3,12 +3,14 @@ import { useLoaderData, useNavigate, useRevalidator, useSearchParams } from "rea
 import { Alert, Button, Card, Col, DatePicker, Flex, Row, Select, Space, Statistic, Table, Typography, type TableProps } from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
-import type { Task, TaskStatus } from "../../shared/types/domain";
+import type { Task, TaskStatus, UserRole } from "../../shared/types/domain";
+import type { User } from "../lib/db.server";
+import { listAllAccounts, listMembers } from "../lib/organization.server";
 import { reviewData } from "../lib/review.server";
+import { canManageTasks } from "../lib/tasks.server";
 import { requireUserOrRedirect } from "../lib/ui.server";
-import { listUsersFor } from "../lib/users.server";
 
-type MemberRow = { id: string; name: string; role: "owner" | "assistant" | "viewer"; isActive: number | boolean };
+type MemberRow = { id: string; name: string; role: UserRole };
 
 function formatDate(value: Date): string {
   return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
@@ -18,10 +20,24 @@ function labelsFor(status: TaskStatus): string {
   return { todo: "待办", in_progress: "进行中", pending_review: "待验收", completed: "已完成" }[status];
 }
 
-/** 回顾统计 loader：与 GET /api/review 共用 app/lib/review.server.ts；仅主人可见 */
+/** 负责人筛选的候选：admin 全部账号；manager 本组织成员加全局管理员（管理员也可以当负责人） */
+function ownerCandidates(user: User): MemberRow[] {
+  const toRow = (row: Record<string, unknown>): MemberRow => ({
+    id: String(row.id),
+    name: String(row.name ?? ""),
+    role: String(row.role ?? "member") as UserRole,
+  });
+  if (user.role === "admin") return listAllAccounts().map(toRow);
+  if (user.role === "manager" && user.orgId) {
+    return [...listMembers(user.orgId), ...listAllAccounts().filter((row) => row.role === "admin")].map(toRow);
+  }
+  return [];
+}
+
+/** 回顾统计 loader：与 GET /api/review 共用 app/lib/review.server.ts；仅管理员与组织管理者可见（§4） */
 export async function loader({ request }: { request: Request }) {
   const user = requireUserOrRedirect(request);
-  if (user.role !== "owner") {
+  if (!canManageTasks(user)) {
     return {
       forbidden: true as const,
       range: "month",
@@ -49,8 +65,7 @@ export async function loader({ request }: { request: Request }) {
     ownerId: query.get("ownerId") ?? "",
     status: query.get("status") ?? "",
   };
-  const { tasks, summary } = reviewData(filters);
-  const members = (listUsersFor("owner") as unknown as MemberRow[]).filter((member) => member.role !== "viewer");
+  const { tasks, summary } = reviewData(user, filters);
   return {
     forbidden: false as const,
     range,
@@ -58,7 +73,7 @@ export async function loader({ request }: { request: Request }) {
     to: toParam,
     ownerId: filters.ownerId,
     status: filters.status,
-    members,
+    members: ownerCandidates(user),
     tasks: tasks as unknown as Task[],
     summary,
   };
@@ -78,7 +93,7 @@ export default function ReviewRoute(): React.ReactElement {
             回顾统计
           </Typography.Title>
         </div>
-        <Alert type="error" showIcon title="当前账户没有回顾统计权限" description="回顾统计仅对主人开放，请使用主人令牌登录。" />
+        <Alert type="error" showIcon title="当前账户没有回顾统计权限" description="回顾统计仅对管理员与组织管理者开放。" />
       </Space>
     );
   }

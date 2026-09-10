@@ -1,7 +1,7 @@
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import net from "node:net";
 import type { ContractCase, Role } from "./cases";
-import { TOKENS, type Fixture } from "./fixture";
+import { ACCOUNTS, type Fixture } from "./fixture";
 
 const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/giu;
 const ISO_RE = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z/gu;
@@ -155,10 +155,12 @@ export async function runCases(options: {
   const recorded: RecordedResponse[] = [];
 
   const login = async (role: Role): Promise<string> => {
-    const response = await fetch(`${options.baseUrl}/api/auth/access`, {
+    const account = (ACCOUNTS as Partial<Record<Role, { username: string; password: string }>>)[role];
+    if (!account) throw new Error(`角色 ${role} 没有配置登录凭据（fixture.ACCOUNTS）`);
+    const response = await fetch(`${options.baseUrl}/api/auth/login`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ token: TOKENS[role] }),
+      body: JSON.stringify({ username: account.username, password: account.password }),
     });
     const raw = response.headers.getSetCookie?.()[0] ?? response.headers.get("set-cookie") ?? "";
     const pair = raw.split(";")[0] ?? "";

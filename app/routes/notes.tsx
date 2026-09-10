@@ -8,25 +8,35 @@ import { requireUserOrRedirect } from "../lib/ui.server";
 
 type NoteRow = { id: string; content: string; isPinned: number | boolean; createdAt: string; updatedAt: string };
 
+/**
+ * 随手记按组织隔离（§14.2）：登录即可用（不再有「主人专属」这一档角色），
+ * 未加入组织的账号由 requireUserOrRedirect 送回 /join（D-34），跨组织数据在域里就已经过滤掉。
+ * `?org=` 是管理员（D-28）的筛选器接缝：既是列表过滤，也是管理员新增时的目标组织。
+ */
 export async function loader({ request }: { request: Request }) {
   const user = requireUserOrRedirect(request);
-  // 随手记是主人专属（与 API 的 requireOwner 一致）
-  if (user.role !== "owner") return { items: [] as NoteRow[], forbidden: true };
-  return { items: listNotes() as unknown as NoteRow[], forbidden: false };
+  // 组织筛选器只对管理员有意义（D-28），与 /tasks 页的写法一致
+  const orgFilter = user.role === "admin" ? new URL(request.url).searchParams.get("org") : null;
+  return { items: listNotes(user, orgFilter) as unknown as NoteRow[] };
 }
 
 export async function action({ request }: { request: Request }) {
   const user = requireUserOrRedirect(request);
-  if (user.role !== "owner") return { error: "只有主人可以访问此功能" };
   const payload = await readPayload(request);
   const intent = String(payload.intent ?? "");
   if (intent === "create") {
-    const created = createNoteRecord(payload.content);
-    return created ? { ok: true } : { error: "笔记内容不能为空" };
+    // 组织归属由 app/lib/notes.server.ts 解析：成员/管理者写本组织；
+    // 管理员是全局角色，目标组织先看表单字段，再看页面上的组织筛选器 ?org=（D-28 的接缝）
+    const created = createNoteRecord(user, {
+      content: payload.content,
+      orgId: payload.orgId || new URL(request.url).searchParams.get("org"),
+    });
+    return created.ok ? { ok: true } : { error: created.message };
   }
   if (intent === "delete") {
-    deleteNoteRecord(String(payload.id ?? ""));
-    return { ok: true };
+    // 不存在与跨组织给出同一句提示（页面不泄露资源是否存在）
+    const removed = deleteNoteRecord(user, String(payload.id ?? ""));
+    return removed.ok ? { ok: true } : { error: removed.message };
   }
   return { error: "未知操作" };
 }
@@ -49,11 +59,11 @@ export default function NotesRoute(): React.ReactElement {
         </Typography.Title>
       </Space>
 
-      {(error || data.forbidden) && (
+      {error && (
         <Alert
           type="error"
           showIcon
-          title={error || "只有主人可以访问此功能"}
+          title={error}
           action={
             <Button size="small" icon={<ReloadOutlined />} onClick={() => revalidator.revalidate()}>
               重试
@@ -62,25 +72,23 @@ export default function NotesRoute(): React.ReactElement {
         />
       )}
 
-      {!data.forbidden && (
-        <Form
-          className="page-stack"
-          onFinish={(values: { content?: string }) => {
-            const content = values.content?.trim();
-            if (!content || busy) return;
-            submit({ intent: "create", content }, { method: "post", encType: "application/json" });
-          }}
-        >
-          <Form.Item name="content" className="quick-add-item">
-            <Input.TextArea placeholder="记录想法、会议要点或临时事项" rows={3} allowClear />
-          </Form.Item>
-          <Form.Item>
-            <Button color="primary" variant="solid" htmlType="submit" disabled={busy}>
-              保存记录
-            </Button>
-          </Form.Item>
-        </Form>
-      )}
+      <Form
+        className="page-stack"
+        onFinish={(values: { content?: string }) => {
+          const content = values.content?.trim();
+          if (!content || busy) return;
+          submit({ intent: "create", content }, { method: "post", encType: "application/json" });
+        }}
+      >
+        <Form.Item name="content" className="quick-add-item">
+          <Input.TextArea placeholder="记录想法、会议要点或临时事项" rows={3} allowClear />
+        </Form.Item>
+        <Form.Item>
+          <Button color="primary" variant="solid" htmlType="submit" disabled={busy}>
+            保存记录
+          </Button>
+        </Form.Item>
+      </Form>
 
       {data.items.length ? (
         <Listy
@@ -102,17 +110,15 @@ export default function NotesRoute(): React.ReactElement {
           )}
         />
       ) : (
-        !data.forbidden && (
-          <Empty
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
-            description={
-              <Space orientation="vertical" size={2}>
-                <Typography.Text strong>暂无随手记</Typography.Text>
-                <Typography.Text type="secondary">记录会议要点或临时想法。</Typography.Text>
-              </Space>
-            }
-          />
-        )
+        <Empty
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+          description={
+            <Space orientation="vertical" size={2}>
+              <Typography.Text strong>暂无随手记</Typography.Text>
+              <Typography.Text type="secondary">记录会议要点或临时想法。</Typography.Text>
+            </Space>
+          }
+        />
       )}
     </Space>
   );

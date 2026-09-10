@@ -27,8 +27,9 @@ import {
 } from "antd";
 import { DownloadOutlined, ReloadOutlined, UploadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
-import { listActiveAssistants, listReportsFor } from "../lib/reports.server";
+import { listReportOwnersFor, listReportsFor } from "../lib/reports.server";
 import { requireUserOrRedirect } from "../lib/ui.server";
+import type { UserRole } from "../../shared/types/domain";
 
 type ReportDocTypeLike = "weekly_report" | "summary" | "other";
 type ReportStatusLike = "submitted" | "approved" | "returned";
@@ -45,7 +46,8 @@ type ReportLike = {
   reviewNote: string | null;
   files: ReportFileLike[];
 };
-type MeLike = { id: string; name: string; role: "owner" | "assistant" | "viewer" };
+type MeLike = { id: string; name: string; role: UserRole; orgId: string | null; orgName: string | null };
+type OwnerLike = { id: string; name: string; orgName: string | null };
 
 const docTypeLabels: Record<ReportDocTypeLike, string> = { weekly_report: "周报", summary: "总结", other: "其他" };
 const statusLabels: Record<ReportStatusLike, string> = { submitted: "已提交", approved: "已通过", returned: "已退回" };
@@ -72,19 +74,22 @@ const docTypeOptions: Array<{ value: ReportDocTypeLike; label: string }> = [
 
 /**
  * 周报页 loader：列表逻辑与 GET /api/reports 共用 app/lib/reports.server.ts 的实现，
- * 页面不通过 HTTP 调自己的 API。查看者与旧 SPA 一致：进不来列表，页面显示错误提示。
+ * 页面不通过 HTTP 调自己的 API。列表已按组织范围过滤：管理员看全部组织，
+ * 组织管理者看本组织，普通用户只看自己提交的。
+ * 未登录 / 待改密 / 未入组三类账号由 requireUserOrRedirect 统一挡在前面（ui.server.ts 的三道门）。
  */
 export async function loader({ request }: { request: Request }) {
   const user = requireUserOrRedirect(request);
-  if (user.role === "viewer") {
-    return { user: user as MeLike, reports: [] as ReportLike[], assistants: [], error: "查看者不能访问周报" };
-  }
   return {
     user: user as MeLike,
     reports: listReportsFor(user) as unknown as ReportLike[],
-    assistants: user.role === "owner" ? listActiveAssistants() : [],
-    error: "",
+    owners: listReportOwnersFor(user),
   };
+}
+
+/** 管理员跨组织指派归属人时补上组织名，避免同名成员分不清 */
+function ownerLabel(me: MeLike, owner: OwnerLike): string {
+  return me.role === "admin" && owner.orgName ? `${owner.name}（${owner.orgName}）` : owner.name;
 }
 
 /** 从 API 信封里取数据；失败时抛出与旧 apiClient 同文案的错误 */
@@ -114,7 +119,7 @@ async function postForm(path: string, form: FormData): Promise<ReportLike> {
 
 export default function ReportsRoute(): React.ReactElement {
   const { message } = AntdApp.useApp();
-  const { user, reports, assistants, error: loaderError } = useLoaderData<typeof loader>();
+  const { user, reports, owners } = useLoaderData<typeof loader>();
   const navigation = useNavigation();
   const revalidator = useRevalidator();
   const [error, setError] = useState("");
@@ -122,6 +127,8 @@ export default function ReportsRoute(): React.ReactElement {
   const [status, setStatus] = useState("all");
   const [owner, setOwner] = useState("all");
   const busy = navigation.state !== "idle" || revalidator.state !== "idle";
+  // 管理员与组织管理者可以指派/筛选归属人，普通用户只能提交自己的
+  const canPickOwner = user.role !== "member";
 
   const filtered = useMemo(
     () =>
@@ -134,14 +141,14 @@ export default function ReportsRoute(): React.ReactElement {
     [reports, type, status, owner],
   );
   const ownerOptions = useMemo(
-    () => [{ value: "all", label: "全部成员" }, ...assistants.map((member) => ({ value: member.id, label: member.name }))],
-    [assistants],
+    () => [{ value: "all", label: "全部成员" }, ...owners.map((item) => ({ value: item.id, label: ownerLabel(user, item) }))],
+    [owners, user],
   );
 
   const refresh = (): void => {
     void revalidator.revalidate();
   };
-  const shownError = error || loaderError;
+  const shownError = error;
 
   return (
     <Space orientation="vertical" size="large" className="page-stack">
@@ -151,7 +158,7 @@ export default function ReportsRoute(): React.ReactElement {
           <Typography.Title level={3} className="page-title">
             周报 / 总结
           </Typography.Title>
-          <Typography.Text type="secondary">存放助理或实习生的每周周报与总结文档（Excel / Word），上传后提交主人审核。</Typography.Text>
+          <Typography.Text type="secondary">存放成员的每周周报与总结文档（Excel / Word），上传后由管理员或组织管理者审核。</Typography.Text>
         </div>
         <Button icon={<ReloadOutlined />} onClick={refresh} loading={busy}>
           刷新
@@ -171,24 +178,22 @@ export default function ReportsRoute(): React.ReactElement {
         />
       ) : null}
 
-      {user.role !== "viewer" ? (
-        <UploadForm
-          me={user}
-          assistants={assistants}
-          onDone={(isOwner) => {
-            void message.success(isOwner ? "已上传并提交审核" : "已提交审核");
-            refresh();
-          }}
-          onError={setError}
-        />
-      ) : null}
+      <UploadForm
+        me={user}
+        owners={owners}
+        onDone={(asProxy) => {
+          void message.success(asProxy ? "已上传并提交审核" : "已提交审核");
+          refresh();
+        }}
+        onError={setError}
+      />
 
       <Card variant="outlined" title="周报列表" className="fill-card">
         <Space orientation="vertical" size="middle" className="page-stack">
           <Space wrap size="small">
             <Select value={type} onChange={setType} options={typeOptions} style={{ width: 132 }} />
             <Select value={status} onChange={setStatus} options={statusOptions} style={{ width: 132 }} />
-            {user.role === "owner" ? <Select value={owner} onChange={setOwner} options={ownerOptions} style={{ width: 160 }} /> : null}
+            {canPickOwner ? <Select value={owner} onChange={setOwner} options={ownerOptions} style={{ width: 160 }} /> : null}
           </Space>
 
           {navigation.state === "loading" ? (
@@ -226,13 +231,13 @@ export default function ReportsRoute(): React.ReactElement {
 
 function UploadForm({
   me,
-  assistants,
+  owners,
   onDone,
   onError,
 }: {
   me: MeLike;
-  assistants: Array<{ id: string; name: string }>;
-  onDone: (isOwner: boolean) => void;
+  owners: OwnerLike[];
+  onDone: (asProxy: boolean) => void;
   onError: (message: string) => void;
 }): React.ReactElement {
   const [ownerId, setOwnerId] = useState("");
@@ -242,13 +247,14 @@ function UploadForm({
   const [note, setNote] = useState("");
   const [fileList, setFileList] = useState<UploadFile[]>([]);
   const [busy, setBusy] = useState(false);
-  const isOwner = me.role === "owner";
+  // 管理员与组织管理者可以代传（服务端按组织范围校验归属人），普通用户只能提交自己的
+  const canPickOwner = me.role !== "member";
   // Upload 由本页手动提交（beforeUpload 返回 false），因此文件从 fileList 的 originFileObj 取
   const rawFile = fileList[0]?.originFileObj ?? null;
 
   const submit = (): void => {
     if (!rawFile || !periodStart || !periodEnd || busy) return;
-    if (isOwner && !ownerId) {
+    if (canPickOwner && !ownerId) {
       onError("请选择归属人");
       return;
     }
@@ -258,11 +264,11 @@ function UploadForm({
     form.append("periodEnd", periodEnd);
     form.append("docType", docType);
     form.append("note", note.trim());
-    form.append("ownerId", isOwner ? ownerId : me.id);
+    form.append("ownerId", canPickOwner ? ownerId : me.id);
     form.append("file", rawFile);
     void postForm("/api/reports", form)
       .then(() => {
-        onDone(isOwner);
+        onDone(canPickOwner);
         setOwnerId("");
         setPeriodStart("");
         setPeriodEnd("");
@@ -278,14 +284,14 @@ function UploadForm({
     <Card variant="outlined" title="上传周报 / 总结">
       <Form layout="vertical" onFinish={submit}>
         <Row gutter={[16, 0]}>
-          {isOwner ? (
+          {canPickOwner ? (
             <Col xs={24} sm={12} lg={6}>
               <Form.Item label="归属人" required>
                 <Select
                   value={ownerId || null}
                   onChange={(value: string) => setOwnerId(value)}
-                  placeholder="选择归属人（助理）"
-                  options={assistants.map((member) => ({ value: member.id, label: member.name }))}
+                  placeholder="选择归属人"
+                  options={owners.map((item) => ({ value: item.id, label: ownerLabel(me, item) }))}
                   style={{ width: "100%" }}
                 />
               </Form.Item>
@@ -349,7 +355,7 @@ function UploadForm({
           htmlType="submit"
           icon={<UploadOutlined />}
           loading={busy}
-          disabled={!rawFile || !periodStart || !periodEnd || busy || (isOwner && !ownerId)}
+          disabled={!rawFile || !periodStart || !periodEnd || busy || (canPickOwner && !ownerId)}
         >
           {busy ? "上传中…" : "上传并提交"}
         </Button>
@@ -374,9 +380,10 @@ function ReportItem({
   const [busy, setBusy] = useState(false);
   const [returnOpen, setReturnOpen] = useState(false);
   const [returnNote, setReturnNote] = useState("");
-  const isOwner = me.role === "owner";
+  // 管理员与组织管理者可以审批/退回本组织周报；普通用户只能看自己提交的
+  const canReview = me.role !== "member";
   const isOwnerOfReport = report.ownerId === me.id;
-  const canResubmit = !isOwner && isOwnerOfReport && report.status === "returned";
+  const canResubmit = report.status === "returned" && (canReview || isOwnerOfReport);
   const latest = report.files[report.files.length - 1];
 
   const run = (fn: () => Promise<ReportLike>): void => {
@@ -391,7 +398,7 @@ function ReportItem({
   const items: DescriptionsProps["items"] = [
     { key: "period", label: "周期", children: `${report.periodStart} ~ ${report.periodEnd}` },
     ...(report.note ? [{ key: "note", label: "备注", children: report.note }] : []),
-    ...(report.reviewNote ? [{ key: "reviewNote", label: "主人批注", children: report.reviewNote }] : []),
+    ...(report.reviewNote ? [{ key: "reviewNote", label: "审核批注", children: report.reviewNote }] : []),
     ...(report.files.length
       ? [
           {
@@ -423,7 +430,7 @@ function ReportItem({
       </Space>
       <Descriptions size="small" column={1} colon={false} items={items} />
       <Space wrap size="small">
-        {isOwner && report.status === "submitted" ? (
+        {canReview && report.status === "submitted" ? (
           <>
             <Button disabled={busy} onClick={() => run(() => postJson(`/api/reports/${report.id}/approve`))}>
               通过

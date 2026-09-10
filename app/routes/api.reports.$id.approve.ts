@@ -1,34 +1,17 @@
-import { db, now } from "../lib/db.server";
+import { appConfig } from "../lib/context.server";
 import { fail, ok } from "../lib/http.server";
-import { notifyReport, reportRepository, requireOwnerForReports, toView } from "../lib/reports.server";
+import { approveReport } from "../lib/reports.server";
+import { requireManager } from "../lib/session.server";
 
-/** POST /api/reports/:id/approve —— 仅主人，仅"已提交"状态 */
+/**
+ * POST /api/reports/:id/approve —— 管理员或**本组织**组织管理者，仅"已提交"状态。
+ * 403 文案由 requireManager 统一（"只有管理员或组织管理者可以执行此操作"），
+ * 组织边界与状态判定在 app/lib/reports.server.ts（跨组织 404）。
+ */
 export async function action({ request, params }: { request: Request; params: { id?: string } }): Promise<Response> {
-  const auth = requireOwnerForReports(request);
+  const auth = requireManager(request, appConfig().sessionCookieName);
   if (!auth.ok) return auth.response;
-  const user = auth.user;
-
-  const repo = reportRepository();
-  const report = repo.findById(String(params.id));
-  if (!report) return fail("NOT_FOUND", "周报不存在", 404);
-  if (report.status !== "submitted") return fail("INVALID_STATE", "只有已提交的周报才能通过", 400);
-
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
-  const note = String(body.note ?? "")
-    .trim()
-    .slice(0, 2000);
-  const stamp = now();
-  repo.update(report.id, { status: "approved", reviewNote: note || null, reviewedAt: stamp });
-  notifyReport(
-    db(),
-    report.ownerId,
-    user.id,
-    report.id,
-    "report_approved",
-    "周报已通过",
-    `你的周报（${report.periodStart}~${report.periodEnd}）已通过`,
-  );
-  const updated = repo.findById(report.id);
-  if (!updated) throw new Error("Report not found");
-  return ok(toView(updated, repo));
+  const result = approveReport(auth.user, String(params.id), body);
+  return result.ok ? ok(result.data, result.status) : fail(result.code, result.message, result.status);
 }
