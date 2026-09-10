@@ -11,7 +11,7 @@ export class SqliteMigrationRunner {
     this.database.exec("CREATE TABLE IF NOT EXISTS schema_migrations (version TEXT PRIMARY KEY, applied_at TEXT NOT NULL)");
     const appliedRows = this.database.prepare("SELECT version FROM schema_migrations ORDER BY version").all() as Array<{ version: string }>;
     const applied = new Set(appliedRows.map((row) => row.version));
-    const files = readdirSync(this.migrationsDirectory).filter((file) => file.endsWith(".sql")).sort();
+    const files = readdirSync(this.migrationsDirectory).filter((file) => file.endsWith(".sql")).toSorted();
     const appliedNow: string[] = [];
     // Some migrations rebuild tables that are referenced by foreign keys.
     // SQLite only allows toggling foreign-key enforcement outside a transaction.
@@ -33,7 +33,7 @@ export class SqliteMigrationRunner {
       this.database.exec("PRAGMA foreign_keys = ON");
       throw error;
     }
-    const currentVersion = [...applied, ...appliedNow].sort().at(-1) ?? "none";
+    const currentVersion = [...applied, ...appliedNow].toSorted().at(-1) ?? "none";
     return { applied: appliedNow, currentVersion };
   }
 }

@@ -81,7 +81,7 @@ export type ImportantFile = { id: string; name: string; filePath: string; catego
 export type Collaborator = { id: string; name: string; role: "owner" | "assistant" | "viewer"; isActive: boolean; createdAt: string; updatedAt: string };
 export const getFiles = (search = "", category = "") => request<ImportantFile[]>(`/files?${new URLSearchParams({ ...(search ? { search } : {}), ...(category ? { category } : {}) }).toString()}`);
 export const createFile = (input: { name: string; filePath: string; category?: string }) => request<ImportantFile>("/files", { method: "POST", body: JSON.stringify(input) });
-export const useFile = (id: string) => request<ImportantFile>(`/files/${id}/use`, { method: "POST" });
+export const markFileUsed = (id: string) => request<ImportantFile>(`/files/${id}/use`, { method: "POST" });
 export const deleteFile = (id: string) => request<null>(`/files/${id}`, { method: "DELETE" });
 export const getUsers = () => request<Collaborator[]>("/users");
 export const createUser = (input: { name: string; role: "assistant" | "viewer" }) => request<{ user: Collaborator; token: string }>("/users", { method: "POST", body: JSON.stringify(input) });

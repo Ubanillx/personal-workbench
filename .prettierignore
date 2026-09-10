@@ -1,0 +1,13 @@
+# 依赖与构建产物
+node_modules/
+dist-server/
+web/dist/
+
+# 归档的旧实现（含旧代码风格，不参与格式化）
+_archive/
+
+# 运行时数据
+data/
+
+# 锁文件体积大、由 npm 生成，不格式化
+package-lock.json

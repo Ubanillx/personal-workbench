@@ -1,6 +1,5 @@
-import { createHash } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
-import type { LegacyWorkbench, MigrationStatistics, TaskSource, UserRole } from "../types/database";
+import type { LegacyWorkbench, MigrationStatistics, UserRole } from "../types/database";
 import { assertNonEmptyString, createEmptyStatistics, isoFromMillis, normalizeLegacyWorkbench, normalizeTaskSource, normalizeTaskStatus, sha256 } from "../types/database";
 import { SqliteMigrationRunner } from "./migration-runner";
 

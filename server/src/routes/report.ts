@@ -4,7 +4,7 @@ import path from "node:path";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { DatabaseClient } from "../db/client";
 import type { AppConfig } from "../config/env";
-import { ReportRepository, type ReportDocType, type ReportRecord, type ReportStatus } from "../db/repositories/report-repository";
+import { ReportRepository, type ReportDocType, type ReportRecord } from "../db/repositories/report-repository";
 
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
 const ALLOWED_EXTS = new Set([".xlsx", ".xls", ".docx", ".doc"]);
@@ -247,6 +247,7 @@ function extensionOf(filename: string): string {
   return idx > 0 ? base.slice(idx).toLowerCase() : "";
 }
 function sanitizeName(filename: string): string {
+  // oxlint-disable-next-line no-control-regex -- 需要剔除文件名里的控制字符与路径分隔符
   return path.basename(filename ?? "").replace(/[\u0000-\u001f/\\]/gu, "").slice(0, 200) || "未命名文件";
 }
 function extFromStoredName(storedName: string): string {

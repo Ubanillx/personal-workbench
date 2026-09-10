@@ -21,7 +21,7 @@ test("周报功能会执行上传、代传、审核、退回、版本与权限",
 
   const owner = await login(app, "owner-token");
   const assistant = await login(app, "assistant-a-token");
-  const assistantB = await login(app, "assistant-b-token");
+  await login(app, "assistant-b-token");
   const viewer = await login(app, "viewer-token");
 
   // viewer 不可见

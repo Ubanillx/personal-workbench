@@ -1,5 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
-import type { LegacyFile, LegacyNote, LegacyTodo } from "../../types/database";
+import type { LegacyTodo } from "../../types/database";
 
 export type TodoRecord = { id: string; content: string; todoDate: string | null; isCompleted: boolean; completedAt: string | null; createdAt: string; updatedAt: string };
 export type CreateTodoInput = Omit<TodoRecord, "id"> & { id: string };

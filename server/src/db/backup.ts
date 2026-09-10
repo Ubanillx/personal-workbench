@@ -22,6 +22,6 @@ export async function backupOpenDatabase(source: DatabaseSync, backupDirectory: 
 }
 
 async function pruneBackups(backupDirectory: string, keep: number): Promise<void> {
-  const files = (await readdir(backupDirectory)).filter((file) => file.endsWith(".sqlite.bak")).sort();
+  const files = (await readdir(backupDirectory)).filter((file) => file.endsWith(".sqlite.bak")).toSorted();
   for (const oldFile of files.slice(0, Math.max(0, files.length - keep))) await unlink(path.join(backupDirectory, oldFile));
 }
