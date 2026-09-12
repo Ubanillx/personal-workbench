@@ -436,15 +436,31 @@ cmd_init() {
   log "systemd 单元已启用（$SERVICE_NAME.service）"
 
   # 4) sudoers：只授权这一个绝对路径，避免 NOPASSWD: ALL
+  #
+  # 模板里带一行 `Defaults:<账号> !requiretty`：经典 sudo 在 RHEL/CentOS 上默认开着
+  # requiretty，少了这行，Jenkins 的非交互 sudo 会被拒。但 **sudo-rs**（Ubuntu 25.10+
+  # 默认的 sudo 实现）不认识 requiretty，visudo 会直接判语法错：
+  #   syntax error: unknown setting: 'requiretty'
+  # 于是：先按完整模板校验，不通过就退化成「去掉 Defaults 行」的版本 —— sudo-rs 本身
+  # 没有 tty 要求，去掉那行语义等价。两条都不通过才放弃并提示人工检查。
   tmp="$(mktemp)"
+  tmp_alt="$(mktemp)"
   render_template "$ROOT/share/deploy-templates/sudoers.${APP_NAME}.in" "$tmp"
   if visudo -cf "$tmp" >/dev/null 2>&1; then
     install -m 0440 -o root -g root "$tmp" "$SUDOERS_PATH"
     log "已写入 sudoers：$SUDOERS_PATH（允许 $DEPLOY_USER 免密执行 $ROOT/bin/deploy.sh）"
   else
-    warn "sudoers 模板校验失败，已跳过安装；请手工检查 $tmp"
+    grep -v '^Defaults:' "$tmp" >"$tmp_alt"
+    if visudo -cf "$tmp_alt" >/dev/null 2>&1; then
+      install -m 0440 -o root -g root "$tmp_alt" "$SUDOERS_PATH"
+      warn "本机 sudo 不认识 requiretty（sudo-rs 的行为），已改用不带 Defaults 行的版本"
+      log "已写入 sudoers：$SUDOERS_PATH（允许 $DEPLOY_USER 免密执行 $ROOT/bin/deploy.sh）"
+    else
+      warn "sudoers 模板校验失败，已跳过安装；去掉 Defaults 行后仍不通过，请人工检查下面这份："
+      warn "$(cat "$tmp_alt")"
+    fi
   fi
-  rm -f "$tmp"
+  rm -f "$tmp" "$tmp_alt"
 
   cat <<EOF
 

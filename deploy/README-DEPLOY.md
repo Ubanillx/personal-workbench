@@ -222,17 +222,18 @@ journalctl -u personal-workbench -f
 
 ## 7. 排障
 
-| 现象                                              | 原因与处理                                                                                                                     |
-| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `目标机上还没有 …/bin/deploy.sh`                  | 没做 §3 第 1 步的一次性 init。按提示执行即可。                                                                                 |
-| `sudo: no tty present` / `a password is required` | sudoers 片段没装或账号不对；确认 `/etc/sudoers.d/personal-workbench` 存在且部署账号在授权行里。                                |
-| 部署脚本报 `Node 版本过低`                        | 目标机的 `node` 太旧，或 systemd/sudo 环境里根本没找到 node（nvm 装的）。换系统级安装或 `--node-bin`。                         |
-| 健康检查超时，已自动回滚                          | 看回滚前打印的 `journalctl` 片段。常见：`.env` 里 `PORT` 与防火墙/占用冲突、`DATABASE_PATH` 目录不可写、迁移失败。             |
-| `EADDRINUSE`                                      | 端口被别的进程占了：`ss -lntp \| grep 17500`。注意服务是 `User=workbench`，需要相应权限才能看到占用者。                        |
-| SSH 报 `Host key verification failed`             | 目标机换过主机密钥（重装/换机）。删掉 Jenkins 构建机 `~/.ssh/known_hosts` 里对应条目后重跑。                                   |
-| `npm ci` 报 package.json 与 lockfile 不同步       | 改了 `package.json` 的依赖分类或版本却没更新 lockfile。本地跑 `npm install --package-lock-only` 后提交 `package-lock.json`。   |
-| 构建在 `rm build/` 一步失败                       | Windows 上才会遇到：`tools/build/prebuild.ts` 会先清理占用进程。Linux 构建机不会（Jenkins 上构建/测试/打包是同一次构建产物）。 |
-| 成员访问不到                                      | `HOST` 必须是 `0.0.0.0`，且防火墙放行 `PORT`；`127.0.0.1` 只在本机可访问。                                                     |
+| 现象                                              | 原因与处理                                                                                                                                                                                      |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `目标机上还没有 …/bin/deploy.sh`                  | 没做 §3 第 1 步的一次性 init。按提示执行即可。                                                                                                                                                  |
+| `sudo: no tty present` / `a password is required` | sudoers 片段没装或账号不对；确认 `/etc/sudoers.d/personal-workbench` 存在且部署账号在授权行里。                                                                                                 |
+| init 报 `sudoers 模板校验失败`                    | Ubuntu 25.10+ 默认的 sudo 是 **sudo-rs**，不认识模板里的 `Defaults:… !requiretty`（`unknown setting: 'requiretty'`）。init 会自动改用去掉该行的版本；两条都不通过时才会打印渲染结果让人工检查。 |
+| 部署脚本报 `Node 版本过低`                        | 目标机的 `node` 太旧，或 systemd/sudo 环境里根本没找到 node（nvm 装的）。换系统级安装或 `--node-bin`。                                                                                          |
+| 健康检查超时，已自动回滚                          | 看回滚前打印的 `journalctl` 片段。常见：`.env` 里 `PORT` 与防火墙/占用冲突、`DATABASE_PATH` 目录不可写、迁移失败。                                                                              |
+| `EADDRINUSE`                                      | 端口被别的进程占了：`ss -lntp \| grep 17500`。注意服务是 `User=workbench`，需要相应权限才能看到占用者。                                                                                         |
+| SSH 报 `Host key verification failed`             | 目标机换过主机密钥（重装/换机）。删掉 Jenkins 构建机 `~/.ssh/known_hosts` 里对应条目后重跑。                                                                                                    |
+| `npm ci` 报 package.json 与 lockfile 不同步       | 改了 `package.json` 的依赖分类或版本却没更新 lockfile。本地跑 `npm install --package-lock-only` 后提交 `package-lock.json`。                                                                    |
+| 构建在 `rm build/` 一步失败                       | Windows 上才会遇到：`tools/build/prebuild.ts` 会先清理占用进程。Linux 构建机不会（Jenkins 上构建/测试/打包是同一次构建产物）。                                                                  |
+| 成员访问不到                                      | `HOST` 必须是 `0.0.0.0`，且防火墙放行 `PORT`；`127.0.0.1` 只在本机可访问。                                                                                                                      |
 
 **遇到部署失败先看这三处**：
 
