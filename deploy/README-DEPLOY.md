@@ -57,12 +57,12 @@ Jenkins（构建机，需要 Node >= 22.9）
 
 ### 2.2 Jenkins 构建机
 
-| 要求    | 说明                                                                            |
-| ------- | ------------------------------------------------------------------------------- |
-| 插件    | GitHub（webhook 触发）、Credentials Binding、Pipeline（含 `sshUserPrivateKey`） |
-| Node.js | >= 22.9.0，在 Jenkins PATH 或全局工具里；流水线第一步就会校验，不达标直接失败   |
-| 命令    | `git`、`ssh`、`scp`、`tar`、`sha256sum`（OpenSSH >= 7.6，用到 `accept-new`）    |
-| 凭据    | 一条 **SSH Username with private key**，ID 默认 `workbench-deploy-ssh`          |
+| 要求    | 说明                                                                                                                                                  |
+| ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 插件    | GitHub（webhook 触发）、Credentials Binding、Pipeline（含 `sshUserPrivateKey`）                                                                       |
+| Node.js | >= 22.9.0，且必须在 **PATH** 里（npm 脚本统一用 `node` 启动，不写绝对路径）；「准备」阶段会校验版本，并校验 PATH 的 `node` 与 `npm` 用的是同一个 Node |
+| 命令    | `git`、`ssh`、`scp`、`tar`、`sha256sum`（OpenSSH >= 7.6，用到 `accept-new`）                                                                          |
+| 凭据    | 一条 **SSH Username with private key**，ID 默认 `workbench-deploy-ssh`                                                                                |
 
 私钥对应的公钥要装到目标机的部署账号上。**私钥不要设密码短语**：`jenkins-remote.sh` 用 `BatchMode=yes`，无法交互输入密码。确实需要密码短语时，把 `deploy/jenkins-remote.sh` 的 ssh 调用换成 Jenkins 的 `sshagent` 步骤。
 

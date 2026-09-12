@@ -27,7 +27,7 @@ Node 20 会被正式服务明确拒绝，避免在没有 `node:sqlite` 支持时
 
 > 注意：`nvm use 22.22.2` 只对当前终端生效。运行 `npm run build` / `npm start` / `npm run dev` 前，请确认 `node --version` 与 `npm --version` 能正常输出；如果提示“无法将 node 识别为 cmdlet”，说明 NVM 的 Node 链接未加入 PATH，请先 `nvm use 22.22.2` 并**新开一个 PowerShell 窗口**再执行。
 
-所有 npm 脚本都通过 `npm_node_execpath` 调用当前 npm 使用的 Node，不会误用系统里其他版本的 Node。
+所有 npm 脚本都用 `node` 启动（从 PATH 解析，跨平台）：**PATH 里的 `node` 必须就是你要用的那个 Node** —— 本机先 `nvm use 22.22.2`；Jenkins 构建机由 `Jenkinsfile` 的「准备」阶段校验「PATH 的 `node`」与「`npm` 用的 `node`」是同一个，不一致直接失败。（原写法 `%npm_node_execpath%` 是 Windows cmd 专用语法，Linux 构建机上会 `not found`。）
 
 ## 启动方式
 

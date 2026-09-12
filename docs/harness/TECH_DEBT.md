@@ -34,15 +34,15 @@
 > 已在 Phase 4 归档到 `_archive/legacy-fastify/`；对应修复在新实现里由 `app/lib/http.server.ts`（CSP）、`app/routes/*`（页面）、
 > `tools/contract/*`（契约与冒烟）承接。
 
-| 原编号  | 问题                                                          | 现状                      | 依据                                                                                                                 |
-| ------- | ------------------------------------------------------------- | ------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| #1 (P0) | helmet 默认 CSP 的 `upgrade-insecure-requests` 导致局域网白屏 | ✅ 已修复                 | `server/src/app.ts:27-38` 显式移除该指令并关闭 HSTS/COOP；`test/integration/workbench-workflow.test.ts:22-26` 有断言 |
-| #2 (P1) | `.env` 不生效                                                 | ✅ 已修复                 | `loadDotEnv()`（`server/src/config/env.ts`）+ `serve`/`dev` 的 `--env-file-if-exists=.env`；见 DEBT-02               |
-| #3 (P1) | `start`/`start:lan` 不构建前端                                | ✅ 已修复                 | `package.json` 两个脚本均以 `npm run build &&` 开头                                                                  |
-| #4 (P1) | Vite `emptyOutDir: false` 导致 dist 累积                      | ✅ 已修复                 | `web/vite.config.mts:20` 为 `emptyOutDir: true`                                                                      |
-| #5 (P1) | Vite 配置以 CJS 加载 ESM 语法                                 | ✅ 已修复                 | 配置已改名为 `web/vite.config.mts`                                                                                   |
-| #6 (P2) | `node`/`npm` 不在系统 PATH                                    | ⚠️ 部分缓解，且新引入回退 | npm 脚本统一用 `%npm_node_execpath%`、README 写明 NVM 步骤；但带预检的受管启动器已被移除 → DEBT-07                   |
-| #7 (P2) | 通知跳转不会自动选中任务                                      | ✅ 已修复                 | `web/src/pages/WorkbenchPages.tsx:13-14` 读取 `params.get("task")` 并选中，依赖数组含 `params`                       |
+| 原编号  | 问题                                                          | 现状                      | 依据                                                                                                                                                                                                                        |
+| ------- | ------------------------------------------------------------- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| #1 (P0) | helmet 默认 CSP 的 `upgrade-insecure-requests` 导致局域网白屏 | ✅ 已修复                 | `server/src/app.ts:27-38` 显式移除该指令并关闭 HSTS/COOP；`test/integration/workbench-workflow.test.ts:22-26` 有断言                                                                                                        |
+| #2 (P1) | `.env` 不生效                                                 | ✅ 已修复                 | `loadDotEnv()`（`server/src/config/env.ts`）+ `serve`/`dev` 的 `--env-file-if-exists=.env`；见 DEBT-02                                                                                                                      |
+| #3 (P1) | `start`/`start:lan` 不构建前端                                | ✅ 已修复                 | `package.json` 两个脚本均以 `npm run build &&` 开头                                                                                                                                                                         |
+| #4 (P1) | Vite `emptyOutDir: false` 导致 dist 累积                      | ✅ 已修复                 | `web/vite.config.mts:20` 为 `emptyOutDir: true`                                                                                                                                                                             |
+| #5 (P1) | Vite 配置以 CJS 加载 ESM 语法                                 | ✅ 已修复                 | 配置已改名为 `web/vite.config.mts`                                                                                                                                                                                          |
+| #6 (P2) | `node`/`npm` 不在系统 PATH                                    | ⚠️ 部分缓解，且新引入回退 | npm 脚本统一用 `node`（跨平台；原 `%npm_node_execpath%` 是 cmd 专用语法，Linux 构建机上必失败）、README 写明 NVM 步骤；`Jenkinsfile`「准备」阶段校验 PATH 的 node 与 npm 的 node 一致；带预检的受管启动器仍未恢复 → DEBT-07 |
+| #7 (P2) | 通知跳转不会自动选中任务                                      | ✅ 已修复                 | `web/src/pages/WorkbenchPages.tsx:13-14` 读取 `params.get("task")` 并选中，依赖数组含 `params`                                                                                                                              |
 
 **结论：7 条中 5 条已修复、1 条未修（`.env`）、1 条变成新的能力回退（启动器）。**
 

@@ -24,7 +24,11 @@ pipeline {
   agent any
 
   options {
-    timestamps()
+    // 不要在这里写 timestamps()：它由 Timestamper 插件提供，插件没装会让整个 Jenkinsfile
+    // 编译失败（Invalid option type "timestamps"），连一个 stage 都跑不到。
+    // 想给日志加时间戳，二选一：
+    //   a) Jenkins 装好 Timestamper 插件后，再把 timestamps() 加回本块；
+    //   b) 不改流水线：Manage Jenkins → System → Timestamper，勾选全局默认加时间戳。
     // 不并发：两次部署同时切 current 软链接会互相踩踏。排队而不是打断正在跑的部署。
     disableConcurrentBuilds()
     timeout(time: 45, unit: 'MINUTES')
@@ -64,11 +68,35 @@ pipeline {
     stage('准备') {
       steps {
         checkout scm
-        sh '''
+        sh '''#!/usr/bin/env bash
+          # 显式声明 bash：Jenkins 的 sh 默认用 /bin/sh，Ubuntu 20.04/22.04 上那是 dash，
+          # 不支持 set -o pipefail，会在第一行就报 "Illegal option -o pipefail"。
           set -euo pipefail
           echo "构建机：$(hostname)"
           echo "Node：  $(node --version)"
           echo "npm：   $(npm --version)"
+
+          # package.json 里所有脚本都用 PATH 里的 node 启动（跨平台，不再是 Windows 专用的
+          # %npm_node_execpath%），所以这里确认「PATH 的 node」与「npm 用的 node」不会跑出
+          # 两个版本：版本不同会让构建静默跑在非预期的 Node 上，症状是莫名其妙的行为差异。
+          path_node="$(command -v node || true)"
+          npm_node="$(npm run --silent env 2>/dev/null | sed -n '/^npm_node_execpath=/{s///;p;q;}')" || true
+          if [ -z "$path_node" ]; then
+            echo "ERROR: PATH 里没有 node；本项目所有 npm 脚本都靠 node 启动。" >&2
+            exit 1
+          fi
+          if [ -n "$npm_node" ] && [ "$(readlink -f "$path_node")" != "$(readlink -f "$npm_node")" ]; then
+            path_ver="$(node --version)"
+            npm_ver="$("$npm_node" --version 2>/dev/null || echo 取不到版本)"
+            if [ "$path_ver" != "$npm_ver" ]; then
+              echo "ERROR: PATH 里的 node（$path_node，$path_ver）与 npm 用的 node（$npm_node，$npm_ver）版本不一致。" >&2
+              echo "       请修正 PATH 顺序，或让 node 与 npm 来自同一套安装后重跑。" >&2
+              exit 1
+            fi
+            echo "提示：PATH 的 node 与 npm 的 node 是两套安装，但版本相同（$path_ver），继续。"
+          fi
+          echo "node 路径：$path_node（与 npm 一致）"
+
           major=$(node -p 'process.versions.node.split(".")[0]')
           minor=$(node -p 'process.versions.node.split(".")[1]')
           if [ "$major" -lt 22 ] || { [ "$major" -eq 22 ] && [ "$minor" -lt 9 ]; }; then
@@ -141,7 +169,7 @@ pipeline {
     stage('打包') {
       when { expression { params.ACTION != 'rollback' } }
       steps {
-        sh '''
+        sh '''#!/usr/bin/env bash
           set -euo pipefail
           rm -rf .release dist
           mkdir -p .release dist
@@ -251,7 +279,7 @@ pipeline {
       }
       steps {
         withEnv(["HEALTH_URL=${params.PUBLIC_HEALTH_URL.trim()}"]) {
-          sh '''
+          sh '''#!/usr/bin/env bash
             set -euo pipefail
             if ! command -v curl >/dev/null 2>&1; then
               echo "构建机没有 curl，跳过部署后验证（目标机自身的健康检查已经在部署阶段通过）"
