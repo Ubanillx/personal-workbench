@@ -230,6 +230,7 @@ journalctl -u personal-workbench -f
 | `目标机上还没有 …/bin/deploy.sh`                  | 没做 §3 第 1 步的一次性 init。按提示执行即可。                                                                                                                                                  |
 | `sudo: no tty present` / `a password is required` | sudoers 片段没装或账号不对；确认 `/etc/sudoers.d/personal-workbench` 存在且部署账号在授权行里。                                                                                                 |
 | init 报 `sudoers 模板校验失败`                    | Ubuntu 25.10+ 默认的 sudo 是 **sudo-rs**，不认识模板里的 `Defaults:… !requiretty`（`unknown setting: 'requiretty'`）。init 会自动改用去掉该行的版本；两条都不通过时才会打印渲染结果让人工检查。 |
+| `mkdir: Permission denied`（`incoming/…`）        | `incoming/` 归了 root，而传产物的是部署账号（只能 `sudo deploy.sh`，不能 sudo mkdir）。重跑 `init` 会把 `incoming/` 改成部署账号所有；手工修：`sudo chown <部署账号> <ROOT>/incoming`。         |
 | 部署脚本报 `Node 版本过低`                        | 目标机的 `node` 太旧，或 systemd/sudo 环境里根本没找到 node（nvm 装的）。换系统级安装或 `--node-bin`。                                                                                          |
 | 健康检查超时，已自动回滚                          | 看回滚前打印的 `journalctl` 片段。常见：`.env` 里 `PORT` 与防火墙/占用冲突、`DATABASE_PATH` 目录不可写、迁移失败。                                                                              |
 | `EADDRINUSE`                                      | 端口被别的进程占了：`ss -lntp \| grep 17500`。注意服务是 `User=workbench`，需要相应权限才能看到占用者。                                                                                         |

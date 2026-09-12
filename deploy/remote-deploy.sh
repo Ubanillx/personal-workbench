@@ -413,8 +413,17 @@ cmd_init() {
   fi
   SERVICE_GROUP="$(id -gn "$SERVICE_USER")"
 
-  install -d -m 0755 "$ROOT" "$ROOT/releases" "$ROOT/bin" "$ROOT/incoming" "$ROOT/share" "$ROOT/share/deploy-templates"
+  install -d -m 0755 "$ROOT" "$ROOT/releases" "$ROOT/bin" "$ROOT/share" "$ROOT/share/deploy-templates"
   install -d -m 0750 -o "$SERVICE_USER" -g "$SERVICE_GROUP" "$ROOT/shared" "$ROOT/shared/data" "$ROOT/shared/backups"
+  # incoming 是「Jenkins 的部署账号往里传产物」的目录：scp/mkdir 用的是部署账号（不是 root，
+  # 它只被授权 sudo 跑 deploy.sh），所以必须归部署账号所有 —— 否则上传第一步就是
+  # `mkdir: Permission denied`，而且失败发生在部署脚本接管之前。
+  if id -u "$DEPLOY_USER" >/dev/null 2>&1; then
+    install -d -m 0755 -o "$DEPLOY_USER" -g "$(id -gn "$DEPLOY_USER")" "$ROOT/incoming"
+  else
+    install -d -m 0755 "$ROOT/incoming"
+    warn "部署账号 $DEPLOY_USER 不存在：$ROOT/incoming 仍归 root，上传产物会 Permission denied"
+  fi
 
   # 1) .env：只在缺失时生成，之后永不覆盖（生产配置是人工维护的状态）
   local env_file="$ROOT/shared/.env" tmp
