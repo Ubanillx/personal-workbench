@@ -117,7 +117,8 @@ ssh deploy@<目标机> 'sudo vi /opt/personal-workbench/shared/.env'
 
 - 类型：**Pipeline**，Definition 选 **Pipeline script from SCM**，SCM 指向本仓库，脚本路径 `Jenkinsfile`；
 - 分支：`main`（多分支任务更好，`Jenkinsfile` 里已经用 `BRANCH_NAME == 'main'` 做部署门禁）；
-- 首次构建前，先把参数填上：`DEPLOY_HOST` 填目标机地址，其余用默认值；
+- 参数不用手填：`DEPLOY_HOST` 留空时，流水线会回落到仓库里写死的默认目标机（`Jenkinsfile` 的 `env.DEPLOY_TARGET_HOST`，当前 `192.168.3.251`）；
+  要发布到别的机器才需要显式填 `DEPLOY_HOST`；只想出包不发布请把 `ACTION` 选成 `build-only`；
 - 勾选 **GitHub hook trigger for GITScm polling**（`Jenkinsfile` 里的 `triggers { githubPush() }` 会声明它，缺 GitHub 插件时删掉那行、改为在任务里手勾）。
 
 ### 第 4 步：GitHub 配 webhook
@@ -156,6 +157,7 @@ ssh deploy@<目标机> 'sudo systemctl start personal-workbench'
 
 - **正常发布**：向 `main` push → webhook → Jenkins 自动跑完 → 目标机切换并重启。
   只有 `main` 分支会部署；其他分支（多分支任务）只构建、只跑测试。
+  目标机取 `DEPLOY_HOST`，留空就用 `Jenkinsfile` 里 `env.DEPLOY_TARGET_HOST` 的默认值（所以 hook 触发的构建也能直接发布）。
 - **只想出包不发布**：`ACTION=build-only`，产物在 Jenkins 构建页的 Artifacts 里。
 - **出事了要回滚**：`ACTION=rollback`（见 §5）。
 - **要不要跑测试**：`ACTION=deploy` 时**一律跳过测试**（发布要快，只跑 lint / format / typecheck / antd lint / build）。

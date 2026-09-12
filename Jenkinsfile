@@ -41,7 +41,7 @@ pipeline {
       choices: ['deploy', 'build-only', 'rollback'],
       description: 'deploy = 构建并发布；build-only = 只构建产物；rollback = 只在目标机回滚到上一个 release'
     )
-    string(name: 'DEPLOY_HOST', defaultValue: '', description: '目标服务器地址（IP 或域名）。留空 = 只构建不发布')
+    string(name: 'DEPLOY_HOST', defaultValue: '', description: '目标服务器地址（IP 或域名）。留空 = 用仓库默认目标机 192.168.3.251；只想出包请把 ACTION 选成 build-only')
     string(name: 'DEPLOY_PORT', defaultValue: '22', description: '目标机 SSH 端口')
     string(name: 'DEPLOY_ROOT', defaultValue: '/opt/personal-workbench', description: '目标机部署根目录')
     string(name: 'KEEP_RELEASES', defaultValue: '5', description: '目标机保留多少个历史 release（回滚靠它们）')
@@ -111,7 +111,14 @@ pipeline {
           env.GIT_SUBJECT = sh(script: 'git log -1 --pretty=%s', returnStdout: true).trim()
           // 多分支任务里是分支名；普通任务没有 BRANCH_NAME，按 main 处理（部署门禁用得到）
           env.BUILD_BRANCH = env.BRANCH_NAME ?: 'main'
+          // 部署目标：参数留空就回落到仓库里的默认目标机。这样「push 到 main → webhook →
+          // 构建 → 发布」这条主路径不用每次手填参数；只想出包不发布就把 ACTION 选 build-only。
+          env.DEPLOY_TARGET_HOST = params.DEPLOY_HOST?.trim() ?: '192.168.3.251'
+          env.DEPLOY_TARGET_ROOT = params.DEPLOY_ROOT?.trim() ?: '/opt/personal-workbench'
+          env.DEPLOY_TARGET_PORT = params.DEPLOY_PORT?.trim() ?: '22'
+          env.DEPLOY_HEALTH_URL = params.PUBLIC_HEALTH_URL?.trim() ?: "http://${env.DEPLOY_TARGET_HOST}/api/ping"
           echo "本次构建：branch=${env.BUILD_BRANCH} sha=${env.GIT_SHA} action=${params.ACTION}"
+          echo "部署目标：${env.DEPLOY_TARGET_HOST}（${env.DEPLOY_TARGET_ROOT}，端口 ${env.DEPLOY_TARGET_PORT}）"
         }
       }
     }
@@ -228,8 +235,8 @@ pipeline {
       when {
         expression {
           params.ACTION == 'deploy' &&
-            params.DEPLOY_HOST?.trim() &&
-            env.BUILD_BRANCH == 'main'
+            env.BUILD_BRANCH == 'main' &&
+            env.DEPLOY_TARGET_HOST
         }
       }
       steps {
@@ -241,9 +248,9 @@ pipeline {
           )
         ]) {
           withEnv([
-            "TARGET_HOST=${params.DEPLOY_HOST.trim()}",
-            "TARGET_PORT=${params.DEPLOY_PORT.trim()}",
-            "TARGET_ROOT=${params.DEPLOY_ROOT.trim()}",
+            "TARGET_HOST=${env.DEPLOY_TARGET_HOST}",
+            "TARGET_PORT=${env.DEPLOY_TARGET_PORT}",
+            "TARGET_ROOT=${env.DEPLOY_TARGET_ROOT}",
             "TARGET_KEEP=${params.KEEP_RELEASES.trim()}"
           ]) {
             sh 'bash deploy/jenkins-remote.sh deploy'
@@ -254,7 +261,7 @@ pipeline {
 
     stage('回滚目标服务器') {
       when {
-        expression { params.ACTION == 'rollback' && params.DEPLOY_HOST?.trim() }
+        expression { params.ACTION == 'rollback' && env.DEPLOY_TARGET_HOST }
       }
       steps {
         withCredentials([
@@ -265,9 +272,9 @@ pipeline {
           )
         ]) {
           withEnv([
-            "TARGET_HOST=${params.DEPLOY_HOST.trim()}",
-            "TARGET_PORT=${params.DEPLOY_PORT.trim()}",
-            "TARGET_ROOT=${params.DEPLOY_ROOT.trim()}"
+            "TARGET_HOST=${env.DEPLOY_TARGET_HOST}",
+            "TARGET_PORT=${env.DEPLOY_TARGET_PORT}",
+            "TARGET_ROOT=${env.DEPLOY_TARGET_ROOT}"
           ]) {
             sh 'bash deploy/jenkins-remote.sh rollback'
           }
@@ -277,10 +284,10 @@ pipeline {
 
     stage('部署后验证') {
       when {
-        expression { params.ACTION == 'deploy' && params.PUBLIC_HEALTH_URL?.trim() }
+        expression { params.ACTION == 'deploy' && env.DEPLOY_HEALTH_URL }
       }
       steps {
-        withEnv(["HEALTH_URL=${params.PUBLIC_HEALTH_URL.trim()}"]) {
+        withEnv(["HEALTH_URL=${env.DEPLOY_HEALTH_URL}"]) {
           sh '''#!/usr/bin/env bash
             set -euo pipefail
             if ! command -v curl >/dev/null 2>&1; then
@@ -300,8 +307,8 @@ pipeline {
   post {
     success {
       script {
-        if (params.ACTION == 'deploy' && params.DEPLOY_HOST?.trim() && env.BUILD_BRANCH == 'main') {
-          echo "[OK] ${env.RELEASE_TARBALL} 已发布到 ${params.DEPLOY_HOST}（${params.DEPLOY_ROOT}）"
+        if (params.ACTION == 'deploy' && env.DEPLOY_TARGET_HOST && env.BUILD_BRANCH == 'main') {
+          echo "[OK] ${env.RELEASE_TARBALL} 已发布到 ${env.DEPLOY_TARGET_HOST}（${env.DEPLOY_TARGET_ROOT}）"
         } else {
           echo "[OK] 构建完成（未发布）：${env.RELEASE_TARBALL ?: '无产物（回滚模式）'}"
         }
