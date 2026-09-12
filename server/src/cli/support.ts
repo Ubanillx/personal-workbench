@@ -1,9 +1,12 @@
 import path from "node:path";
 import { createInterface } from "node:readline";
+import { loadDotEnv } from "../config/env";
 
 /** 三个账号 CLI 共用的输入与路径处理 */
 
 export function resolveDatabasePath(): string {
+  // CLI 不经 appConfig()，这里单独兜一次 .env，保证 DATABASE_PATH 在两种入口下口径一致
+  loadDotEnv();
   const fromEnv = process.env.DATABASE_PATH;
   return fromEnv ? path.resolve(fromEnv) : path.resolve(process.cwd(), "data/workbench.sqlite");
 }

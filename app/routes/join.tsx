@@ -17,9 +17,12 @@ import {
   Typography,
   type TableProps,
 } from "antd";
-import { LogoutOutlined, PlusOutlined } from "@ant-design/icons";
+import { LogoutOutlined, PlusOutlined, UndoOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import type { JoinRequestKind, JoinRequestStatus, OrganizationStatus, UserRole } from "../../shared/types/domain";
+import { BrandLogo } from "../components/brand-logo";
+import { IconActionButton, RowActions } from "../components/crud-actions";
+import { PageHeader } from "../components/page-header";
 import { appConfig } from "../lib/context.server";
 import { readPayload } from "../lib/form.server";
 import {
@@ -38,7 +41,7 @@ import { requireAuth } from "../lib/session.server";
  *
  * 组织与申请的规则全部在 app/lib/organization.server.ts 里，本页 loader/action 直接调函数
  * （不绕自己的 HTTP API），避免规则出现两份实现。
- * 三种视角：无组织用户（申请加入 + 我的申请）、已有组织用户（组织信息 + 成员 + 申请退出）、
+ * 三种视角：无组织用户（全屏入组，无工作台侧栏）、已有组织用户（组织信息 + 成员 + 申请退出）、
  * 管理员（全局角色，不隶属任何组织，只看组织总览）。
  */
 
@@ -163,8 +166,8 @@ export async function action({ request }: { request: Request }): Promise<{ error
 
   if (!result.ok) return { error: await failureMessage(result.response) };
   if (intent === "cancel") return { notice: "申请已撤回" };
-  if (intent === "leave") return { notice: "退出申请已提交，等待组织管理者审批" };
-  return { notice: "入组申请已提交，等待组织管理者审批" };
+  if (intent === "leave") return { notice: "退出申请已提交，请等待管理者审批" };
+  return { notice: "申请已提交，请等待管理者审批" };
 }
 
 export default function JoinRoute(): React.ReactElement {
@@ -233,16 +236,28 @@ export default function JoinRoute(): React.ReactElement {
     {
       title: "操作",
       key: "actions",
+      width: 120,
+      align: "right",
       render: (_value, row) =>
         row.status === "pending" ? (
-          <Popconfirm
-            title="撤回这条申请？"
-            okText="撤回"
-            cancelText="取消"
-            onConfirm={() => submit({ intent: "cancel", id: row.id }, { method: "post", encType: "application/json" })}
-          >
-            <Button disabled={busy}>撤回</Button>
-          </Popconfirm>
+          <RowActions
+            actions={[
+              {
+                key: "cancel",
+                label: "撤回",
+                render: (
+                  <Popconfirm
+                    title="撤回这条申请？"
+                    okText="撤回"
+                    cancelText="取消"
+                    onConfirm={() => submit({ intent: "cancel", id: row.id }, { method: "post", encType: "application/json" })}
+                  >
+                    <IconActionButton label="撤回" icon={<UndoOutlined />} tone="danger" disabled={busy} />
+                  </Popconfirm>
+                ),
+              },
+            ]}
+          />
         ) : null,
     },
   ];
@@ -268,84 +283,126 @@ export default function JoinRoute(): React.ReactElement {
     },
   ];
 
+  const orgTable = <Table<OrgRow> rowKey="id" columns={orgColumns} dataSource={data.organizations} pagination={false} />;
+  const requestTable = data.requests.length ? (
+    <Table<RequestRow> rowKey="id" columns={requestColumns} dataSource={data.requests} pagination={false} />
+  ) : (
+    <Typography.Text type="secondary">还没有申请记录。</Typography.Text>
+  );
+  const pendingAlert = pending ? (
+    <Alert
+      type="info"
+      showIcon
+      title={`已向「${pending.orgName}」提交${KIND_LABEL[pending.kind]}，正在等待审批`}
+      description="同一时间只能有一条待处理申请。可以继续等待，或在下方撤回后改选其他组织。"
+    />
+  ) : null;
+  const joinForm = canJoin ? (
+    <Card variant="outlined" title="申请加入组织">
+      <Form
+        layout="vertical"
+        disabled={Boolean(pending)}
+        onFinish={(values: { orgId?: string; message?: string }) => {
+          if (!values.orgId || busy) return;
+          submit({ intent: "join", orgId: values.orgId, message: values.message ?? "" }, { method: "post", encType: "application/json" });
+        }}
+      >
+        <Form.Item name="orgId" label="组织" rules={[{ required: true, message: "请选择要加入的组织" }]}>
+          <Select
+            placeholder="请选择要加入的组织"
+            options={selectableOrgs.map((org) => ({ value: org.id, label: `${org.name}（${org.memberCount} 人）` }))}
+          />
+        </Form.Item>
+        <Form.Item name="message" label="申请说明（选填）">
+          <Input.TextArea rows={3} maxLength={200} showCount placeholder="简单介绍一下自己，方便管理者审批" />
+        </Form.Item>
+        <Button color="primary" variant="solid" htmlType="submit" icon={<PlusOutlined />} loading={busy} block>
+          提交申请
+        </Button>
+      </Form>
+    </Card>
+  ) : null;
+
+  // 未入组用户没有工作台壳，本页单独做成全屏入组页
+  if (canJoin) {
+    return (
+      <div className="join-screen">
+        <Space orientation="vertical" size="large" className="join-panel">
+          <Space orientation="vertical" size={8} align="center" className="join-brand">
+            <BrandLogo height={40} />
+            <Typography.Title level={4} className="access-title">
+              加入组织
+            </Typography.Title>
+            <Typography.Text type="secondary">你好，{data.user.name}。选择一个组织提交申请，管理者通过后即可使用工作台。</Typography.Text>
+          </Space>
+          {error ? <Alert type="error" showIcon title={error} /> : null}
+          {pendingAlert}
+          {joinForm}
+          <Card variant="outlined" title="组织列表">
+            <Table<OrgRow>
+              rowKey="id"
+              columns={orgColumns}
+              dataSource={data.organizations}
+              pagination={false}
+              scroll={{ x: "max-content" }}
+            />
+          </Card>
+          <Card variant="outlined" title="我的申请">
+            {data.requests.length ? (
+              <Table<RequestRow>
+                rowKey="id"
+                columns={requestColumns}
+                dataSource={data.requests}
+                pagination={false}
+                scroll={{ x: "max-content" }}
+              />
+            ) : (
+              <Typography.Text type="secondary">还没有申请记录。</Typography.Text>
+            )}
+          </Card>
+          <div className="join-brand">
+            <form method="post" action="/logout">
+              <Button color="default" variant="text" htmlType="submit" icon={<LogoutOutlined />}>
+                退出登录
+              </Button>
+            </form>
+          </div>
+        </Space>
+      </div>
+    );
+  }
+
   return (
     <Space orientation="vertical" size="large" className="page-stack">
-      <div>
-        <Typography.Title level={3} className="page-title">
-          加入组织
-        </Typography.Title>
-        <Typography.Text type="secondary">
-          {hasOrg
-            ? `你已属于组织「${data.user.orgName ?? ""}」，角色：${ROLE_LABEL[data.user.role]}。`
-            : "未加入组织的账号只能访问本页：先申请加入一个组织，等该组织的管理者审批通过后即可使用工作台。"}
-        </Typography.Text>
-      </div>
-
-      {error && <Alert type="error" showIcon title={error} />}
-
-      {pending && (
-        <Alert
-          type="info"
-          showIcon
-          title={`你有一条待审批的${KIND_LABEL[pending.kind]}申请（${pending.orgName}）`}
-          description="同一时间只能有一条待审批申请：先等待管理者处理，或在下方「我的申请」里撤回。"
-        />
-      )}
-
-      {canJoin && (
-        <Card variant="outlined" title="申请加入组织">
-          <Form
-            layout="vertical"
-            disabled={Boolean(pending)}
-            onFinish={(values: { orgId?: string; message?: string }) => {
-              if (!values.orgId || busy) return;
-              submit(
-                { intent: "join", orgId: values.orgId, message: values.message ?? "" },
-                { method: "post", encType: "application/json" },
-              );
-            }}
-          >
-            <Form.Item name="orgId" label="选择组织" rules={[{ required: true, message: "请选择要加入的组织" }]}>
-              <Select
-                placeholder="请选择要加入的组织"
-                options={selectableOrgs.map((org) => ({ value: org.id, label: `${org.name}（${org.memberCount} 人）` }))}
-              />
-            </Form.Item>
-            <Form.Item name="message" label="申请说明（可选）">
-              <Input.TextArea rows={3} maxLength={200} showCount placeholder="简单说明身份或来意，方便管理者审批" />
-            </Form.Item>
-            <Button color="primary" variant="solid" htmlType="submit" icon={<PlusOutlined />} loading={busy}>
-              提交入组申请
-            </Button>
-          </Form>
-        </Card>
-      )}
-
-      {hasOrg && (
+      <PageHeader
+        title="组织与申请"
+        eyebrow="ORGANIZATION"
+        description={hasOrg ? `你属于「${data.user.orgName || ""}」，当前角色是${ROLE_LABEL[data.user.role]}。` : undefined}
+      />
+      {error ? <Alert type="error" showIcon title={error} /> : null}
+      {pendingAlert}
+      {hasOrg ? (
         <Card variant="outlined" title="我的组织">
           <Space orientation="vertical" size="middle" className="list-block">
             <Descriptions
               column={2}
               items={[
-                { key: "name", label: "组织名称", children: data.user.orgName ?? "—" },
+                { key: "name", label: "组织名称", children: data.user.orgName || "—" },
                 { key: "role", label: "我的角色", children: ROLE_LABEL[data.user.role] },
                 { key: "count", label: "成员人数", children: `${data.orgMemberCount} 人` },
                 { key: "account", label: "我的账号", children: data.user.username },
               ]}
             />
-            {data.members.length > 0 && (
+            {data.members.length > 0 ? (
               <Table<MemberRow> rowKey="id" columns={memberColumns} dataSource={data.members} pagination={false} />
-            )}
+            ) : null}
           </Space>
         </Card>
-      )}
-
-      {hasOrg && (
+      ) : null}
+      {hasOrg ? (
         <Card variant="outlined" title="申请退出组织">
           <Space orientation="vertical" size="middle" className="list-block">
-            <Typography.Text type="secondary">
-              退出组织需要本组织管理者批准（D-32）；批准后你会回到「未加入」状态，可以重新申请。
-            </Typography.Text>
+            <Typography.Text type="secondary">退出需要管理者批准。批准后会回到未加入状态，之后可以再申请其他组织。</Typography.Text>
             <Form
               layout="vertical"
               disabled={Boolean(pending)}
@@ -354,7 +411,7 @@ export default function JoinRoute(): React.ReactElement {
                 submit({ intent: "leave", message: values.message ?? "" }, { method: "post", encType: "application/json" });
               }}
             >
-              <Form.Item name="message" label="退出原因（可选）">
+              <Form.Item name="message" label="退出原因（选填）">
                 <Input.TextArea rows={3} maxLength={200} showCount placeholder="例如：换到别的组织 / 暂时不需要协助" />
               </Form.Item>
               <Button color="danger" variant="solid" htmlType="submit" icon={<LogoutOutlined />} loading={busy}>
@@ -363,27 +420,15 @@ export default function JoinRoute(): React.ReactElement {
             </Form>
           </Space>
         </Card>
-      )}
-
-      {data.user.role === "admin" && (
-        <Alert
-          type="info"
-          showIcon
-          title="管理员是全局角色"
-          description="管理员不隶属任何组织，因此不需要申请入组；组织与账号的全局管理在管理页完成。"
-        />
-      )}
-
+      ) : null}
+      {data.user.role === "admin" ? (
+        <Alert type="info" showIcon title="管理员是全局角色" description="可直接在「设置」里管理组织和账号，不必申请加入某个组织。" />
+      ) : null}
       <Card variant="outlined" title="组织列表">
-        <Table<OrgRow> rowKey="id" columns={orgColumns} dataSource={data.organizations} pagination={false} />
+        {orgTable}
       </Card>
-
       <Card variant="outlined" title="我的申请">
-        {data.requests.length ? (
-          <Table<RequestRow> rowKey="id" columns={requestColumns} dataSource={data.requests} pagination={false} />
-        ) : (
-          <Typography.Text type="secondary">还没有提交过入组或退组申请。</Typography.Text>
-        )}
+        {requestTable}
       </Card>
     </Space>
   );

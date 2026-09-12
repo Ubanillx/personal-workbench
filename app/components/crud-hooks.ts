@@ -6,7 +6,7 @@ import { useSearchParams } from "react-router";
 export type CrudEnvelope = { ok?: true; error?: string; notice?: string };
 
 /**
- * 写操作反馈：**成功走全局提示 + 关闭弹窗，失败留给页面用 Alert 常驻展示**。
+ * 写操作反馈：**成功走全局提示 + 关闭表单抽屉，失败留给页面用 Alert 常驻展示**。
  *
  * 为什么失败不弹 toast：失败通常是「校验没过 / 没权限 / 跨组织」这类需要用户读完再改的
  * 信息，常驻 Alert 不会消失、还能带「重试」按钮；成功则是瞬时反馈，toast 更合适。

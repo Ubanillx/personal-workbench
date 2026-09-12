@@ -1,7 +1,8 @@
 import type React from "react";
 import { redirect, useActionData, useLoaderData, useNavigation, useSubmit } from "react-router";
-import { Alert, Avatar, Button, Card, Form, Input, Space, Typography } from "antd";
+import { Alert, Button, Card, Form, Input, Space, Typography } from "antd";
 import { KeyOutlined, LockOutlined } from "@ant-design/icons";
+import { BrandLogo } from "../components/brand-logo";
 import { appConfig } from "../lib/context.server";
 import { readPayload } from "../lib/form.server";
 import { changeOwnPassword, readCookie, requireAuth } from "../lib/session.server";
@@ -68,9 +69,7 @@ export default function PasswordRoute(): React.ReactElement {
       <Card className="access-card">
         <Space orientation="vertical" size="large" className="access-stack">
           <Space orientation="vertical" size={4} align="center" className="access-brand">
-            <Avatar shape="square" size={48} className="brand-avatar">
-              台
-            </Avatar>
+            <BrandLogo height={40} />
             <Typography.Title level={4} className="access-title">
               修改密码
             </Typography.Title>

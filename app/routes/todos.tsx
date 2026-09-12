@@ -11,19 +11,19 @@ import {
   Flex,
   Form,
   Input,
+  Segmented,
   Select,
   Space,
-  Switch,
   Table,
   Tag,
   Typography,
   type TableProps,
 } from "antd";
-import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
+import { CheckOutlined, DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined, UndoOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { confirmDanger, RowActions } from "../components/crud-actions";
 import { useCrudFeedback, useListParams } from "../components/crud-hooks";
-import { FormModal } from "../components/crud-modal";
+import { FormDrawer } from "../components/crud-drawer";
 import { SelectionAlert, TableToolbar } from "../components/crud-toolbar";
 import { PageHeader } from "../components/page-header";
 import { readPayload } from "../lib/form.server";
@@ -39,12 +39,27 @@ type TodoRow = {
   completedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  /**
+   * 所属组织：服务端读模型里有这一列（`records.server.ts` 的 `TODO_SELECT`），API 载荷里不带
+   * （契约冻结），页面用它渲染管理员的「所属组织」列——表单里的「所属组织」字段必须在列表里看得见。
+   */
+  orgId: string | null;
 };
 type OrgOption = { id: string; name: string; status: string };
 type ActionResult = { ok: true; notice: string } | { error: string };
 
 const STATUS_OPTIONS = [
-  { value: "all", label: "全部状态" },
+  { value: "all", label: "全部" },
+  { value: "open", label: "未完成" },
+  { value: "done", label: "已完成" },
+];
+
+/**
+ * 编辑表单里的「状态」选项：只保留两个真实状态，不含筛选器里的「全部」。
+ * 表单里**不用 Switch**——开关语义是「立刻切换」，而这里是在编辑一条记录的状态，
+ * 与其它编辑表单（如任务的优先级、随手记的置顶状态）一致，用 `Select` 选。
+ */
+const TODO_STATE_OPTIONS = [
   { value: "open", label: "未完成" },
   { value: "done", label: "已完成" },
 ];
@@ -141,7 +156,7 @@ export default function TodosRoute(): React.ReactElement {
   const { modal } = AntdApp.useApp();
   const list = useListParams();
   const [createForm] = Form.useForm<{ content?: string; todoDate?: dayjs.Dayjs | null; orgId?: string }>();
-  const [editForm] = Form.useForm<{ content?: string; todoDate?: dayjs.Dayjs | null; isCompleted?: boolean }>();
+  const [editForm] = Form.useForm<{ content?: string; todoDate?: dayjs.Dayjs | null; state?: string }>();
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<TodoRow | null>(null);
   const [selectedKeys, setSelectedKeys] = useState<React.Key[]>([]);
@@ -184,23 +199,9 @@ export default function TodosRoute(): React.ReactElement {
 
   const filtered = Boolean(keyword || status !== "all" || dateFilter !== "all" || orgFilter);
 
+  // 列表里不再放「完成」开关列：切换完成状态由右侧「操作」列的按钮负责（还有批量操作），
+  // 同一个动作在表格里出现两次既重复又容易误点；「状态」列只做只读展示。
   const columns: TableProps<TodoRow>["columns"] = [
-    {
-      title: "完成",
-      dataIndex: "isCompleted",
-      key: "isCompleted",
-      width: 76,
-      align: "center",
-      render: (_value, row) => (
-        <Switch
-          size="small"
-          checked={Boolean(row.isCompleted)}
-          disabled={busy}
-          aria-label={row.isCompleted ? "恢复为未完成" : "标记为已完成"}
-          onChange={(checked) => toggle(row, checked)}
-        />
-      ),
-    },
     {
       title: "待办内容",
       dataIndex: "content",
@@ -245,7 +246,8 @@ export default function TodosRoute(): React.ReactElement {
       onFilter: (value, row) => (value === "done" ? Boolean(row.isCompleted) : !row.isCompleted),
       render: (_value, row) => (
         <Tag color={row.isCompleted ? "green" : "blue"} variant="filled">
-          {row.isCompleted ? "已完成" : "待处理"}
+          {/* 状态词与筛选器、编辑表单逐字一致（D-46 的用词约定：同一个字段只有一套说法） */}
+          {row.isCompleted ? "已完成" : "未完成"}
         </Tag>
       ),
     },
@@ -257,30 +259,45 @@ export default function TodosRoute(): React.ReactElement {
       sorter: (a, b) => a.updatedAt.localeCompare(b.updatedAt),
       render: (_value, row) => <Typography.Text type="secondary">{dayjs(row.updatedAt).format("MM-DD HH:mm")}</Typography.Text>,
     },
+    // 「所属组织」列只对管理员渲染：新建表单里就有这个字段（管理员必须选），列表里也就必须看得见（D-47）
+    ...(isAdmin
+      ? ([
+          {
+            title: "所属组织",
+            key: "orgName",
+            width: 140,
+            render: (_value: unknown, row: TodoRow) => {
+              const name = data.organizations.find((org) => org.id === row.orgId)?.name;
+              return name ? <Tag color="blue">{name}</Tag> : <Typography.Text type="secondary">—</Typography.Text>;
+            },
+          },
+        ] satisfies TableProps<TodoRow>["columns"])
+      : []),
     {
       title: "操作",
       key: "actions",
-      width: 120,
+      width: 240,
       align: "right",
       render: (_value, row) => (
         <RowActions
-          extra={
-            <Button size="small" color="default" variant="text" icon={<EditOutlined />} onClick={() => setEditing(row)}>
-              编辑
-            </Button>
-          }
-          items={[
+          actions={[
+            {
+              key: "edit",
+              label: "编辑",
+              icon: <EditOutlined />,
+              onClick: () => setEditing(row),
+            },
             {
               key: "toggle",
               label: row.isCompleted ? "恢复为未完成" : "标记完成",
+              icon: row.isCompleted ? <UndoOutlined /> : <CheckOutlined />,
               onClick: () => toggle(row, !row.isCompleted),
             },
-            { type: "divider" },
             {
               key: "delete",
               label: "删除",
-              danger: true,
               icon: <DeleteOutlined />,
+              tone: "danger",
               onClick: () =>
                 confirmDanger(modal, {
                   title: "删除这条待办？",
@@ -299,7 +316,8 @@ export default function TodosRoute(): React.ReactElement {
     <Flex vertical gap="large" className="page-stack">
       <PageHeader
         title="待办清单"
-        description="安排日常事项，及时处理待办。"
+        eyebrow="TODOS"
+        description="按计划日期安排日常事项。"
         extra={
           <>
             <Button icon={<ReloadOutlined />} onClick={() => revalidator.revalidate()} loading={busy}>
@@ -332,11 +350,11 @@ export default function TodosRoute(): React.ReactElement {
               onChange={(event) => setDraftKeyword(event.target.value)}
               onSearch={(value) => list.patch({ q: value.trim() })}
             />
-            <Select
+            <Segmented
               value={status}
               options={STATUS_OPTIONS}
-              style={{ width: 130 }}
-              onChange={(value: string) => list.patch({ status: value === "all" ? null : value })}
+              aria-label="按完成状态筛选"
+              onChange={(value) => list.patch({ status: value === "all" ? null : String(value) })}
             />
             <Select
               value={dateFilter}
@@ -390,7 +408,7 @@ export default function TodosRoute(): React.ReactElement {
             columns={columns}
             dataSource={rows}
             loading={busy}
-            scroll={{ x: 900 }}
+            scroll={{ x: isAdmin ? 960 : 820 }}
             rowSelection={{
               selectedRowKeys: selectedKeys,
               preserveSelectedRowKeys: true,
@@ -422,7 +440,7 @@ export default function TodosRoute(): React.ReactElement {
         </Flex>
       </Card>
 
-      <FormModal
+      <FormDrawer
         open={createOpen}
         title="新建待办"
         okText="创建"
@@ -456,9 +474,9 @@ export default function TodosRoute(): React.ReactElement {
             />
           </Form.Item>
         ) : null}
-      </FormModal>
+      </FormDrawer>
 
-      <FormModal
+      <FormDrawer
         open={editing !== null}
         title="编辑待办"
         form={editForm}
@@ -468,7 +486,7 @@ export default function TodosRoute(): React.ReactElement {
         initialValues={{
           content: editing?.content ?? "",
           todoDate: editing?.todoDate ? dayjs(editing.todoDate) : null,
-          isCompleted: Boolean(editing?.isCompleted),
+          state: editing?.isCompleted ? "done" : "open",
         }}
         onCancel={() => setEditing(null)}
         onFinish={(values) => {
@@ -480,7 +498,7 @@ export default function TodosRoute(): React.ReactElement {
             id: editing.id,
             content,
             todoDate: values.todoDate ? values.todoDate.format("YYYY-MM-DD") : null,
-            isCompleted: Boolean(values.isCompleted),
+            isCompleted: values.state === "done",
           });
         }}
       >
@@ -490,10 +508,10 @@ export default function TodosRoute(): React.ReactElement {
         <Form.Item name="todoDate" label="计划日期">
           <DatePicker format="YYYY-MM-DD" style={{ width: "100%" }} placeholder="未设置" allowClear />
         </Form.Item>
-        <Form.Item name="isCompleted" label="完成状态" valuePropName="checked">
-          <Switch checkedChildren="已完成" unCheckedChildren="未完成" />
+        <Form.Item name="state" label="状态">
+          <Select options={TODO_STATE_OPTIONS} />
         </Form.Item>
-      </FormModal>
+      </FormDrawer>
     </Flex>
   );
 }

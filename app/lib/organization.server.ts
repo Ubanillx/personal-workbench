@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { JoinRequest, JoinRequestKind, Organization } from "../../shared/types/domain";
 import { db, one, rows, run, now, type User } from "./db.server";
 import { fail } from "./http.server";
+import { createNotification } from "./notifications.server";
 import { notFound } from "./session.server";
 
 /**
@@ -420,17 +421,7 @@ export function decideJoinRequest(user: User, requestId: string, approve: boolea
 /* --------------------------------------------------------------- 通知 */
 
 function notify(recipientId: string, actorId: string, orgId: string, eventType: string, title: string, message: string): void {
-  run(
-    db(),
-    "INSERT INTO notifications(id,recipient_id,actor_id,task_id,report_id,event_type,title,message,is_read,created_at,read_at) VALUES(?,?,?,NULL,NULL,?,?,?,0,?,NULL)",
-    randomUUID(),
-    recipientId,
-    actorId,
-    eventType,
-    title,
-    message,
-    now(),
-  );
+  createNotification(db(), { recipientId, actorId, eventType, title, message });
   void orgId;
 }
 

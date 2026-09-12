@@ -18,17 +18,33 @@ import {
   Typography,
   type TableProps,
 } from "antd";
-import { CopyOutlined, DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
+import {
+  CloudOutlined,
+  CopyOutlined,
+  DeleteOutlined,
+  DownloadOutlined,
+  EditOutlined,
+  FolderOpenOutlined,
+  HistoryOutlined,
+  PlusOutlined,
+  ReloadOutlined,
+  SettingOutlined,
+} from "@ant-design/icons";
 import dayjs from "dayjs";
+import type { WebDavBrowseEntry, WebDavFileStatus } from "../../shared/types/domain";
 import { confirmDanger, RowActions } from "../components/crud-actions";
 import { useCrudFeedback, useListParams } from "../components/crud-hooks";
-import { FormModal } from "../components/crud-modal";
+import { FormDrawer } from "../components/crud-drawer";
 import { SelectionAlert, TableToolbar } from "../components/crud-toolbar";
 import { PageHeader } from "../components/page-header";
+import { displayPath, formatBytes, remoteParentPath } from "../components/webdav-browser";
+import { WebDavFilePicker } from "../components/webdav-file-picker";
+import { WebDavUploadPicker } from "../components/webdav-upload-picker";
 import { readPayload } from "../lib/form.server";
 import { createFileRecord, deleteFileRecord, listFiles, markFileUsedRecord, updateFileRecord } from "../lib/files.server";
 import { listOrganizations } from "../lib/organization.server";
 import { requireManagerOrRedirect } from "../lib/ui.server";
+import { isWebDavPath, remoteStatuses, toRemotePath, webDavStatus } from "../lib/webdav.server";
 
 type FileRow = {
   id: string;
@@ -38,36 +54,71 @@ type FileRow = {
   lastUsedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  /** 所属组织：服务端读模型里有（`records.server.ts` 的 `FILE_SELECT`），API 载荷不带（契约冻结），页面用它渲染管理员列 */
+  orgId: string | null;
 };
 type FileFormValues = { name?: string; filePath?: string; category?: string; orgId?: string };
 type OrgOption = { id: string; name: string; status: string };
 type ActionResult = { ok: true; notice: string } | { error: string };
+/** 表单里的「选择文件」当前在为哪个抽屉挑文件（null = 没在挑） */
+type PickTarget = "create" | "edit";
 
 /**
  * 文件页：与 GET /api/files 共用 app/lib/files.server.ts。
  * 文件库只对管理员与组织管理者开放（§4），普通成员由 requireManagerOrRedirect 送回首页；
  * 列表按组织过滤，`?org=` 是管理员（D-28）的筛选器接缝：既是列表过滤，也是管理员新增时的目标组织。
+ *
+ * WebDAV（可选接入，见 docs/harness/WEBDAV.md）：`file_path` 以 `webdav:` 开头的是远端条目，
+ * 页面对它们额外探测一次远端状态（大小 / 修改时间 / 是否还在），数量与耗时都有上限；
+ * 当前账号在设置页里没配 WebDAV 时整块信息为 `enabled: false`，只能查看已有索引（新增需先配置）。
+ *
+ * 路径**只能选**（D-48）：新建 / 编辑抽屉里的「选择文件」走 `WebDavFilePicker`（字段只读，选中的文件填进表单），
+ * 页头的「浏览 WebDAV」走 `WebDavUploadPicker`（选中即登记 + 上传），两者共用 `webdav-browser.tsx`。
+ * 浏览器读不到本机磁盘、服务端也不该为此暴露文件系统，所以本机路径不再有新增入口（老数据照常展示）。
  */
 export async function loader({ request }: { request: Request }) {
   const user = requireManagerOrRedirect(request);
   const query = new URL(request.url).searchParams;
   // 组织筛选器只对管理员有意义（D-28），与 /tasks 页的写法一致
+  const orgFilter = user.role === "admin" ? query.get("org") : null;
   const files = listFiles(
     user,
     (query.get("search") ?? "").trim(),
     (query.get("category") ?? "").trim(),
-    user.role === "admin" ? query.get("org") : null,
+    orgFilter,
   ) as unknown as FileRow[];
   // 分类候选取自未过滤的全量列表，避免选中某个分类后其余分类从下拉里消失
-  const all = listFiles(user, "", "", user.role === "admin" ? query.get("org") : null) as unknown as FileRow[];
+  const all = listFiles(user, "", "", orgFilter) as unknown as FileRow[];
   const organizations =
     user.role === "admin"
       ? listOrganizations(user).map((org) => ({ id: org.id, name: org.name, status: String(org.status) }) as OrgOption)
       : [];
+
+  const status = webDavStatus(user.id);
+  const remotePaths = files.filter((file) => isWebDavPath(file.filePath)).map((file) => toRemotePath(file.filePath));
+  const probe =
+    status.enabled && remotePaths.length
+      ? await remoteStatuses(user.id, remotePaths)
+      : { reachable: true, message: null, statuses: new Map<string, WebDavFileStatus>() };
+  const remote: Record<string, WebDavFileStatus | null> = {};
+  for (const file of files) {
+    if (isWebDavPath(file.filePath)) remote[file.id] = probe.statuses.get(toRemotePath(file.filePath)) ?? null;
+  }
+
   return {
     files,
     categories: [...new Set(all.map((file) => file.category).filter(Boolean))].toSorted((a, b) => a.localeCompare(b, "zh-Hans-CN")),
     organizations,
+    webdav: {
+      enabled: status.enabled,
+      configured: status.configured,
+      root: status.root,
+      url: status.url,
+      probeLimit: status.probeLimit,
+      reachable: probe.reachable,
+      message: probe.message,
+      remote,
+    },
   };
 }
 
@@ -135,6 +186,12 @@ export default function FilesRoute(): React.ReactElement {
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<FileRow | null>(null);
   const [selectedKeys, setSelectedKeys] = useState<React.Key[]>([]);
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [pickTarget, setPickTarget] = useState<PickTarget | null>(null);
+  /** 「选择文件」打开时定位到的目录（编辑远端条目直接进它所在那层，新建从浏览根开始） */
+  const [pickStart, setPickStart] = useState("");
+  /** 打开「选择文件」时表单里已填的路径：命中的那一行显示「当前」 */
+  const [pickCurrent, setPickCurrent] = useState("");
   const { error } = useCrudFeedback(actionData, () => {
     setCreateOpen(false);
     setEditing(null);
@@ -153,6 +210,28 @@ export default function FilesRoute(): React.ReactElement {
     submit(payload as Parameters<typeof submit>[0], { method: "post", encType: "application/json" });
   };
 
+  /**
+   * 打开「选择文件」（D-48）：起点用**表单当前值**定——编辑远端条目时直接进它所在那层目录，
+   * 不必每次从浏览根一路点进去；老的本机路径没有对应远端目录，回到浏览根。
+   */
+  const openFilePicker = (target: PickTarget): void => {
+    const form = target === "edit" ? editForm : createForm;
+    const current = String(form.getFieldValue("filePath") ?? "");
+    setPickStart(remoteParentPath(current));
+    setPickCurrent(current);
+    setPickTarget(target);
+  };
+
+  /** 选中文件后回填：路径一定覆盖；文件名称**还空着**才用文件名补上（用户改过的说法不覆盖） */
+  const applyPicked = (entry: WebDavBrowseEntry): void => {
+    if (!pickTarget) return;
+    const form = pickTarget === "edit" ? editForm : createForm;
+    const named = String(form.getFieldValue("name") ?? "").trim();
+    form.setFieldsValue({ filePath: entry.filePath, ...(named ? {} : { name: entry.name }) });
+    setPickTarget(null);
+    void message.success(`已选择「${entry.name}」`);
+  };
+
   /** 复制路径 + 记一次「最近使用」：复制成功才上报，避免把失败算成使用 */
   const copyPath = (file: FileRow): void => {
     if (!navigator.clipboard) {
@@ -168,6 +247,15 @@ export default function FilesRoute(): React.ReactElement {
       .catch(() => window.prompt("请复制以下路径", file.filePath));
   };
 
+  /**
+   * 下载远端文件（D-49）：GET /api/files/:id/download 是服务端流式代理，
+   * 响应带 content-disposition: attachment，浏览器拿到后直接落盘、页面不跳走。
+   * 本机路径的索引没有下载入口（服务端读不到本机磁盘）。
+   */
+  const download = (file: FileRow): void => {
+    window.location.href = `/api/files/${file.id}/download`;
+  };
+
   const remove = (file: FileRow): void =>
     confirmDanger(modal, {
       title: `删除「${file.name}」的索引？`,
@@ -177,6 +265,8 @@ export default function FilesRoute(): React.ReactElement {
     });
 
   const filtered = Boolean(search || category || orgFilter);
+  /** 该行是不是 WebDAV 远端条目：loader 对每个远端行都会写 remote[file.id]（未检查时为 null） */
+  const isRemote = (file: FileRow): boolean => data.webdav.remote[file.id] !== undefined;
 
   const columns: TableProps<FileRow>["columns"] = [
     {
@@ -192,9 +282,16 @@ export default function FilesRoute(): React.ReactElement {
       dataIndex: "filePath",
       key: "filePath",
       render: (_value, file) => (
-        <Typography.Text code copyable={{ text: file.filePath, tooltips: ["复制路径", "已复制"] }}>
-          {file.filePath}
-        </Typography.Text>
+        <Space size={4} align="center">
+          {isRemote(file) ? (
+            <Tag color="geekblue" variant="filled">
+              WebDAV
+            </Tag>
+          ) : null}
+          <Typography.Text code copyable={{ text: file.filePath, tooltips: ["复制路径", "已复制"] }}>
+            {displayPath(file.filePath)}
+          </Typography.Text>
+        </Space>
       ),
     },
     {
@@ -229,25 +326,88 @@ export default function FilesRoute(): React.ReactElement {
         ),
     },
     {
+      title: "文件情况",
+      key: "remote",
+      width: 230,
+      render: (_value, file) => {
+        // 本机路径没法从服务端探测（服务只看得到路径字符串），如实标注而不是显示成「正常」
+        if (!isRemote(file)) return <Typography.Text type="secondary">本机路径，无法检查</Typography.Text>;
+        const status = data.webdav.remote[file.id] ?? null;
+        if (!status) return <Tag>未检查</Tag>;
+        if (!status.exists)
+          return (
+            <Tag color="red" variant="filled">
+              远端已不存在
+            </Tag>
+          );
+        return (
+          <Space size={4} wrap>
+            <Tag color="green" variant="filled">
+              可访问
+            </Tag>
+            <Typography.Text>{formatBytes(status.size)}</Typography.Text>
+            <Typography.Text type="secondary">
+              {status.lastModified ? dayjs(status.lastModified).format("MM-DD HH:mm") : "无时间"}
+            </Typography.Text>
+          </Space>
+        );
+      },
+    },
+    // 「所属组织」列只对管理员渲染：新建表单里就有这个字段（管理员必须选），列表里也就必须看得见（D-47）
+    ...(isAdmin
+      ? ([
+          {
+            title: "所属组织",
+            key: "orgName",
+            width: 140,
+            render: (_value: unknown, file: FileRow) => {
+              const name = data.organizations.find((org) => org.id === file.orgId)?.name;
+              return name ? <Tag color="blue">{name}</Tag> : <Typography.Text type="secondary">—</Typography.Text>;
+            },
+          },
+        ] satisfies TableProps<FileRow>["columns"])
+      : []),
+    {
       title: "操作",
       key: "actions",
-      width: 160,
+      width: 320,
       align: "right",
-      render: (_value, file) => (
-        <RowActions
-          extra={
-            <Button size="small" color="default" variant="text" icon={<CopyOutlined />} onClick={() => copyPath(file)}>
-              复制路径
-            </Button>
-          }
-          items={[
-            { key: "edit", label: "编辑", icon: <EditOutlined />, onClick: () => setEditing(file) },
-            { key: "touch", label: "记录为最近使用", onClick: () => post({ intent: "touch", id: file.id }) },
-            { type: "divider" },
-            { key: "delete", label: "删除索引", danger: true, icon: <DeleteOutlined />, onClick: () => remove(file) },
-          ]}
-        />
-      ),
+      render: (_value, file) => {
+        const status = data.webdav.remote[file.id] ?? null;
+        return (
+          <RowActions
+            actions={[
+              {
+                key: "copy",
+                label: "复制路径",
+                icon: <CopyOutlined />,
+                onClick: () => copyPath(file),
+              },
+              // 下载只对远端条目开放，且本账号要配好 WebDAV（否则点下去必 503）；
+              // 「远端已不存在」时置灰而不是让用户点出 404
+              ...(isRemote(file) && data.webdav.enabled
+                ? [
+                    {
+                      key: "download",
+                      label: status && !status.exists ? "远端已不存在，无法下载" : "下载",
+                      icon: <DownloadOutlined />,
+                      disabled: status ? !status.exists : false,
+                      onClick: () => download(file),
+                    },
+                  ]
+                : []),
+              { key: "edit", label: "编辑", icon: <EditOutlined />, onClick: () => setEditing(file) },
+              {
+                key: "touch",
+                label: "记录为最近使用",
+                icon: <HistoryOutlined />,
+                onClick: () => post({ intent: "touch", id: file.id }),
+              },
+              { key: "delete", label: "删除索引", icon: <DeleteOutlined />, tone: "danger", onClick: () => remove(file) },
+            ]}
+          />
+        );
+      },
     },
   ];
 
@@ -255,12 +415,27 @@ export default function FilesRoute(): React.ReactElement {
     <Flex vertical gap="large" className="page-stack">
       <PageHeader
         title="重要文件"
-        description="收藏本机或共享盘文件路径，方便查找与复制。"
+        eyebrow="FILES"
+        description={
+          data.webdav.enabled
+            ? `从 WebDAV「${data.webdav.root}」直接浏览、选择与上传。`
+            : "配置 WebDAV 后，即可从远端直接浏览、选择与上传。"
+        }
+        help="只登记路径索引，不会移动或删除磁盘上的原文件。"
         extra={
           <>
             <Button icon={<ReloadOutlined />} onClick={() => revalidator.revalidate()} loading={busy}>
               刷新
             </Button>
+            {data.webdav.enabled ? (
+              <Button icon={<CloudOutlined />} onClick={() => setUploadOpen(true)}>
+                浏览 WebDAV
+              </Button>
+            ) : (
+              <Button icon={<SettingOutlined />} href="/settings?tab=webdav">
+                配置 WebDAV
+              </Button>
+            )}
             <Button color="primary" variant="solid" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
               添加文件
             </Button>
@@ -269,6 +444,10 @@ export default function FilesRoute(): React.ReactElement {
       />
 
       {error ? <Alert type="error" showIcon title={error} /> : null}
+
+      {data.webdav.enabled && !data.webdav.reachable ? (
+        <Alert type="warning" showIcon title="WebDAV 暂时不可达，远端文件状态未检查" description={data.webdav.message ?? undefined} />
+      ) : null}
 
       <Card variant="outlined">
         <Flex vertical gap="middle">
@@ -333,7 +512,7 @@ export default function FilesRoute(): React.ReactElement {
             columns={columns}
             dataSource={data.files}
             loading={busy}
-            scroll={{ x: 960 }}
+            scroll={{ x: isAdmin ? 1100 : 960 }}
             rowSelection={{ selectedRowKeys: selectedKeys, preserveSelectedRowKeys: true, onChange: (keys) => setSelectedKeys(keys) }}
             pagination={{
               pageSize: 10,
@@ -361,7 +540,7 @@ export default function FilesRoute(): React.ReactElement {
         </Flex>
       </Card>
 
-      <FormModal
+      <FormDrawer
         open={createOpen}
         title="添加文件索引"
         okText="添加"
@@ -370,6 +549,18 @@ export default function FilesRoute(): React.ReactElement {
         error={error}
         initialValues={{ orgId: orgFilter || data.organizations.at(0)?.id || "" }}
         onCancel={() => setCreateOpen(false)}
+        // 选择器挂在本抽屉**里面**（afterForm）：antd 会给嵌套的浮层 +100 层级，
+        // 保证它稳稳盖在表单抽屉之上，不依赖两个同层抽屉的 DOM 顺序（CODE_STYLE §10.7 第 2 条）
+        afterForm={
+          <WebDavFilePicker
+            open={pickTarget === "create"}
+            root={data.webdav.root}
+            initialPath={pickStart}
+            currentFilePath={pickCurrent}
+            onClose={() => setPickTarget(null)}
+            onPick={applyPicked}
+          />
+        }
         onFinish={(values) => {
           const name = values.name?.trim();
           const filePath = values.filePath?.trim();
@@ -383,17 +574,15 @@ export default function FilesRoute(): React.ReactElement {
           });
         }}
       >
-        <Form.Item name="name" label="文件名称" rules={[{ required: true, message: "请输入文件名称" }]}>
+        <Form.Item
+          name="name"
+          label="文件名称"
+          rules={[{ required: true, message: "请输入文件名称" }]}
+          tooltip="从 WebDAV 选文件时会自动填入文件名（已经填过就不覆盖）"
+        >
           <Input placeholder="例如：2026 版报价单模板" maxLength={80} />
         </Form.Item>
-        <Form.Item
-          name="filePath"
-          label="文件路径"
-          rules={[{ required: true, message: "请输入文件路径" }]}
-          tooltip="本机绝对路径或共享盘路径（\\\\server\\share\\...）"
-        >
-          <Input placeholder="C:\work\报价单模板.xlsx" maxLength={400} />
-        </Form.Item>
+        <FilePathItem webdavEnabled={data.webdav.enabled} onPick={() => openFilePicker("create")} />
         <Form.Item name="category" label="分类" tooltip="用于列表筛选，例如：报价 / 客户资料 / 模板">
           <Input placeholder="可选" maxLength={40} />
         </Form.Item>
@@ -405,9 +594,9 @@ export default function FilesRoute(): React.ReactElement {
             />
           </Form.Item>
         ) : null}
-      </FormModal>
+      </FormDrawer>
 
-      <FormModal
+      <FormDrawer
         open={editing !== null}
         title="编辑文件索引"
         form={editForm}
@@ -420,6 +609,16 @@ export default function FilesRoute(): React.ReactElement {
           category: editing?.category ?? "",
         }}
         onCancel={() => setEditing(null)}
+        afterForm={
+          <WebDavFilePicker
+            open={pickTarget === "edit"}
+            root={data.webdav.root}
+            initialPath={pickStart}
+            currentFilePath={pickCurrent}
+            onClose={() => setPickTarget(null)}
+            onPick={applyPicked}
+          />
+        }
         onFinish={(values) => {
           if (!editing) return;
           const name = values.name?.trim();
@@ -431,13 +630,59 @@ export default function FilesRoute(): React.ReactElement {
         <Form.Item name="name" label="文件名称" rules={[{ required: true, message: "请输入文件名称" }]}>
           <Input maxLength={80} />
         </Form.Item>
-        <Form.Item name="filePath" label="文件路径" rules={[{ required: true, message: "请输入文件路径" }]}>
-          <Input maxLength={400} />
-        </Form.Item>
+        <FilePathItem webdavEnabled={data.webdav.enabled} onPick={() => openFilePicker("edit")} />
         <Form.Item name="category" label="分类">
           <Input placeholder="可选" maxLength={40} />
         </Form.Item>
-      </FormModal>
+      </FormDrawer>
+
+      <WebDavUploadPicker
+        open={uploadOpen}
+        root={data.webdav.root}
+        organizations={data.organizations.filter((org) => org.status === "active")}
+        defaultOrgId={orgFilter || data.organizations.at(0)?.id || ""}
+        defaultCategory={category}
+        onClose={() => setUploadOpen(false)}
+        onRegister={(entry, values) => {
+          setUploadOpen(false);
+          post({
+            intent: "create",
+            name: entry.name,
+            filePath: entry.filePath,
+            category: values.category,
+            ...(values.orgId ? { orgId: values.orgId } : {}),
+          });
+        }}
+        onUploaded={() => void revalidator.revalidate()}
+      />
     </Flex>
+  );
+}
+
+/**
+ * 「文件路径」字段（D-48）：**只能选**——点「选择文件」在 WebDAV 目录里挑，字段只读展示选中的路径。
+ * 浏览器读不到本机磁盘、服务端也不该为此暴露文件系统，所以这里不再有手写入口
+ * （已有的本机路径索引照常显示，复制 / 改名 / 分类不受影响）。
+ *
+ * 用 `Space.Compact` + 内层 `Form.Item noStyle` 是 antd 的标准「输入框 + 按钮」写法：
+ * 校验与外层的标签 / 提示仍然由外层 `Form.Item` 负责，两个抽屉共用同一个字段定义。
+ */
+function FilePathItem({ webdavEnabled, onPick }: { webdavEnabled: boolean; onPick: () => void }): React.ReactElement {
+  return (
+    <Form.Item
+      label="文件路径"
+      required
+      tooltip="点「选择文件」在远端目录里挑，路径自动填好"
+      {...(webdavEnabled ? {} : { extra: "本账号还没配置 WebDAV，「选择文件」暂时用不了：请先到「设置 → WebDAV」保存一次账号。" })}
+    >
+      <Space.Compact style={{ width: "100%" }}>
+        <Form.Item name="filePath" noStyle rules={[{ required: true, message: "请选择文件" }]}>
+          <Input readOnly placeholder="点右侧「选择文件」从 WebDAV 挑" maxLength={400} />
+        </Form.Item>
+        <Button icon={<FolderOpenOutlined />} onClick={onPick} disabled={!webdavEnabled}>
+          选择文件
+        </Button>
+      </Space.Compact>
+    </Form.Item>
   );
 }

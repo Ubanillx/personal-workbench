@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { TaskStatus } from "../../shared/types/domain";
-import { clamp, date, db, now, ownerIdOf, priority, rows, run, type User } from "./db.server";
+import { clamp, date, db, now, one, ownerIdOf, priority, rows, run, type User } from "./db.server";
 import { assertOrgAccess, orgIsActive } from "./session.server";
 import {
   canManageTasks,
@@ -99,21 +99,35 @@ export function updateTask(user: User, id: string, body: Record<string, unknown>
   if (body.progress !== undefined || body.status !== undefined) return failed("FIELD_FORBIDDEN", "请使用进度和验收接口变更任务状态", 400);
   const title = String(body.title ?? current.title).trim();
   if (!title) return failed("VALIDATION_ERROR", "任务标题不能为空", 400);
+  /**
+   * 所属组织：请求里带 `orgId` 且与当前不同 = 换组织（§14.3、D-47）。
+   * - 只有**全局管理员**能换：组织管理者只在本组织内有管理权，不能把任务搬到别的组织；
+   * - 目标组织必须启用（已解散的组织不能再接收任务）；
+   * - 负责人跟着按**目标组织**校验——换组织后负责人必须属于新组织，否则负责人看不到自己的任务。
+   */
+  const orgId = body.orgId === undefined ? located.orgId : String(body.orgId ?? "").trim();
+  const movingOrg = orgId !== located.orgId;
+  if (movingOrg) {
+    if (user.role !== "admin") return failed("FORBIDDEN", "只有管理员可以修改任务所属组织", 403);
+    if (!orgId) return failed("VALIDATION_ERROR", "任务必须属于某个组织", 400);
+    if (!orgIsActive(user, orgId)) return failed("VALIDATION_ERROR", "组织不存在或已解散，不能改到该组织", 400);
+  }
   const ownerId = Object.prototype.hasOwnProperty.call(body, "ownerId") ? ownerIdOf(body.ownerId, null) : current.ownerId;
-  const owner = validateOwner(database, ownerId, { orgId: located.orgId });
+  const owner = validateOwner(database, ownerId, { orgId });
   if (!owner.valid) return failed("VALIDATION_ERROR", owner.message, 400);
   const isPrivate = body.isPrivate === undefined ? Number(current.isPrivate) : body.isPrivate ? 1 : 0;
   if (isPrivate && ownerId !== current.createdBy) return failed("VALIDATION_ERROR", "私密任务只能由创建者本人负责", 400);
   const stamp = now();
   run(
     database,
-    "UPDATE tasks SET title=?,description=?,priority=?,due_date=?,owner_id=?,is_private=?,updated_at=? WHERE id=?",
+    "UPDATE tasks SET title=?,description=?,priority=?,due_date=?,owner_id=?,is_private=?,org_id=?,updated_at=? WHERE id=?",
     title.slice(0, 240),
     String(body.description ?? current.description),
     priority(body.priority ?? current.priority),
     body.dueDate === undefined ? current.dueDate : date(body.dueDate),
     ownerId,
     isPrivate,
+    orgId,
     stamp,
     id,
   );
@@ -127,6 +141,20 @@ export function updateTask(user: User, id: string, body: Record<string, unknown>
       "task_reassigned",
       "任务负责人已变更",
       `任务“${current.title}”已重新分配`,
+    );
+  }
+  if (movingOrg) {
+    const targetName = one<{ name: string }>(database, "SELECT name FROM organizations WHERE id=?", orgId)?.name ?? "新组织";
+    event(database, id, user, "task_moved", `所属组织从 ${current.orgName ?? "—"} 改为 ${targetName}`);
+    // notifications.event_type 的 CHECK 里没有 task_moved（009），这里复用 task_reassigned 作为路由键，
+    // 用户看到的是下面的标题与正文：负责人 + **新组织**的组织管理者（orgManagerIds 读的是更新后的 org_id）
+    notifyParticipants(
+      database,
+      findTask(database, id) as TaskView,
+      user.id,
+      "task_reassigned",
+      "任务已调整到本组织",
+      `任务“${current.title}”已从「${current.orgName ?? "—"}」调整到「${targetName}」`,
     );
   }
   return done(findTask(database, id) as TaskView);

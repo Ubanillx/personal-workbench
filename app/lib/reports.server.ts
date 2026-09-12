@@ -1,10 +1,20 @@
 import { randomUUID } from "node:crypto";
-import { promises as fsp } from "node:fs";
+import { createReadStream, promises as fsp } from "node:fs";
 import path from "node:path";
+import { Readable } from "node:stream";
 import type { Report, ReportDocType, ReportFile, ReportStatus } from "../../shared/types/domain";
-import { appConfig } from "./context.server";
 import { date, db, now, one, rows, run, USER_SELECT, toUser, type User } from "./db.server";
 import { fail } from "./http.server";
+import { createNotification } from "./notifications.server";
+import {
+  ReportStorageError,
+  isRemoteStoredName,
+  openReportDownload,
+  reportStorageCode,
+  reportStorageMessage,
+  reportStorageStatus,
+  uploadReportFile,
+} from "./report-storage.server";
 import { assertOrgAccess, assertOrgManage, orgScope } from "./session.server";
 
 /**
@@ -18,6 +28,12 @@ import { assertOrgAccess, assertOrgManage, orgScope } from "./session.server";
  *   「不存在 / 跨组织 / 看不到」返回同样的 404（§4 不变式 1，不泄露资源是否存在）；
  * - 写入：`INSERT` 显式写 `weekly_reports.org_id`（迁移 009 起是 NOT NULL）；
  * - `report_files` 没有 `org_id`，一律经 `report_id` 先过周报的组织边界（§14.2 的间接表规则）。
+ *
+ * 存储与归属（D-46，见 docs/harness/REPORTS_WEBDAV.md）：
+ * - **归属人恒为提交者本人**：`ownerId` 不再从表单读取，代传（管理者代本组织成员提交）已取消，
+ *   管理员不参与提交（403）；正文落点由 `report-storage.server.ts` 按
+ *   `<上传根目录>/<用户名>/<起止日期>/<文件名>` 写到 NAS；
+ * - 本文件里**没有任何本地磁盘读写**了：老记录的本地读路径只在下载路由里保留一个兼容分支。
  */
 
 /* ------------------------------------------------------------------ 结果与载荷 */
@@ -178,8 +194,10 @@ export type OwnerCheck = { valid: true; id: string; name: string; orgId: string 
 /**
  * 校验周报归属人（与任务域 `validateOwner` 同一口径）：
  * 账号必须启用、必须已加入组织（周报的 `org_id` 由归属人决定），
- * 且非管理员指派时必须是**本组织**的人。member / manager / admin 都可以是归属人。
- * `options.orgId` 省略时不校验组织（管理员跨组织指派）。
+ * 且非管理员指派时必须是**本组织**的人。
+ *
+ * D-46 之后调用方只剩一个：`createReport` 拿**提交者自己**的 id 过一遍，
+ * 确认「启用 + 有组织」这两个前提仍然成立（代传与跨组织指派已取消，`options.orgId` 只作防御保留）。
  */
 export function validateReportOwner(id: string | null, options: { orgId?: string | null } = {}): OwnerCheck {
   if (!id) return { valid: false, message: "请选择归属人" };
@@ -192,7 +210,11 @@ export function validateReportOwner(id: string | null, options: { orgId?: string
   return { valid: true, id: owner.id, name: owner.name, orgId: owner.orgId };
 }
 
-/** 上传表单「归属人」下拉的数据源：范围内的启用成员（admin 为全部组织，manager 为本组织） */
+/**
+ * 周报页「归属人」**筛选器**的数据源：范围内的启用成员（admin 为全部组织，manager 为本组织）。
+ *
+ * D-46 之后它不再服务于上传表单（归属人恒为提交者本人、代传已取消），只用来筛列表。
+ */
 export function listReportOwnersFor(user: User): Array<{ id: string; name: string; orgName: string | null }> {
   const scope = orgScope(user);
   if (!scope && user.role !== "admin") return [];
@@ -209,11 +231,24 @@ export function listReportOwnersFor(user: User): Array<{ id: string; name: strin
 /* ------------------------------------------------------------------ 写：建单 / 重传 / 审批 / 退回 */
 
 /**
- * POST /api/reports：字段校验 → 归属人（决定 `org_id`）→ 落盘 → 写库 → 通知本组织管理者。
- * 组织归属遵循 §14.2：普通用户 / 组织管理者写自己的组织，管理员是全局角色（不隶属组织），
- * 由归属人所属组织决定。
+ * 把存储层的异常收成周报域的服务结果（消息由 `report-storage.server.ts` 翻译成人话）。
+ * 单独抽出来是因为建单与重传两条写入路径都要用，且都必须**在写库之前**失败。
+ */
+function storageFailure(error: unknown): ServiceResult<never> {
+  if (error instanceof ReportStorageError) return failed(error.code, error.message, error.status);
+  return failed(reportStorageCode(error), reportStorageMessage(error), reportStorageStatus(error));
+}
+
+/**
+ * POST /api/reports：字段校验 → 归属人（**恒为提交者本人**）→ 写 NAS → 写库 → 通知本组织管理者。
+ *
+ * D-46 起这里的归属人不再来自表单：谁登录谁就是归属人，`org_id` 就是他自己的组织。
+ * 管理员是全局角色（没有组织），**不参与提交**——周报本来就是成员交、管理者审，
+ * 因此管理员在这里直接 403，页面上也不给上传入口。
  */
 export async function createReport(user: User, upload: Upload): Promise<ServiceResult<ReportView>> {
+  if (user.role === "admin") return failed("FORBIDDEN", "管理员不提交周报，请由成员本人提交", 403);
+
   const fields = upload.fields;
   const periodStart = date(fields.periodStart);
   const periodEnd = date(fields.periodEnd);
@@ -224,12 +259,10 @@ export async function createReport(user: User, upload: Upload): Promise<ServiceR
   const ext = extensionOf(upload.file.filename);
   if (!isAllowedExt(ext)) return failed("VALIDATION_ERROR", "仅支持 .xlsx / .xls / .docx / .doc 文件", 400);
 
-  // 未加入组织的账号（D-24）没有可写入的组织；组织管理者与普通用户只能写自己的组织。
-  // 管理员是全局角色、不隶属组织，周报的组织由归属人所属组织决定（§14.2）。
-  const orgId = user.role === "admin" ? null : user.orgId;
-  if (user.role !== "admin" && !orgId) return failed("FORBIDDEN", "你还没有加入组织，无法提交周报", 403);
-  // 普通用户只能提交自己的；管理员与组织管理者可以代传本组织的成员（§14.3）
-  const owner = validateReportOwner(user.role === "member" ? user.id : resolveOwnerId(fields.ownerId), { orgId });
+  // 未加入组织的账号（D-24）没有可写入的组织（管理员已在上面的分支里挡掉）
+  const orgId = user.orgId;
+  if (!orgId) return failed("FORBIDDEN", "你还没有加入组织，无法提交周报", 403);
+  const owner = validateReportOwner(user.id, { orgId });
   if (!owner.valid) return failed("VALIDATION_ERROR", owner.message, 400);
 
   const id = randomUUID();
@@ -237,7 +270,21 @@ export async function createReport(user: User, upload: Upload): Promise<ServiceR
   const note = String(fields.note ?? "")
     .trim()
     .slice(0, 2000);
-  const file = await persistFile(appConfig().uploadsDir, id, 1, upload, ext);
+  // 先写远端再写库：远端失败时库里不留半条记录（远端成功、写库失败会留一个孤儿文件，见设计文档 §11.5）
+  let stored: { storedName: string; size: number };
+  try {
+    stored = await uploadReportFile({
+      username: user.username,
+      periodStart,
+      periodEnd,
+      originalName: upload.file.filename,
+      version: 1,
+      buffer: upload.file.buffer,
+      contentType: upload.file.mimetype,
+    });
+  } catch (error) {
+    return storageFailure(error);
+  }
   run(
     db(),
     `INSERT INTO weekly_reports(id,org_id,owner_id,period_start,period_end,doc_type,note,status,current_version,
@@ -265,8 +312,8 @@ export async function createReport(user: User, upload: Upload): Promise<ServiceR
     reportId: id,
     version: 1,
     originalName: sanitizeName(upload.file.filename),
-    storedName: file.storedName,
-    sizeBytes: file.size,
+    storedName: stored.storedName,
+    sizeBytes: stored.size,
     ext,
     mimeType: upload.file.mimetype || null,
     uploadedBy: user.id,
@@ -362,8 +409,11 @@ export function reuploadTarget(user: User, id: string): ServiceResult<ScopedRepo
 }
 
 /**
- * POST /api/reports/:id/file 的落库部分：落盘 → 记新版本（经 `report_id` 关联）→ 通知本组织管理者。
+ * POST /api/reports/:id/file 的落库部分：写 NAS → 记新版本（经 `report_id` 关联）→ 通知本组织管理者。
  * `target` 由 `reuploadTarget` 产出，已经过组织边界、权限与状态校验。
+ *
+ * 远端目录取**这份周报归属人**的用户名与周期（不是上传者的）：重传可能由管理者或管理员触发，
+ * 但文件始终落在同一个人的同一个周期目录下，路径规则不因谁来操作而变化（D-46）。
  */
 export async function reuploadReport(user: User, target: ScopedReport, upload: Upload): Promise<ServiceResult<ReportView>> {
   const report = target.report;
@@ -372,7 +422,20 @@ export async function reuploadReport(user: User, target: ScopedReport, upload: U
 
   const version = report.currentVersion + 1;
   const stamp = now();
-  const file = await persistFile(appConfig().uploadsDir, report.id, version, upload, ext);
+  let stored: { storedName: string; size: number };
+  try {
+    stored = await uploadReportFile({
+      username: usernameOf(report.ownerId),
+      periodStart: report.periodStart,
+      periodEnd: report.periodEnd,
+      originalName: upload.file.filename,
+      version,
+      buffer: upload.file.buffer,
+      contentType: upload.file.mimetype,
+    });
+  } catch (error) {
+    return storageFailure(error);
+  }
   run(
     db(),
     `UPDATE weekly_reports SET status='submitted',current_version=?,review_note=NULL,submitted_at=?,returned_at=NULL,reviewed_at=NULL,updated_at=?
@@ -387,8 +450,8 @@ export async function reuploadReport(user: User, target: ScopedReport, upload: U
     reportId: report.id,
     version,
     originalName: sanitizeName(upload.file.filename),
-    storedName: file.storedName,
-    sizeBytes: file.size,
+    storedName: stored.storedName,
+    sizeBytes: stored.size,
     ext,
     mimeType: upload.file.mimetype || null,
     uploadedBy: user.id,
@@ -413,18 +476,7 @@ export async function reuploadReport(user: User, target: ScopedReport, upload: U
 
 function notifyReport(recipientId: string, actorId: string, reportId: string, type: string, title: string, message: string): void {
   if (!recipientId || recipientId === actorId) return;
-  run(
-    db(),
-    "INSERT INTO notifications(id,recipient_id,actor_id,task_id,report_id,event_type,title,message,is_read,created_at,read_at) VALUES(?,?,?,NULL,?,?,?,?,0,?,NULL)",
-    randomUUID(),
-    recipientId,
-    actorId,
-    reportId,
-    type,
-    title,
-    message,
-    now(),
-  );
+  createNotification(db(), { recipientId, actorId, reportId, eventType: type, title, message });
 }
 
 /**
@@ -495,26 +547,44 @@ export function handleUploadError(error: unknown): Response {
   return fail("BAD_REQUEST", "上传内容无法解析", 400);
 }
 
-async function persistFile(
-  uploadsDir: string,
+/**
+ * 打开一份周报正文用于下载（D-46）。分成两条路径：
+ *
+ * - `webdav:` 前缀 = 新式记录 → 走 NAS 流式读取（`report-storage.server.ts`）；
+ * - 无前缀 = 迁移脚本还没搬到的老记录 → 仍读本地 `data/uploads/reports/<reportId>/<storedName>`。
+ *
+ * 兼容分支保留到 CLI 跑完（`TODO-14` 负责删掉它）。返回 `null` 表示「文件确实没了」，
+ * 调用方给 404「文件已丢失」；NAS 连不上等异常照旧抛出。
+ */
+export async function openReportFile(
+  storedName: string,
   reportId: string,
-  version: number,
-  upload: Upload,
-  ext: string,
-): Promise<{ storedName: string; size: number }> {
-  const dir = path.join(uploadsDir, reportId);
-  await fsp.mkdir(dir, { recursive: true });
-  const storedName = `v${version}${ext}`;
-  const targetPath = path.join(dir, storedName);
-  if (upload.file.buffer.length > MAX_FILE_BYTES) {
-    throw new UploadError("文件超过 20MB 大小限制", 413, "FILE_TOO_LARGE");
+  uploadsDir: string,
+): Promise<{ body: ReadableStream<Uint8Array>; size: number | null } | null> {
+  if (isRemoteStoredName(storedName)) {
+    const remote = await openReportDownload(storedName);
+    return remote ? { body: remote.body, size: remote.size } : null;
   }
-  await fsp.writeFile(targetPath, upload.file.buffer, { flag: "wx" });
-  return { storedName, size: upload.file.buffer.length };
+  const legacyPath = path.join(uploadsDir, reportId, storedName);
+  let size: number;
+  try {
+    size = (await fsp.stat(legacyPath)).size;
+  } catch {
+    return null;
+  }
+  // 老记录也用流读，不整份读进内存（`access`/`stat` 先失败成 404，避免错误在响应中途才炸）
+  return { body: Readable.toWeb(createReadStream(legacyPath)) as ReadableStream<Uint8Array>, size };
 }
 
 function normalizeDocType(value: string | undefined): ReportDocType | null {
   return value === "weekly_report" || value === "summary" || value === "other" ? value : null;
+}
+
+/** 周报归属人的**登录用户名**：远端目录的第一层就是它（D-46）。 */
+function usernameOf(userId: string): string {
+  const row = one<{ username: string }>(db(), "SELECT username FROM users WHERE id=?", userId);
+  // 账号被删时周报会级联删除，取不到只可能是数据被手工改过——给个兜底段名，不抛异常
+  return row ? String(row.username) : "unnamed";
 }
 
 function isAllowedExt(ext: string): boolean {
@@ -525,11 +595,6 @@ function extensionOf(filename: string): string {
   const base = path.basename(filename ?? "");
   const index = base.lastIndexOf(".");
   return index > 0 ? base.slice(index).toLowerCase() : "";
-}
-
-function resolveOwnerId(value: string | undefined): string | null {
-  const trimmed = (value ?? "").trim();
-  return trimmed || null;
 }
 
 // 文件名来自外部上传，必须剔除控制字符与路径分隔符，因此这里刻意匹配控制字符

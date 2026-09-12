@@ -18,5 +18,6 @@ export const taskRoutes = [
   route("api/tasks/:id/activity", "routes/api.tasks.$id.activity.ts"),
   route("api/notifications", "routes/api.notifications.ts"),
   route("api/notifications/read", "routes/api.notifications.read.ts"),
+  route("api/notifications/stream", "routes/api.notifications.stream.ts"),
   route("api/review", "routes/api.review.ts"),
 ] satisfies RouteConfig;

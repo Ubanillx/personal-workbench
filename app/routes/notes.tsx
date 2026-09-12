@@ -10,20 +10,20 @@ import {
   Flex,
   Form,
   Input,
+  Segmented,
   Select,
   Space,
-  Switch,
   Table,
   Tag,
   Tooltip,
   Typography,
   type TableProps,
 } from "antd";
-import { DeleteOutlined, EditOutlined, PlusOutlined, PushpinFilled, ReloadOutlined } from "@ant-design/icons";
+import { DeleteOutlined, EditOutlined, PlusOutlined, PushpinFilled, PushpinOutlined, ReloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { confirmDanger, RowActions } from "../components/crud-actions";
 import { useCrudFeedback, useListParams } from "../components/crud-hooks";
-import { FormModal } from "../components/crud-modal";
+import { FormDrawer } from "../components/crud-drawer";
 import { SelectionAlert, TableToolbar } from "../components/crud-toolbar";
 import { PageHeader } from "../components/page-header";
 import { readPayload } from "../lib/form.server";
@@ -37,14 +37,34 @@ type NoteRow = {
   isPinned: number | boolean;
   createdAt: string;
   updatedAt: string;
+  /** 所属组织：服务端读模型里有（`records.server.ts` 的 `NOTE_SELECT`），API 载荷不带（契约冻结），页面用它渲染管理员列 */
+  orgId: string | null;
 };
 type OrgOption = { id: string; name: string; status: string };
 type ActionResult = { ok: true; notice: string } | { error: string };
 
+/**
+ * 随手记的「灵感等级」用词约定（D-46）：
+ * - **状态词**（字段名 / 列头 / Tag / 筛选器）用「灵感等级：重点 / 普通」；
+ * - **动作词**（右侧操作按钮 / 批量按钮 / 成功提示）仍用「置顶 / 取消置顶」——
+ *   它描述的是「排到列表最前」这个效果，是中文后台里更好懂的动词。
+ * 两套词各管一头，但都是同一件事：`notes.is_pinned`。
+ */
 const PIN_OPTIONS = [
-  { value: "all", label: "全部记录" },
-  { value: "pinned", label: "仅置顶" },
-  { value: "normal", label: "非置顶" },
+  { value: "all", label: "全部" },
+  { value: "pinned", label: "仅重点" },
+  { value: "normal", label: "普通" },
+];
+
+/**
+ * 编辑表单里的「灵感等级」选项：只保留两个真实等级，不含筛选器里的「全部」。
+ * 表单里**不用 Switch**——开关语义是「立刻切换」，而这里是在编辑一条记录的等级，
+ * 与其它编辑表单（如任务的优先级）一致，用 `Select` 选。
+ * 取值仍用 `pinned` / `normal`，与数据列 `is_pinned` 一一对应，便于对照。
+ */
+const PIN_FORM_OPTIONS = [
+  { value: "pinned", label: "重点" },
+  { value: "normal", label: "普通" },
 ];
 
 /**
@@ -126,7 +146,7 @@ export default function NotesRoute(): React.ReactElement {
   const { modal } = AntdApp.useApp();
   const list = useListParams();
   const [createForm] = Form.useForm<{ content?: string; orgId?: string }>();
-  const [editForm] = Form.useForm<{ content?: string; isPinned?: boolean }>();
+  const [editForm] = Form.useForm<{ content?: string; level?: string }>();
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<NoteRow | null>(null);
   const [selectedKeys, setSelectedKeys] = useState<React.Key[]>([]);
@@ -153,7 +173,7 @@ export default function NotesRoute(): React.ReactElement {
           if (pin === "normal" && item.isPinned) return false;
           return true;
         })
-        // 置顶优先，其次按最近更新：与随手记的使用习惯一致
+        // 重点（置顶）优先，其次按最近更新：与随手记的使用习惯一致
         .toSorted((a, b) => Number(b.isPinned) - Number(a.isPinned) || b.updatedAt.localeCompare(a.updatedAt)),
     [data.items, keyword, pin],
   );
@@ -163,23 +183,9 @@ export default function NotesRoute(): React.ReactElement {
   };
   const filtered = Boolean(keyword || pin !== "all" || orgFilter);
 
+  // 列表里不再放「置顶」开关列：置顶 / 取消置顶由右侧「操作」列的按钮负责（还有批量操作），
+  // 同一个动作在表格里出现两次既重复又容易误点；「灵感等级」列与内容前的图钉只做只读展示。
   const columns: TableProps<NoteRow>["columns"] = [
-    {
-      title: "置顶",
-      dataIndex: "isPinned",
-      key: "isPinned",
-      width: 84,
-      align: "center",
-      render: (_value, row) => (
-        <Switch
-          size="small"
-          checked={Boolean(row.isPinned)}
-          disabled={busy}
-          aria-label={row.isPinned ? "取消置顶" : "置顶"}
-          onChange={(checked) => post({ intent: "pin", id: row.id, isPinned: checked })}
-        />
-      ),
-    },
     {
       title: "记录内容",
       dataIndex: "content",
@@ -196,17 +202,17 @@ export default function NotesRoute(): React.ReactElement {
       ),
     },
     {
-      title: "状态",
-      key: "state",
-      width: 100,
+      title: "灵感等级",
+      key: "level",
+      width: 120,
       filters: [
-        { text: "已置顶", value: "pinned" },
+        { text: "重点", value: "pinned" },
         { text: "普通", value: "normal" },
       ],
       onFilter: (value, row) => (value === "pinned" ? Boolean(row.isPinned) : !row.isPinned),
       render: (_value, row) => (
         <Tag color={row.isPinned ? "gold" : "default"} variant="filled">
-          {row.isPinned ? "已置顶" : "普通"}
+          {row.isPinned ? "重点" : "普通"}
         </Tag>
       ),
     },
@@ -224,30 +230,45 @@ export default function NotesRoute(): React.ReactElement {
         </Space>
       ),
     },
+    // 「所属组织」列只对管理员渲染：新建表单里就有这个字段（管理员必须选），列表里也就必须看得见（D-47）
+    ...(isAdmin
+      ? ([
+          {
+            title: "所属组织",
+            key: "orgName",
+            width: 140,
+            render: (_value: unknown, row: NoteRow) => {
+              const name = data.organizations.find((org) => org.id === row.orgId)?.name;
+              return name ? <Tag color="blue">{name}</Tag> : <Typography.Text type="secondary">—</Typography.Text>;
+            },
+          },
+        ] satisfies TableProps<NoteRow>["columns"])
+      : []),
     {
       title: "操作",
       key: "actions",
-      width: 120,
+      width: 200,
       align: "right",
       render: (_value, row) => (
         <RowActions
-          extra={
-            <Button size="small" color="default" variant="text" icon={<EditOutlined />} onClick={() => setEditing(row)}>
-              编辑
-            </Button>
-          }
-          items={[
+          actions={[
+            {
+              key: "edit",
+              label: "编辑",
+              icon: <EditOutlined />,
+              onClick: () => setEditing(row),
+            },
             {
               key: "pin",
               label: row.isPinned ? "取消置顶" : "置顶",
+              icon: <PushpinOutlined />,
               onClick: () => post({ intent: "pin", id: row.id, isPinned: !row.isPinned }),
             },
-            { type: "divider" },
             {
               key: "delete",
               label: "删除",
-              danger: true,
               icon: <DeleteOutlined />,
+              tone: "danger",
               onClick: () =>
                 confirmDanger(modal, {
                   title: "删除这条随手记？",
@@ -266,7 +287,8 @@ export default function NotesRoute(): React.ReactElement {
     <Flex vertical gap="large" className="page-stack">
       <PageHeader
         title="随手记"
-        description="记录想法与要点，重要内容可置顶。"
+        eyebrow="NOTES"
+        description="记录要点与灵感，重点内容会排在列表最前。"
         extra={
           <>
             <Button icon={<ReloadOutlined />} onClick={() => revalidator.revalidate()} loading={busy}>
@@ -299,11 +321,11 @@ export default function NotesRoute(): React.ReactElement {
               onChange={(event) => setDraftKeyword(event.target.value)}
               onSearch={(value) => list.patch({ q: value.trim() })}
             />
-            <Select
+            <Segmented
               value={pin}
               options={PIN_OPTIONS}
-              style={{ width: 140 }}
-              onChange={(value: string) => list.patch({ pin: value === "all" ? null : value })}
+              aria-label="按灵感等级筛选"
+              onChange={(value) => list.patch({ pin: value === "all" ? null : String(value) })}
             />
             {isAdmin ? (
               <Select
@@ -350,7 +372,7 @@ export default function NotesRoute(): React.ReactElement {
             columns={columns}
             dataSource={rows}
             loading={busy}
-            scroll={{ x: 880 }}
+            scroll={{ x: isAdmin ? 940 : 800 }}
             rowSelection={{
               selectedRowKeys: selectedKeys,
               preserveSelectedRowKeys: true,
@@ -382,7 +404,7 @@ export default function NotesRoute(): React.ReactElement {
         </Flex>
       </Card>
 
-      <FormModal
+      <FormDrawer
         open={createOpen}
         title="新建随手记"
         okText="保存"
@@ -414,31 +436,31 @@ export default function NotesRoute(): React.ReactElement {
             />
           </Form.Item>
         ) : null}
-      </FormModal>
+      </FormDrawer>
 
-      <FormModal
+      <FormDrawer
         open={editing !== null}
         title="编辑随手记"
         form={editForm}
         submitting={busy}
         error={error}
         formKey={editing?.id ?? "none"}
-        initialValues={{ content: editing?.content ?? "", isPinned: Boolean(editing?.isPinned) }}
+        initialValues={{ content: editing?.content ?? "", level: editing?.isPinned ? "pinned" : "normal" }}
         onCancel={() => setEditing(null)}
         onFinish={(values) => {
           if (!editing) return;
           const content = values.content?.trim();
           if (!content) return;
-          post({ intent: "update", id: editing.id, content, isPinned: Boolean(values.isPinned) });
+          post({ intent: "update", id: editing.id, content, isPinned: values.level === "pinned" });
         }}
       >
         <Form.Item name="content" label="记录内容" rules={[{ required: true, message: "请输入记录内容" }]}>
           <Input.TextArea rows={8} maxLength={2000} showCount autoSize={{ minRows: 6, maxRows: 12 }} />
         </Form.Item>
-        <Form.Item name="isPinned" label="置顶" valuePropName="checked" tooltip="置顶记录在列表最前，便于随时查看">
-          <Switch checkedChildren="已置顶" unCheckedChildren="普通" />
+        <Form.Item name="level" label="灵感等级" tooltip="重点的记录排在列表最前，便于随时查看">
+          <Select options={PIN_FORM_OPTIONS} />
         </Form.Item>
-      </FormModal>
+      </FormDrawer>
     </Flex>
   );
 }

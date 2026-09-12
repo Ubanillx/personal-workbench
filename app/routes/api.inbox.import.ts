@@ -77,7 +77,7 @@ export async function action({ request }: { request: Request }): Promise<Respons
       id,
       user,
       "task_created",
-      owner.user && owner.user.id !== user.id ? `从企微导入并分配给 ${owner.user.name}` : "从企微收件箱导入",
+      owner.user && owner.user.id !== user.id ? `从企微导入并分配给 ${owner.user.name}` : "从企微导入任务",
     );
     const task = findTask(database, id);
     if (task) created.push(task);

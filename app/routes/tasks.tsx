@@ -18,33 +18,38 @@ import {
   Select,
   Slider,
   Space,
+  Statistic,
   Table,
   Tag,
   Timeline,
   Tooltip,
   Typography,
   type DescriptionsProps,
-  type MenuProps,
   type TableProps,
 } from "antd";
 import {
   CheckOutlined,
   DeleteOutlined,
   EditOutlined,
+  EyeOutlined,
+  ImportOutlined,
   InboxOutlined,
   PlusOutlined,
   ReloadOutlined,
+  RiseOutlined,
   RollbackOutlined,
   SendOutlined,
   UndoOutlined,
+  UserSwitchOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import type { UserRole } from "../../shared/types/domain";
-import { confirmAction, confirmDanger, RowActions } from "../components/crud-actions";
+import { confirmAction, confirmDanger, RowActions, type RowAction } from "../components/crud-actions";
 import { useCrudFeedback, useListParams } from "../components/crud-hooks";
-import { FormModal } from "../components/crud-modal";
+import { FormDrawer } from "../components/crud-drawer";
 import { SelectionAlert, TableToolbar } from "../components/crud-toolbar";
 import { PageHeader } from "../components/page-header";
+import { WecomImportDrawer } from "../components/wecom-import-drawer";
 import { db, type User } from "../lib/db.server";
 import { readPayload } from "../lib/form.server";
 import { listAllAccounts, listMembers, listOrganizations } from "../lib/organization.server";
@@ -109,6 +114,8 @@ type TaskFormValues = {
   orgId?: string;
   isPrivate?: boolean;
 };
+/** 改派只动负责人，字段刻意只有一项：服务端 `updateTask` 会按 key 是否存在决定是否改 owner_id */
+type ReassignFormValues = { ownerId?: string };
 type ActionResult = { ok: true; notice: string } | { error: string };
 
 const STATUS_LABEL: Record<string, string> = { todo: "待办", in_progress: "进行中", pending_review: "待验收", completed: "已完成" };
@@ -117,13 +124,19 @@ const PRIORITY_COLOR: Record<string, string> = { P0: "red", P1: "gold", P2: "def
 const EVENT_LABEL: Record<string, string> = {
   task_created: "创建",
   task_reassigned: "改派",
+  task_moved: "调整组织",
   task_submitted: "提交验收",
   task_approved: "验收通过",
   task_returned: "退回",
   task_archived: "归档",
   task_restored: "恢复",
 };
-const TIMELINE_COLOR: Record<string, string> = { task_approved: "green", task_returned: "red", task_archived: "gray" };
+const TIMELINE_COLOR: Record<string, string> = {
+  task_approved: "green",
+  task_returned: "red",
+  task_archived: "gray",
+  task_moved: "purple",
+};
 const PRIORITY_OPTIONS = [
   { value: "P0", label: "P0 · 最高" },
   { value: "P1", label: "P1 · 普通" },
@@ -176,9 +189,15 @@ function assigneeCandidates(user: User): Member[] {
   return [];
 }
 
-/** 多组织时用「姓名（管理员）」区分全局账号；同组织内只显示姓名 */
+/**
+ * 多组织时用「姓名（管理员）」区分全局账号；同组织内只显示姓名。
+ *
+ * 判据必须是 **`role`**，不能是「没有组织」：`users` 的约束只要求「管理员不隶属组织」，
+ * 反过来的「没有组织 ⇒ 管理员」并不成立——注册后还没入组、被移出组织、组织被解散（D-24/D-32/D-33）
+ * 都会产生「role=member 且 org_id 为 NULL」的账号，按旧写法会把普通成员显示成「（管理员）」。
+ */
 function memberLabel(member: Member): string {
-  return member.orgId ? member.name : `${member.name}（管理员）`;
+  return member.role === "admin" ? `${member.name}（管理员）` : member.name;
 }
 
 function isOverdue(task: TaskRow, today: string): boolean {
@@ -199,6 +218,20 @@ export async function loader({ request }: { request: Request }) {
   // 组织筛选器只给管理员（D-28）；其他人的组织范围由可见性条件锁死
   const org = user.role === "admin" ? (url.searchParams.get("org") ?? null) : null;
   const tasks = visible(database, user, includeArchived, status, assignee, org) as unknown as TaskRow[];
+  const requestedRange = url.searchParams.get("range") ?? "all";
+  const range = canManage && ["week", "month", "custom"].includes(requestedRange) ? requestedRange : "all";
+  const today = dayjs().format("YYYY-MM-DD");
+  const validDate = (value: string | null): string =>
+    value && /^\d{4}-\d{2}-\d{2}$/.test(value) && dayjs(value).isValid() && dayjs(value).format("YYYY-MM-DD") === value ? value : "";
+  const from =
+    range === "custom"
+      ? validDate(url.searchParams.get("from"))
+      : range === "all"
+        ? ""
+        : dayjs()
+            .subtract(range === "week" ? 7 : 30, "day")
+            .format("YYYY-MM-DD");
+  const to = range === "custom" ? validDate(url.searchParams.get("to")) : range === "all" ? "" : today;
   const taskId = url.searchParams.get("task");
   let selected: TaskRow | null = null;
   let selectedOrgId: string | null = null;
@@ -218,7 +251,11 @@ export async function loader({ request }: { request: Request }) {
   return {
     user: user as Me,
     canManage,
-    tasks,
+    tasks: tasks.filter((task) => (!from || task.updatedAt.slice(0, 10) >= from) && (!to || task.updatedAt.slice(0, 10) <= to)),
+    range,
+    from,
+    to,
+    today,
     selected,
     selectedOrgId,
     activity,
@@ -300,24 +337,32 @@ export default function TasksRoute(): React.ReactElement {
   const navigation = useNavigation();
   const revalidator = useRevalidator();
   const submit = useSubmit();
-  const { modal } = AntdApp.useApp();
+  const { modal, message } = AntdApp.useApp();
   const list = useListParams();
   const [createForm] = Form.useForm<TaskFormValues>();
   const [editForm] = Form.useForm<TaskFormValues>();
+  const [reassignForm] = Form.useForm<ReassignFormValues>();
   const [createOpen, setCreateOpen] = useState(false);
-  const [editOpen, setEditOpen] = useState(false);
+  // 编辑 / 改派对象直接存整行数据（与 notes / todos / files 一致）：抽屉能立刻打开并回填，
+  // 不必等详情抽屉那条 loader 往返；也避免「详情 + 表单」两个同侧抽屉同时挂在 DOM 上互相压层级。
+  // 编辑与改派互斥（同一时刻只有一个非空），抽屉本身也拆成两个，职责单一。
+  const [editingTask, setEditingTask] = useState<TaskRow | null>(null);
+  const [reassigningTask, setReassigningTask] = useState<TaskRow | null>(null);
+  // 企微导入抽屉：它产出的就是任务，所以入口挂在**本页页头**，不再单开一个导航页面
+  const [importOpen, setImportOpen] = useState(false);
   const [selectedKeys, setSelectedKeys] = useState<React.Key[]>([]);
   const { error } = useCrudFeedback(actionData, () => {
     setCreateOpen(false);
-    setEditOpen(false);
+    setEditingTask(null);
+    setReassigningTask(null);
     setSelectedKeys([]);
   });
 
   const me = data.user;
   const canManage = data.canManage;
   const isAdmin = me.role === "admin";
-  const busy = navigation.state !== "idle";
-  const today = dayjs().format("YYYY-MM-DD");
+  const busy = navigation.state !== "idle" || revalidator.state !== "idle";
+  const today = data.today;
 
   const keyword = list.get("q");
   const [draftKeyword, setDraftKeyword] = useState(keyword);
@@ -336,23 +381,56 @@ export default function TasksRoute(): React.ReactElement {
   };
   const openDetail = (task: TaskRow): void => list.patch({ task: task.id });
   const closeDetail = (): void => list.patch({ task: null });
-  const filtered = Boolean(keyword || data.status !== "all" || data.assignee !== "all" || data.org || data.includeArchived);
+  /**
+   * 打开企微导入抽屉前先收起别的右侧抽屉（详情 / 编辑 / 改派）：
+   * 同一时刻只挂一个右侧浮层，层级才可预期（见 CODE_STYLE §10.7 第 2 条）。
+   */
+  const openImport = (): void => {
+    setEditingTask(null);
+    setReassigningTask(null);
+    if (list.get("task")) list.patch({ task: null });
+    setImportOpen(true);
+  };
+  const filtered = Boolean(
+    keyword || data.status !== "all" || data.assignee !== "all" || data.org || data.includeArchived || data.range !== "all",
+  );
+  const completed = rows.filter((task) => task.status === "completed").length;
   const activeOrganizations = data.organizations.filter((org) => org.status === "active");
+  /**
+   * 编辑抽屉「所属组织」的候选：启用中的组织都可选，但**任务当前所属的组织**无论状态都要列进去——
+   * 组织一旦解散，编辑这条任务时下拉里必须还能看到当前值（服务端只在「改到别的组织」时才校验组织是否启用）。
+   */
+  const editableOrganizations = useMemo(() => {
+    const options = data.organizations.map((org) => ({
+      value: org.id,
+      label: org.status === "archived" ? `${org.name}（已解散）` : org.name,
+    }));
+    const current = editingTask?.orgId;
+    if (current && !options.some((option) => option.value === current)) {
+      options.unshift({ value: current, label: `${editingTask?.orgName ?? "当前组织"}（已解散）` });
+    }
+    return options;
+  }, [data.organizations, editingTask]);
   /** 新建时的负责人候选：管理员按所选组织过滤（负责人必须属于任务所在组织） */
   const createOrgId = (Form.useWatch("orgId", createForm) as string | undefined) ?? "";
   const createAssigneePool = isAdmin
     ? data.members.filter((member) => member.role === "admin" || member.orgId === createOrgId)
     : data.members;
   const selectedTask = data.selected;
-  const detailMembers = isAdmin
-    ? data.members.filter((member) => member.role === "admin" || member.orgId === data.selectedOrgId)
-    : data.members;
+  // 改派的负责人候选：管理员按「任务所属组织」过滤（负责人必须属于任务所在组织）。
+  // 用编辑 / 改派对象自己的 orgId，而不是详情那条记录的 orgId——抽屉一打开就是正确名单，不必等 loader。
+  const formOrgId = editingTask?.orgId ?? reassigningTask?.orgId ?? data.selectedOrgId;
+  const taskMembers = isAdmin ? data.members.filter((member) => member.role === "admin" || member.orgId === formOrgId) : data.members;
 
-  const openEdit = (): void => setEditOpen(true);
-  /** 组织列只对管理员渲染（D-28 的合并视图要能看出每行属于哪个组织） */
+  const openEdit = (task: TaskRow): void => setEditingTask(task);
+  const openReassign = (task: TaskRow): void => setReassigningTask(task);
+  /**
+   * 「所属组织」列只对管理员渲染（D-28 的合并视图要能看出每行属于哪个组织）。
+   * 列头用与新建/编辑表单**逐字相同**的「所属组织」：同一个字段在列表与表单里只有一个说法（D-47）。
+   */
   const orgColumn: NonNullable<TableProps<TaskRow>["columns"]> = [
     {
-      title: "组织",
+      title: "所属组织",
       dataIndex: "orgName",
       key: "orgName",
       width: 140,
@@ -401,8 +479,6 @@ export default function TasksRoute(): React.ReactElement {
       dataIndex: "status",
       key: "status",
       width: 110,
-      filters: Object.entries(STATUS_LABEL).map(([value, text]) => ({ text, value })),
-      onFilter: (value, task) => task.status === value,
       render: (_value, task) => (
         <Tag color={STATUS_COLOR[task.status] ?? "default"} variant="filled">
           {STATUS_LABEL[task.status] ?? task.status}
@@ -437,134 +513,141 @@ export default function TasksRoute(): React.ReactElement {
           <Typography.Text type="secondary">未设置</Typography.Text>
         ),
     },
+    {
+      // 「更新时间范围」筛选器与默认排序真正作用的就是这一列（loader 里按 updated_at 过滤 + ORDER BY updated_at DESC）。
+      // 以前列表只有「截止日期」列，筛选项落在用户看不见的字段上 —— 补上这一列，筛选字段与显示字段才对得上。
+      title: "最近更新",
+      dataIndex: "updatedAt",
+      key: "updatedAt",
+      width: 160,
+      sorter: (a, b) => a.updatedAt.localeCompare(b.updatedAt),
+      defaultSortOrder: "descend",
+      render: (_value, task) => (
+        <Typography.Text type="secondary" title={dayjs(task.updatedAt).format("YYYY-MM-DD HH:mm")}>
+          {dayjs(task.updatedAt).format("MM-DD HH:mm")}
+        </Typography.Text>
+      ),
+    },
     ...(isAdmin ? orgColumn : []),
     {
       title: "操作",
       key: "actions",
-      width: 180,
+      width: 400,
       align: "right",
       render: (_value, task) => {
         const isOwner = task.ownerId === me.id;
         const canReport = isOwner && !task.archivedAt && task.status !== "completed" && task.status !== "pending_review";
-        const items: MenuProps["items"] = [
-          { key: "detail", label: "查看详情", onClick: () => openDetail(task) },
+        const actions: RowAction[] = [
+          {
+            key: "detail",
+            label: canReport ? "汇报进度" : "详情",
+            icon: canReport ? <RiseOutlined /> : <EyeOutlined />,
+            onClick: () => openDetail(task),
+          },
           {
             key: "edit",
-            label: "编辑 / 改派",
+            label: "编辑",
             icon: <EditOutlined />,
             disabled: !canManage || Boolean(task.archivedAt),
-            onClick: () => {
-              openDetail(task);
-              openEdit();
-            },
+            // 只开表单抽屉，不顺手把详情挂到 URL：编辑/改派是独立动作，不该顺带弹一次任务详情
+            onClick: () => openEdit(task),
           },
-          ...(isOwner
-            ? [
-                {
-                  key: "submit",
-                  label: "提交验收",
-                  icon: <SendOutlined />,
-                  disabled: Boolean(task.archivedAt) || task.status === "pending_review" || task.progress < 100,
-                  onClick: () =>
-                    confirmAction(modal, {
-                      title: "提交验收？",
-                      content: "提交后由管理员或组织管理者验收，期间不能再更新进度。",
-                      okText: "提交验收",
-                      onOk: () => post({ intent: "submit-review", taskId: task.id, note: "提交验收" }),
-                    }),
-                },
-              ]
-            : []),
-          ...(canManage && task.status === "pending_review"
-            ? [
-                {
-                  key: "approve",
-                  label: "通过验收",
-                  icon: <CheckOutlined />,
-                  onClick: () =>
-                    confirmAction(modal, {
-                      title: "确认通过验收？",
-                      content: "通过后任务状态变为「已完成」，进度锁定为 100%。",
-                      okText: "通过验收",
-                      onOk: () => post({ intent: "approve", taskId: task.id }),
-                    }),
-                },
-                {
-                  key: "return",
-                  label: "退回修改",
-                  icon: <RollbackOutlined />,
-                  onClick: () => {
-                    let reason = RETURN_NOTE_DEFAULT;
-                    modal.confirm({
-                      title: "退回修改",
-                      content: (
-                        <Input.TextArea
-                          rows={3}
-                          defaultValue={RETURN_NOTE_DEFAULT}
-                          maxLength={200}
-                          onChange={(event) => (reason = event.target.value)}
-                        />
-                      ),
-                      okText: "退回修改",
-                      cancelText: "取消",
-                      onOk: () => post({ intent: "return", taskId: task.id, note: reason }),
-                    });
-                  },
-                },
-              ]
-            : []),
-          { type: "divider" },
-          ...(canManage && !task.archivedAt
-            ? [
-                {
-                  key: "archive",
-                  label: "归档任务",
-                  icon: <InboxOutlined />,
-                  onClick: () =>
-                    confirmAction(modal, {
-                      title: "归档该任务？",
-                      content: "归档后任务从列表隐藏（可勾选「显示归档」查看），之后可以恢复。",
-                      okText: "归档",
-                      onOk: () => post({ intent: "archive", taskId: task.id }),
-                    }),
-                },
-              ]
-            : []),
-          ...(canManage && task.archivedAt
-            ? [
-                {
-                  key: "restore",
-                  label: "恢复任务",
-                  icon: <UndoOutlined />,
-                  onClick: () => post({ intent: "restore", taskId: task.id }),
-                },
-                {
-                  key: "delete",
-                  label: "彻底删除",
-                  danger: true,
-                  icon: <DeleteOutlined />,
-                  onClick: () =>
-                    confirmDanger(modal, {
-                      title: `彻底删除「${task.title}」？`,
-                      content: "删除后连同评论与进度记录一并移除，无法恢复。",
-                      okText: "彻底删除",
-                      onOk: () => post({ intent: "delete", taskId: task.id }),
-                    }),
-                },
-              ]
-            : []),
+          {
+            key: "reassign",
+            label: "改派",
+            icon: <UserSwitchOutlined />,
+            disabled: !canManage || Boolean(task.archivedAt),
+            onClick: () => openReassign(task),
+          },
         ];
-        return (
-          <RowActions
-            extra={
-              <Button size="small" color="default" variant="text" onClick={() => openDetail(task)}>
-                {canReport ? "汇报进度" : "详情"}
-              </Button>
-            }
-            items={items}
-            disabled={busy}
-          />
-        );
+        if (isOwner) {
+          actions.push({
+            key: "submit",
+            label: "提交验收",
+            icon: <SendOutlined />,
+            disabled: Boolean(task.archivedAt) || task.status === "pending_review" || task.progress < 100,
+            onClick: () =>
+              confirmAction(modal, {
+                title: "提交验收？",
+                content: "提交后由管理员或组织管理者验收，期间不能再更新进度。",
+                okText: "提交验收",
+                onOk: () => post({ intent: "submit-review", taskId: task.id, note: "提交验收" }),
+              }),
+          });
+        }
+        if (canManage && task.status === "pending_review") {
+          actions.push({
+            key: "approve",
+            label: "通过验收",
+            icon: <CheckOutlined />,
+            tone: "primary",
+            onClick: () =>
+              confirmAction(modal, {
+                title: "确认通过验收？",
+                content: "通过后任务状态变为「已完成」，进度锁定为 100%。",
+                okText: "通过验收",
+                onOk: () => post({ intent: "approve", taskId: task.id }),
+              }),
+          });
+          actions.push({
+            key: "return",
+            label: "退回修改",
+            icon: <RollbackOutlined />,
+            onClick: () => {
+              let reason = RETURN_NOTE_DEFAULT;
+              modal.confirm({
+                title: "退回修改",
+                content: (
+                  <Input.TextArea
+                    rows={3}
+                    defaultValue={RETURN_NOTE_DEFAULT}
+                    maxLength={200}
+                    onChange={(event) => (reason = event.target.value)}
+                  />
+                ),
+                okText: "退回修改",
+                cancelText: "取消",
+                onOk: () => post({ intent: "return", taskId: task.id, note: reason }),
+              });
+            },
+          });
+        }
+        if (canManage && !task.archivedAt) {
+          actions.push({
+            key: "archive",
+            label: "归档任务",
+            icon: <InboxOutlined />,
+            onClick: () =>
+              confirmAction(modal, {
+                title: "归档该任务？",
+                content: "归档后任务从列表隐藏（可勾选「显示归档」查看），之后可以恢复。",
+                okText: "归档",
+                onOk: () => post({ intent: "archive", taskId: task.id }),
+              }),
+          });
+        }
+        if (canManage && task.archivedAt) {
+          actions.push({
+            key: "restore",
+            label: "恢复任务",
+            icon: <UndoOutlined />,
+            onClick: () => post({ intent: "restore", taskId: task.id }),
+          });
+          actions.push({
+            key: "delete",
+            label: "彻底删除",
+            icon: <DeleteOutlined />,
+            tone: "danger",
+            onClick: () =>
+              confirmDanger(modal, {
+                title: `彻底删除「${task.title}」？`,
+                content: "删除后连同评论与进度记录一并移除，无法恢复。",
+                okText: "彻底删除",
+                onOk: () => post({ intent: "delete", taskId: task.id }),
+              }),
+          });
+        }
+        return <RowActions actions={actions} disabled={busy} />;
       },
     },
   ];
@@ -573,9 +656,13 @@ export default function TasksRoute(): React.ReactElement {
     <Flex vertical gap="large" className="page-stack">
       <PageHeader
         title="任务进展"
-        description="分配任务，跟进进度与验收。"
+        eyebrow="TASKS"
+        help="负责人只能汇报本人任务的进度；私密任务仅创建者与管理员可见。时间范围按最近更新时间筛选，统计与当前列表一致。企微导入的目标组织默认跟随下面的组织筛选器。"
         extra={
           <>
+            <Button icon={<ImportOutlined />} onClick={openImport}>
+              从企微导入
+            </Button>
             <Button icon={<ReloadOutlined />} onClick={() => revalidator.revalidate()} loading={busy}>
               刷新
             </Button>
@@ -589,152 +676,190 @@ export default function TasksRoute(): React.ReactElement {
       {error ? <Alert type="error" showIcon title={error} /> : null}
       {list.get("task") && !selectedTask ? <Alert type="warning" showIcon title="该任务不存在，或你没有查看权限" /> : null}
 
-      <Card variant="outlined">
-        <Flex vertical gap="middle">
-          <TableToolbar
-            extra={
-              <Typography.Text type="secondary">
-                共 {rows.length} 个任务{filtered ? "（已筛选）" : ""}
-              </Typography.Text>
-            }
-          >
-            <Input.Search
-              allowClear
-              placeholder="搜索任务标题或负责人"
-              style={{ width: 240 }}
-              value={draftKeyword}
-              loading={busy}
-              onChange={(event) => setDraftKeyword(event.target.value)}
-              onSearch={(value) => list.patch({ q: value.trim() })}
-            />
-            <Select
-              value={data.status}
-              options={STATUS_OPTIONS}
-              style={{ width: 140 }}
-              onChange={(value: string) => list.patch({ status: value === "all" ? null : value })}
-            />
-            <Select
-              value={data.assignee}
-              style={{ width: 170 }}
-              options={[
-                { value: "all", label: "全部负责人" },
-                { value: "mine", label: "我负责的" },
-                { value: "unassigned", label: "未分配" },
-                ...data.members.filter((member) => member.isActive).map((member) => ({ value: member.id, label: memberLabel(member) })),
-              ]}
-              onChange={(value: string) => list.patch({ assignee: value === "all" ? null : value })}
-            />
-            {isAdmin ? (
+      <Flex vertical gap="middle">
+        <TableToolbar
+          extra={
+            <Typography.Text type="secondary">
+              共 {rows.length} 个任务{filtered ? "（已筛选）" : ""}
+            </Typography.Text>
+          }
+        >
+          {canManage ? (
+            <>
               <Select
-                value={data.org || "all"}
-                style={{ width: 180 }}
+                aria-label="更新时间范围"
+                value={data.range}
                 options={[
-                  { value: "all", label: "全部组织" },
-                  ...data.organizations.map((org) => ({
-                    value: org.id,
-                    label: org.status === "archived" ? `${org.name}（已解散）` : org.name,
-                  })),
+                  { value: "all", label: "全部时间" },
+                  { value: "week", label: "最近 7 天" },
+                  { value: "month", label: "最近 30 天" },
+                  { value: "custom", label: "自定义范围" },
                 ]}
-                onChange={(value: string) => list.patch({ org: value === "all" ? null : value })}
+                style={{ width: 150 }}
+                onChange={(value: string) => list.patch({ range: value === "all" ? null : value, from: null, to: null })}
               />
-            ) : null}
-            {canManage ? (
-              <Checkbox checked={data.includeArchived} onChange={(event) => list.patch({ archived: event.target.checked ? "1" : null })}>
-                显示归档
-              </Checkbox>
-            ) : null}
-            {filtered ? (
-              <Button color="default" variant="text" onClick={() => list.reset()}>
-                重置
+              {data.range === "custom" ? (
+                <DatePicker.RangePicker
+                  value={data.from && data.to ? [dayjs(data.from), dayjs(data.to)] : null}
+                  style={{ maxWidth: "100%" }}
+                  onChange={(values) =>
+                    list.patch({ from: values?.[0]?.format("YYYY-MM-DD") ?? null, to: values?.[1]?.format("YYYY-MM-DD") ?? null })
+                  }
+                />
+              ) : null}
+            </>
+          ) : null}
+          <Input.Search
+            allowClear
+            placeholder="搜索任务标题或负责人"
+            style={{ width: 240 }}
+            value={draftKeyword}
+            loading={busy}
+            onChange={(event) => setDraftKeyword(event.target.value)}
+            onSearch={(value) => list.patch({ q: value.trim() })}
+          />
+          <Select
+            value={data.status}
+            options={STATUS_OPTIONS}
+            style={{ width: 140 }}
+            onChange={(value: string) => list.patch({ status: value === "all" ? null : value })}
+          />
+          <Select
+            value={data.assignee}
+            style={{ width: 170 }}
+            options={[
+              { value: "all", label: "全部负责人" },
+              { value: "mine", label: "我负责的" },
+              { value: "unassigned", label: "未分配" },
+              ...data.members.filter((member) => member.isActive).map((member) => ({ value: member.id, label: memberLabel(member) })),
+            ]}
+            onChange={(value: string) => list.patch({ assignee: value === "all" ? null : value })}
+          />
+          {isAdmin ? (
+            <Select
+              value={data.org || "all"}
+              style={{ width: 180 }}
+              options={[
+                { value: "all", label: "全部组织" },
+                ...data.organizations.map((org) => ({
+                  value: org.id,
+                  label: org.status === "archived" ? `${org.name}（已解散）` : org.name,
+                })),
+              ]}
+              onChange={(value: string) => list.patch({ org: value === "all" ? null : value })}
+            />
+          ) : null}
+          {canManage ? (
+            <Checkbox checked={data.includeArchived} onChange={(event) => list.patch({ archived: event.target.checked ? "1" : null })}>
+              显示归档
+            </Checkbox>
+          ) : null}
+          {filtered ? (
+            <Button color="default" variant="text" onClick={() => list.reset()}>
+              重置
+            </Button>
+          ) : null}
+        </TableToolbar>
+
+        {canManage ? (
+          <div className="task-summary" aria-label="任务统计">
+            <Statistic title="任务总数" value={rows.length} suffix="个" />
+            <Statistic title="完成率" value={rows.length ? Math.round((completed / rows.length) * 100) : 0} suffix="%" />
+            <Statistic title="待验收" value={rows.filter((task) => task.status === "pending_review").length} suffix="个" />
+            <Statistic
+              title="已逾期"
+              value={rows.filter((task) => isOverdue(task, today)).length}
+              suffix="个"
+              styles={{ content: { color: "#cf1322" } }}
+            />
+          </div>
+        ) : null}
+
+        {canManage ? (
+          <SelectionAlert count={selectedKeys.length} noun="个任务" onClear={() => setSelectedKeys([])}>
+            {activeSelection.length ? (
+              <Button
+                size="small"
+                onClick={() =>
+                  confirmAction(modal, {
+                    title: `归档选中的 ${activeSelection.length} 个任务？`,
+                    content: "归档后从默认列表隐藏，可随时恢复。",
+                    okText: "批量归档",
+                    onOk: () => post({ intent: "bulk-archive", ids: activeSelection.map((task) => task.id) }),
+                  })
+                }
+              >
+                批量归档
               </Button>
             ) : null}
-          </TableToolbar>
-
-          {canManage ? (
-            <SelectionAlert count={selectedKeys.length} noun="个任务" onClear={() => setSelectedKeys([])}>
-              {activeSelection.length ? (
+            {archivedSelection ? (
+              <>
+                <Button size="small" onClick={() => post({ intent: "bulk-restore", ids: selectedKeys })}>
+                  批量恢复
+                </Button>
                 <Button
                   size="small"
+                  color="danger"
+                  variant="outlined"
                   onClick={() =>
-                    confirmAction(modal, {
-                      title: `归档选中的 ${activeSelection.length} 个任务？`,
-                      content: "归档后从默认列表隐藏，可随时恢复。",
-                      okText: "批量归档",
-                      onOk: () => post({ intent: "bulk-archive", ids: activeSelection.map((task) => task.id) }),
+                    confirmDanger(modal, {
+                      title: `彻底删除选中的 ${selectedKeys.length} 个任务？`,
+                      content: "删除后连同评论与进度记录一并移除，无法恢复。",
+                      okText: "批量删除",
+                      onOk: () => post({ intent: "bulk-delete", ids: selectedKeys }),
                     })
                   }
                 >
-                  批量归档
+                  批量删除
                 </Button>
-              ) : null}
-              {archivedSelection ? (
-                <>
-                  <Button size="small" onClick={() => post({ intent: "bulk-restore", ids: selectedKeys })}>
-                    批量恢复
-                  </Button>
-                  <Button
-                    size="small"
-                    color="danger"
-                    variant="outlined"
-                    onClick={() =>
-                      confirmDanger(modal, {
-                        title: `彻底删除选中的 ${selectedKeys.length} 个任务？`,
-                        content: "删除后连同评论与进度记录一并移除，无法恢复。",
-                        okText: "批量删除",
-                        onOk: () => post({ intent: "bulk-delete", ids: selectedKeys }),
-                      })
-                    }
-                  >
-                    批量删除
-                  </Button>
-                </>
-              ) : null}
-            </SelectionAlert>
-          ) : null}
+              </>
+            ) : null}
+          </SelectionAlert>
+        ) : null}
 
-          <Table<TaskRow>
-            rowKey="id"
-            size="middle"
-            columns={columns}
-            dataSource={rows}
-            loading={busy}
-            scroll={{ x: isAdmin ? 1180 : 1040 }}
-            {...(canManage
-              ? {
-                  rowSelection: {
-                    selectedRowKeys: selectedKeys,
-                    preserveSelectedRowKeys: true,
-                    onChange: (keys: React.Key[]) => setSelectedKeys(keys),
-                  },
+        <Table<TaskRow>
+          rowKey="id"
+          size="middle"
+          columns={columns}
+          dataSource={rows}
+          loading={busy}
+          scroll={{ x: isAdmin ? 1340 : 1200 }}
+          {...(canManage
+            ? {
+                rowSelection: {
+                  selectedRowKeys: selectedKeys,
+                  preserveSelectedRowKeys: true,
+                  onChange: (keys: React.Key[]) => setSelectedKeys(keys),
+                },
+              }
+            : {})}
+          pagination={{
+            pageSize: 10,
+            showSizeChanger: true,
+            showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条 / 共 ${total} 条`,
+          }}
+          locale={{
+            emptyText: (
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description={
+                  <Space orientation="vertical" size={2}>
+                    <Typography.Text strong>{filtered ? "没有符合条件的任务" : "暂无任务"}</Typography.Text>
+                    <Typography.Text type="secondary">
+                      {filtered ? "调整筛选条件，或重置后查看全部任务。" : "点击右上角「新建任务」派发第一条任务。"}
+                    </Typography.Text>
+                  </Space>
                 }
-              : {})}
-            pagination={{
-              pageSize: 10,
-              showSizeChanger: true,
-              showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条 / 共 ${total} 条`,
-            }}
-            locale={{
-              emptyText: (
-                <Empty
-                  image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  description={
-                    <Space orientation="vertical" size={2}>
-                      <Typography.Text strong>{filtered ? "没有符合条件的任务" : "暂无任务"}</Typography.Text>
-                      <Typography.Text type="secondary">
-                        {filtered ? "调整筛选条件，或重置后查看全部任务。" : "点击右上角「新建任务」派发第一条任务。"}
-                      </Typography.Text>
-                    </Space>
-                  }
-                >
-                  {filtered ? <Button onClick={() => list.reset()}>重置筛选</Button> : null}
-                </Empty>
-              ),
-            }}
-          />
-        </Flex>
-      </Card>
+              >
+                {filtered ? <Button onClick={() => list.reset()}>重置筛选</Button> : null}
+              </Empty>
+            ),
+          }}
+        />
+      </Flex>
 
-      {selectedTask ? (
+      {/* 表单抽屉（编辑 / 改派）开着时不挂详情抽屉：两个同侧抽屉叠在一起会互相盖住，也让层级变得不可预期 */}
+      {selectedTask && !editingTask && !reassigningTask && !importOpen ? (
         <TaskDetailDrawer
           task={selectedTask}
           activity={data.activity}
@@ -743,12 +868,13 @@ export default function TasksRoute(): React.ReactElement {
           showOrg={isAdmin}
           busy={busy}
           onClose={closeDetail}
-          onEdit={openEdit}
+          onEdit={() => openEdit(selectedTask)}
+          onReassign={() => openReassign(selectedTask)}
           onPost={post}
         />
       ) : null}
 
-      <FormModal
+      <FormDrawer
         open={createOpen}
         title="新建任务"
         okText="创建任务"
@@ -759,7 +885,9 @@ export default function TasksRoute(): React.ReactElement {
         initialValues={{
           priority: "P1",
           ownerId: "",
-          orgId: activeOrganizations.at(0)?.id ?? "",
+          // 与 /todos、/notes 一致：管理员建任务时的默认组织跟随页面上的组织筛选器（D-28 的接缝），
+          // 否则在「贝塔组」筛选下新建，任务会落到第一个组织，建完就从当前列表里消失。
+          orgId: data.org || activeOrganizations.at(0)?.id || "",
           isPrivate: false,
         }}
         onCancel={() => setCreateOpen(false)}
@@ -816,40 +944,47 @@ export default function TasksRoute(): React.ReactElement {
             </Form.Item>
           </Flex>
         ) : null}
-      </FormModal>
+      </FormDrawer>
 
-      <FormModal
-        open={editOpen && selectedTask !== null}
+      <FormDrawer
+        open={editingTask !== null}
         title="编辑任务"
         form={editForm}
         submitting={busy}
         error={error}
-        width={620}
-        formKey={selectedTask?.id ?? "none"}
+        width={680}
+        formKey={editingTask?.id ?? "none"}
+        // 字段集与列表的列一一对应（D-47）：标题/说明/优先级/截止日期/所属组织/负责人/私密 都能在这里改，
+        // 状态与进度由下面的「状态与进度」面板负责（它们是动作驱动的，不是自由字段）。
         initialValues={{
-          title: selectedTask?.title ?? "",
-          description: selectedTask?.description ?? "",
-          priority: selectedTask?.priority ?? "P1",
-          ownerId: selectedTask?.ownerId ?? "",
-          dueDate: selectedTask?.dueDate ? dayjs(selectedTask.dueDate) : null,
-          isPrivate: Boolean(selectedTask?.isPrivate),
+          title: editingTask?.title ?? "",
+          description: editingTask?.description ?? "",
+          priority: editingTask?.priority ?? "P1",
+          dueDate: editingTask?.dueDate ? dayjs(editingTask.dueDate) : null,
+          isPrivate: Boolean(editingTask?.isPrivate),
+          ownerId: editingTask?.ownerId ?? "",
+          orgId: editingTask?.orgId ?? "",
         }}
-        onCancel={() => setEditOpen(false)}
+        onCancel={() => setEditingTask(null)}
         onFinish={(values) => {
-          if (!selectedTask) return;
+          if (!editingTask) return;
           const title = values.title?.trim();
           if (!title) return;
           post({
             intent: "update",
-            taskId: selectedTask.id,
+            taskId: editingTask.id,
             title,
             description: values.description ?? "",
-            priority: values.priority ?? selectedTask.priority,
-            ownerId: values.ownerId || "unassigned",
+            priority: values.priority ?? editingTask.priority,
             dueDate: values.dueDate ? values.dueDate.format("YYYY-MM-DD") : null,
             isPrivate: Boolean(values.isPrivate),
+            // 负责人：与列表的「负责人」列对应（改派抽屉仍在，是同一件事的快捷入口）
+            ...(canManage ? { ownerId: values.ownerId || "unassigned" } : {}),
+            // 所属组织：与列表的「组织」列对应，只有管理员能改（组织管理者提交了服务端也会拒）
+            ...(isAdmin ? { orgId: values.orgId ?? "" } : {}),
           });
         }}
+        afterForm={editingTask ? <TaskProgressPanel task={editingTask} me={me} canManage={canManage} busy={busy} onPost={post} /> : null}
       >
         <Form.Item name="title" label="任务标题" rules={[{ required: true, message: "请输入任务标题" }]}>
           <Input maxLength={120} />
@@ -865,19 +1000,94 @@ export default function TasksRoute(): React.ReactElement {
             <DatePicker format="YYYY-MM-DD" style={{ width: "100%" }} allowClear placeholder="未设置" />
           </Form.Item>
         </Flex>
-        <Form.Item name="ownerId" label="负责人（改派会通知双方）">
+        {isAdmin ? (
+          <Form.Item
+            name="orgId"
+            label="所属组织"
+            rules={[{ required: true, message: "请选择任务所属组织" }]}
+            tooltip="只有管理员能改所属组织；换组织后负责人必须属于新组织，原组织的成员将不再看到该任务"
+          >
+            <Select options={editableOrganizations} />
+          </Form.Item>
+        ) : null}
+        {canManage ? (
+          <Form.Item name="ownerId" label="负责人" tooltip="直接改负责人等同于「改派」：会写入协作时间线，并通知原负责人与新负责人">
+            <Select
+              placeholder="未分配"
+              showSearch={{ optionFilterProp: "label" }}
+              options={[
+                { value: "", label: "未分配" },
+                ...taskMembers
+                  // 已停用/已离开本组织的现任负责人也要显示出来，否则下拉里看不到当前值
+                  .filter((member) => member.isActive || member.id === editingTask?.ownerId)
+                  .map((member) => ({ value: member.id, label: memberLabel(member) })),
+              ]}
+            />
+          </Form.Item>
+        ) : null}
+        <Form.Item name="isPrivate" label="私密任务" valuePropName="checked" tooltip="私密任务只有创建者本人与管理员可见">
+          <Checkbox>仅创建者与管理员可见</Checkbox>
+        </Form.Item>
+        {editingTask ? (
+          <Descriptions
+            size="small"
+            column={2}
+            items={[
+              { key: "created", label: "创建时间", children: dayjs(editingTask.createdAt).format("YYYY-MM-DD HH:mm") },
+              { key: "updated", label: "最近更新", children: dayjs(editingTask.updatedAt).format("YYYY-MM-DD HH:mm") },
+            ]}
+          />
+        ) : null}
+      </FormDrawer>
+
+      {/* 改派单独一个抽屉：只改负责人，和服务端 updateTask 的「按 key 是否存在决定改不改 owner_id」一一对应 */}
+      <FormDrawer
+        open={reassigningTask !== null}
+        title="改派负责人"
+        okText="确认改派"
+        form={reassignForm}
+        submitting={busy}
+        error={error}
+        width={480}
+        formKey={reassigningTask?.id ?? "none"}
+        initialValues={{ ownerId: reassigningTask?.ownerId ?? "" }}
+        onCancel={() => setReassigningTask(null)}
+        onFinish={(values) => {
+          if (!reassigningTask) return;
+          // 只提交 ownerId：标题 / 说明 / 优先级 / 私密等字段由服务端回落到当前值，不会被这条请求改掉
+          post({ intent: "update", taskId: reassigningTask.id, ownerId: values.ownerId || "unassigned" });
+        }}
+      >
+        <Form.Item name="ownerId" label="负责人（改派会通知原负责人与新负责人）">
           <Select
             showSearch={{ optionFilterProp: "label" }}
             options={[
               { value: "", label: "未分配" },
-              ...detailMembers.filter((member) => member.isActive).map((member) => ({ value: member.id, label: memberLabel(member) })),
+              ...taskMembers.filter((member) => member.isActive).map((member) => ({ value: member.id, label: memberLabel(member) })),
             ]}
           />
         </Form.Item>
-        <Form.Item name="isPrivate" label="私密任务" valuePropName="checked" tooltip="私密任务只有创建者本人与管理员可见">
-          <Checkbox>仅创建者与管理员可见</Checkbox>
-        </Form.Item>
-      </FormModal>
+      </FormDrawer>
+
+      {/*
+        企微导入：写进的是任务，入口就在本页页头（不再单独占一个导航页面）。
+        目标组织默认跟随页面上的组织筛选器（D-28 的接缝）；负责人候选与「新建任务」共用同一份 loader 名单；
+        导入成功后关抽屉 + 提示 + revalidate，新任务当场出现在下面的列表里。
+      */}
+      <WecomImportDrawer
+        open={importOpen}
+        role={me.role}
+        selfId={me.id}
+        members={data.members}
+        organizations={isAdmin ? activeOrganizations.map((org) => ({ id: org.id, name: org.name })) : []}
+        defaultOrgId={isAdmin ? data.org || activeOrganizations.at(0)?.id || "" : ""}
+        onClose={() => setImportOpen(false)}
+        onImported={(created, skipped) => {
+          setImportOpen(false);
+          void message.success(`已从企微导入 ${created} 条任务${skipped ? `，跳过 ${skipped} 条疑似重复` : ""}`);
+          void revalidator.revalidate();
+        }}
+      />
     </Flex>
   );
 }
@@ -886,7 +1096,7 @@ export default function TasksRoute(): React.ReactElement {
 
 /**
  * 任务详情抽屉：**只读展示 + 明确的动作按钮**。
- * 编辑、验收、归档等写操作都从抽屉里触发对应的弹窗/确认，抽屉本身不内嵌可编辑表单，
+ * 编辑 / 改派 / 验收 / 归档等写操作都从抽屉里触发对应的表单抽屉或确认框，抽屉本身不内嵌可编辑表单，
  * 避免「看着像详情、改了就提交」的误操作（旧实现把编辑表单直接铺在抽屉里）。
  */
 function TaskDetailDrawer({
@@ -898,6 +1108,7 @@ function TaskDetailDrawer({
   busy,
   onClose,
   onEdit,
+  onReassign,
   onPost,
 }: {
   task: TaskRow;
@@ -908,12 +1119,11 @@ function TaskDetailDrawer({
   busy: boolean;
   onClose: () => void;
   onEdit: () => void;
+  onReassign: () => void;
   onPost: (payload: Record<string, unknown>) => void;
 }): React.ReactElement {
   const { modal } = AntdApp.useApp();
   const today = dayjs().format("YYYY-MM-DD");
-  const isOwner = task.ownerId === me.id;
-  const canReport = isOwner && !task.archivedAt && task.status !== "completed" && task.status !== "pending_review";
 
   const items: DescriptionsProps["items"] = [
     { key: "owner", label: "负责人", children: task.ownerName ?? "未分配" },
@@ -967,9 +1177,14 @@ function TaskDetailDrawer({
       }
       extra={
         canManage && !task.archivedAt ? (
-          <Button icon={<EditOutlined />} onClick={onEdit} disabled={busy}>
-            编辑
-          </Button>
+          <Space size="small">
+            <Button icon={<EditOutlined />} onClick={onEdit} disabled={busy}>
+              编辑
+            </Button>
+            <Button icon={<UserSwitchOutlined />} onClick={onReassign} disabled={busy}>
+              改派
+            </Button>
+          </Space>
         ) : null
       }
     >
@@ -978,86 +1193,8 @@ function TaskDetailDrawer({
 
         <Descriptions size="small" column={2} items={items} />
 
-        <Card variant="outlined" size="small" title="完成进度">
-          <Flex vertical gap="small">
-            <Progress percent={task.progress} status={task.status === "completed" ? "success" : "active"} />
-            {task.status === "pending_review" ? (
-              <Typography.Text type="secondary">已提交验收，等待管理员或组织管理者处理。</Typography.Text>
-            ) : null}
-          </Flex>
-        </Card>
-
-        {canReport ? <ProgressReporter task={task} busy={busy} onPost={onPost} /> : null}
-
-        {(canManage && task.status === "pending_review") || (isOwner && task.status === "pending_review") ? (
-          <Card variant="outlined" size="small" title="验收处理">
-            <Space wrap size="small">
-              {isOwner ? (
-                <Typography.Text type="secondary">你已提交验收，等待处理。如需继续完善，可联系管理员退回。</Typography.Text>
-              ) : null}
-              {canManage ? (
-                <>
-                  <Button
-                    color="primary"
-                    variant="solid"
-                    icon={<CheckOutlined />}
-                    disabled={busy}
-                    onClick={() =>
-                      confirmAction(modal, {
-                        title: "确认通过验收？",
-                        content: "通过后任务状态变为「已完成」，进度锁定为 100%。",
-                        okText: "通过验收",
-                        onOk: () => onPost({ intent: "approve", taskId: task.id }),
-                      })
-                    }
-                  >
-                    通过验收
-                  </Button>
-                  <Button
-                    icon={<RollbackOutlined />}
-                    disabled={busy}
-                    onClick={() => {
-                      let reason = RETURN_NOTE_DEFAULT;
-                      modal.confirm({
-                        title: "退回修改",
-                        content: (
-                          <Input.TextArea
-                            rows={3}
-                            defaultValue={RETURN_NOTE_DEFAULT}
-                            maxLength={200}
-                            onChange={(event) => (reason = event.target.value)}
-                          />
-                        ),
-                        okText: "退回修改",
-                        cancelText: "取消",
-                        onOk: () => onPost({ intent: "return", taskId: task.id, note: reason }),
-                      });
-                    }}
-                  >
-                    退回修改
-                  </Button>
-                </>
-              ) : null}
-            </Space>
-          </Card>
-        ) : null}
-
-        {isOwner && task.status !== "pending_review" && task.status !== "completed" && !task.archivedAt ? (
-          <Button
-            icon={<SendOutlined />}
-            disabled={busy || task.progress < 100}
-            onClick={() =>
-              confirmAction(modal, {
-                title: "提交验收？",
-                content: "提交后由管理员或组织管理者验收，期间不能再更新进度。",
-                okText: "提交验收",
-                onOk: () => onPost({ intent: "submit-review", taskId: task.id, note: "提交验收" }),
-              })
-            }
-          >
-            提交验收{task.progress < 100 ? "（需先到 100%）" : ""}
-          </Button>
-        ) : null}
+        {/* 状态与进度：与编辑抽屉共用同一个面板（列表「状态」「进度」两列在这两个抽屉里都有对应字段与入口） */}
+        <TaskProgressPanel task={task} me={me} canManage={canManage} busy={busy} onPost={onPost} />
 
         {canManage ? (
           <Space wrap size="small">
@@ -1131,6 +1268,128 @@ function TaskDetailDrawer({
         <CommentBox taskId={task.id} busy={busy} onPost={onPost} />
       </Flex>
     </Drawer>
+  );
+}
+
+/**
+ * 「状态与进度」面板：**详情抽屉与编辑抽屉共用同一份实现**（写操作只有一处，不会两套口径）。
+ *
+ * 为什么状态/进度不做成可自由填写的表单字段：它们不是元信息，而是被动作驱动的状态机——
+ * 进度只能由负责人本人汇报（`reportProgress`），状态由进度与验收推导
+ * （`submitReview` / `approveTask` / `returnTask`；`PATCH /api/tasks/:id` 明确拒绝 status/progress，见契约用例
+ * `tasks.patch.managerA.reject-progress`）。因此这里把「当前值」只读展示，把**当前允许的流转**平铺成按钮：
+ * 列表上能看到的「状态」「进度」两列，在 CRUD 抽屉里都能看到、并且都有合法的修改入口。
+ */
+function TaskProgressPanel({
+  task,
+  me,
+  canManage,
+  busy,
+  onPost,
+}: {
+  task: TaskRow;
+  me: Me;
+  canManage: boolean;
+  busy: boolean;
+  onPost: (payload: Record<string, unknown>) => void;
+}): React.ReactElement {
+  const { modal } = AntdApp.useApp();
+  const isOwner = task.ownerId === me.id;
+  const canReport = isOwner && !task.archivedAt && task.status !== "completed" && task.status !== "pending_review";
+  const pending = task.status === "pending_review";
+  return (
+    <>
+      <Card variant="outlined" size="small" title="状态与进度">
+        <Flex vertical gap="small">
+          <Descriptions
+            size="small"
+            column={2}
+            items={[
+              {
+                key: "status",
+                label: "状态",
+                children: (
+                  <Tag color={STATUS_COLOR[task.status] ?? "default"} variant="filled">
+                    {STATUS_LABEL[task.status] ?? task.status}
+                  </Tag>
+                ),
+              },
+              { key: "progress", label: "进度", children: `${task.progress}%` },
+            ]}
+          />
+          <Progress percent={task.progress} status={task.status === "completed" ? "success" : "active"} />
+          <Typography.Text type="secondary">
+            状态由进度与验收驱动：负责人把进度汇报到 100% 后提交验收，管理员或组织管理者通过即完成。
+          </Typography.Text>
+          {pending ? (
+            <Typography.Text type="secondary">
+              {isOwner ? "你已提交验收，等待处理。如需继续完善，可联系管理员退回。" : "已提交验收，等待管理员或组织管理者处理。"}
+            </Typography.Text>
+          ) : null}
+          {pending && canManage ? (
+            <Space wrap size="small">
+              <Button
+                color="primary"
+                variant="solid"
+                icon={<CheckOutlined />}
+                disabled={busy}
+                onClick={() =>
+                  confirmAction(modal, {
+                    title: "确认通过验收？",
+                    content: "通过后任务状态变为「已完成」，进度锁定为 100%。",
+                    okText: "通过验收",
+                    onOk: () => onPost({ intent: "approve", taskId: task.id }),
+                  })
+                }
+              >
+                通过验收
+              </Button>
+              <Button
+                icon={<RollbackOutlined />}
+                disabled={busy}
+                onClick={() => {
+                  let reason = RETURN_NOTE_DEFAULT;
+                  modal.confirm({
+                    title: "退回修改",
+                    content: (
+                      <Input.TextArea
+                        rows={3}
+                        defaultValue={RETURN_NOTE_DEFAULT}
+                        maxLength={200}
+                        onChange={(event) => (reason = event.target.value)}
+                      />
+                    ),
+                    okText: "退回修改",
+                    cancelText: "取消",
+                    onOk: () => onPost({ intent: "return", taskId: task.id, note: reason }),
+                  });
+                }}
+              >
+                退回修改
+              </Button>
+            </Space>
+          ) : null}
+          {isOwner && !pending && task.status !== "completed" && !task.archivedAt ? (
+            <Button
+              icon={<SendOutlined />}
+              disabled={busy || task.progress < 100}
+              onClick={() =>
+                confirmAction(modal, {
+                  title: "提交验收？",
+                  content: "提交后由管理员或组织管理者验收，期间不能再更新进度。",
+                  okText: "提交验收",
+                  onOk: () => onPost({ intent: "submit-review", taskId: task.id, note: "提交验收" }),
+                })
+              }
+            >
+              提交验收{task.progress < 100 ? "（需先到 100%）" : ""}
+            </Button>
+          ) : null}
+        </Flex>
+      </Card>
+
+      {canReport ? <ProgressReporter task={task} busy={busy} onPost={onPost} /> : null}
+    </>
   );
 }
 

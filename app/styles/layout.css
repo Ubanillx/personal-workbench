@@ -17,11 +17,21 @@ body {
   padding: 24px;
 }
 
+/* 工作台外壳：占满视口高度且自身不滚动，侧栏与右侧主体各自独立滚动，避免内容变长时侧栏跟着上移 */
 .app-shell {
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* 右侧主体：头部固定在顶部，内容区独立滚动 */
+.app-body {
+  height: 100vh;
+  overflow: hidden;
 }
 
 .app-sider {
+  height: 100vh;
+  overflow: auto;
   border-right: 1px solid #dfe5ed;
 }
 
@@ -35,6 +45,13 @@ body {
 .brand-avatar {
   background: #185fa5;
   flex: none;
+}
+
+/* 系统 Logo 是横向字标：只定高、宽度按原图比例走，不参与 flex 压缩 */
+.brand-logo {
+  flex: none;
+  width: auto;
+  max-width: 100%;
 }
 
 .brand-copy {
@@ -55,14 +72,16 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 56px;
-  padding: 0 16px;
+  height: 60px;
+  padding: 0 20px;
   border-bottom: 1px solid #dfe5ed;
 }
 
 .app-content {
   padding: 20px 24px 32px;
   min-width: 0;
+  min-height: 0;
+  overflow: auto;
 }
 
 .dev-banner {
@@ -96,6 +115,12 @@ body {
   margin: 0 !important;
 }
 
+/* 标题旁的说明入口：用 help 光标暗示「悬停有详细信息」，不参与主标题的字重层级 */
+.page-help {
+  cursor: help;
+  font-size: 14px;
+}
+
 /* 列表工具栏：筛选区左、动作区右，撑满卡片宽度 */
 .table-toolbar {
   width: 100%;
@@ -107,19 +132,85 @@ body {
   padding: 0;
 }
 
-/* 行内操作区：包一层容器以便阻断行级点击（避免点操作按钮同时打开详情） */
+/* 行内操作区：包一层容器以便阻断行级点击（避免点操作按钮同时打开详情）；动作平铺后靠右对齐 */
 .row-actions {
   display: inline-flex;
+  justify-content: flex-end;
 }
 
-/* 表单弹窗顶部的服务端错误提示：与表单内容保持一个基础间距（4px 栅格） */
-.form-modal-alert {
+/* 自定义动作（Upload / Popconfirm 包裹的按钮）：保持与文字按钮同一基线 */
+.row-action-custom {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* 纯图标动作：Tooltip 的触发节点固定为这个 span（原生元素），禁用态也能正常弹出提示 */
+.row-action-icon {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* 表单抽屉顶部的服务端错误提示：与表单内容保持一个基础间距（4px 栅格） */
+.form-drawer-alert {
   margin-bottom: 16px;
 }
 
 .status-card,
 .fill-card {
   height: 100%;
+}
+
+/* 概览页欢迎条标题（渐变底由组件 inline style 提供，避免覆盖 antd Card 的内部类名） */
+.hero-title {
+  margin: 0 !important;
+}
+
+.hero-copy {
+  min-width: 0;
+}
+
+/* 统计卡标题：图标 + 文字一行排布；有口径提示时用 help 光标给出可悬停的暗示 */
+.stat-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.stat-label-help {
+  cursor: help;
+}
+
+/* 统计卡图标：默认中性灰，只有出现需要关注的数字时才上色（见 StatCard 的 tone） */
+.stat-icon {
+  display: inline-flex;
+  align-items: center;
+  color: #8c8c8c;
+}
+
+.stat-icon-danger {
+  color: #cf1322;
+}
+
+.stat-icon-warning {
+  color: #d48806;
+}
+
+.stat-icon-success {
+  color: #389e0d;
+}
+
+/* 环形仪表盘：数字强调、标签弱化，右侧图例自适应占满剩余宽度 */
+.gauge-value {
+  font-size: 20px;
+}
+
+.gauge-label {
+  font-size: 12px;
+}
+
+.gauge-legend {
+  flex: 1 1 180px;
+  min-width: 180px;
 }
 
 .list-block {
@@ -131,16 +222,6 @@ body {
   width: 100%;
 }
 
-.quick-add {
-  width: 100%;
-  gap: 8px 0;
-}
-
-.quick-add-item {
-  flex: 1 1 140px;
-  min-width: 0;
-}
-
 .account-name {
   max-width: 120px;
   overflow: hidden;
@@ -150,27 +231,33 @@ body {
   display: inline-flex;
   align-items: center;
 }
+/* 顶栏右侧操作区：无论左侧是否还有内容，都固定右对齐 */
 .header-actions {
   flex-shrink: 0;
+  margin-left: auto;
 }
 
 @media (max-width: 991px) {
   .app-sider {
     position: fixed !important;
-    top: 56px;
+    top: 60px;
     bottom: 0;
     left: 0;
+    height: auto;
     z-index: 1000;
     overflow: auto;
   }
 }
 
 @media (max-width: 575px) {
+  .join-screen {
+    padding: 24px 12px 32px;
+  }
   .app-content {
     padding: 16px 12px 24px;
   }
   .app-header {
-    padding: 0 8px;
+    padding: 0 12px;
     gap: 4px;
   }
   .account-details,
@@ -181,20 +268,66 @@ body {
     min-width: 0;
     max-width: 100%;
   }
-  .quick-add-item {
-    flex-basis: 100%;
-    margin-inline-end: 0;
-  }
 }
 
-.notification-entry {
+.notification-panel {
+  gap: 0;
+}
+
+.notification-item {
   display: flex;
   flex-direction: column;
-  max-width: 280px;
+  gap: 4px;
+  width: 100%;
+  padding: 12px 4px;
+  border: 0;
+  border-bottom: 1px solid rgb(0 0 0 / 6%);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.notification-item:hover {
+  background: #f5f7fa;
+}
+
+.notification-item-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .notification-message {
   font-size: 12px;
+}
+
+.notification-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.join-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 100vh;
+  padding: 32px 24px 48px;
+  background: #f5f7fa;
+}
+
+.join-panel {
+  width: 100%;
+  max-width: 720px;
+}
+
+.join-brand {
+  text-align: center;
+  width: 100%;
 }
 
 .access-card {
@@ -224,4 +357,18 @@ body {
   flex-direction: column;
   gap: 6px;
   margin-bottom: 16px;
+}
+.task-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  padding: 16px 0;
+  border-top: 1px solid #e5e7eb;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+@media (max-width: 600px) {
+  .task-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }

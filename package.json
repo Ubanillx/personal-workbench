@@ -5,14 +5,14 @@
   "author": "me",
   "license": "MIT",
   "engines": {
-    "node": ">=22.5.0"
+    "node": ">=22.9.0"
   },
   "scripts": {
     "start": "npm run build && set \"NODE_ENV=production\" && set \"HOST=127.0.0.1\" && set \"PORT=17500\" && npm run serve",
     "start:lan": "npm run build && set \"NODE_ENV=production\" && set \"HOST=0.0.0.0\" && set \"PORT=17500\" && npm run serve",
-    "serve": "react-router-serve build/server/index.js",
-    "dev": "react-router dev",
-    "build": "react-router build",
+    "serve": "\"%npm_node_execpath%\" --env-file-if-exists=.env node_modules/@react-router/serve/bin.cjs build/server/index.js",
+    "dev": "\"%npm_node_execpath%\" --env-file-if-exists=.env node_modules/@react-router/dev/bin.cjs dev",
+    "build": "\"%npm_node_execpath%\" --import tsx tools/build/prebuild.ts && react-router build",
     "typecheck": "npm run typecheck:server && npm run typecheck:tools && npm run typecheck:app && npm run typecheck:test",
     "typecheck:server": "\"%npm_node_execpath%\" node_modules/typescript/lib/tsc.js -p server/tsconfig.json --noEmit",
     "typecheck:tools": "\"%npm_node_execpath%\" node_modules/typescript/lib/tsc.js -p tools/tsconfig.json",
@@ -26,17 +26,19 @@
     "lint:fix": "oxlint --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "npm run test:db && npm run test:api && npm run test:auth && npm run test:ui",
+    "test": "npm run test:db && npm run test:webdav && npm run test:api && npm run test:auth && npm run test:ui",
     "pretest": "npm run build",
     "test:api": "\"%npm_node_execpath%\" --import tsx tools/contract/compare.ts --serve-npm serve",
     "test:auth": "\"%npm_node_execpath%\" --import tsx --test test/api/auth.spec.ts",
     "test:ui": "\"%npm_node_execpath%\" --import tsx tools/contract/smoke-ui.ts --require-migrated",
-    "test:db": "\"%npm_node_execpath%\" --import tsx --test test/db/backup.test.ts test/db/json-migration.test.ts test/db/migration-backup.test.ts test/db/password.test.ts test/db/account.test.ts",
+    "test:db": "\"%npm_node_execpath%\" --import tsx --test test/db/backup.test.ts test/db/json-migration.test.ts test/db/migration-backup.test.ts test/db/password.test.ts test/db/account.test.ts test/db/bootstrap.test.ts test/db/report-storage.test.ts",
     "user:list": "\"%npm_node_execpath%\" --import tsx server/src/cli/list-users.ts",
+    "test:webdav": "\"%npm_node_execpath%\" --import tsx --test test/webdav/client.test.ts",
     "user:passwd": "\"%npm_node_execpath%\" --import tsx server/src/cli/set-password.ts",
     "user:init": "\"%npm_node_execpath%\" --import tsx server/src/cli/init-passwords.ts",
     "db:backup": "\"%npm_node_execpath%\" --import tsx server/src/cli/backup-sqlite.ts",
-    "db:rehearse": "\"%npm_node_execpath%\" --import tsx tools/db/rehearse-migration.ts"
+    "db:rehearse": "\"%npm_node_execpath%\" --import tsx tools/db/rehearse-migration.ts",
+    "reports:migrate-webdav": "\"%npm_node_execpath%\" --import tsx tools/reports-migrate-webdav.ts"
   },
   "devDependencies": {
     "@ant-design/cli": "^6.6.3",
@@ -47,7 +49,6 @@
     "@vitejs/plugin-react": "^6.1.1",
     "oxlint": "^1.82.0",
     "prettier": "^3.9.6",
-    "tsx": "^4.23.13",
     "typescript": "^7.0.2",
     "vite": "^8.2.2"
   },
@@ -60,6 +61,7 @@
     "isbot": "^5",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "react-router": "^8.3.1"
+    "react-router": "^8.3.1",
+    "tsx": "^4.23.13"
   }
 }

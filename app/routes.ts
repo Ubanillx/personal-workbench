@@ -16,15 +16,14 @@ export default [
   route("register", "routes/register.tsx"),
   route("password", "routes/password.tsx"),
   route("join", "routes/join.tsx"),
-  route("organization", "routes/organization.tsx"),
-  route("admin", "routes/admin.tsx"),
+  route("settings", "routes/settings.tsx"),
   route("logout", "routes/logout.ts"),
   route("tasks", "routes/tasks.tsx"),
   route("todos", "routes/todos.tsx"),
   route("notes", "routes/notes.tsx"),
-  route("inbox", "routes/inbox.tsx"),
+  // 企微导入已并入 /tasks（页头抽屉）；这条只是老链接的重定向，不是页面
+  route("inbox", "routes/inbox-redirect.ts"),
   route("reports", "routes/reports.tsx"),
-  route("collaboration", "routes/collaboration.tsx"),
   route("files", "routes/files.tsx"),
   route("review", "routes/review.tsx"),
 

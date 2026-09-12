@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { TaskPriority, TaskStatus, UserRole } from "../../shared/types/domain";
 import { now, one, rows, run, toUser, type Db, type User } from "./db.server";
+import { createNotification } from "./notifications.server";
 import { orgScope } from "./session.server";
 
 /**
@@ -171,19 +172,7 @@ export function notify(
   message: string,
 ): void {
   for (const recipient of [...new Set(recipients)].filter((x) => x !== actor))
-    run(
-      database,
-      "INSERT INTO notifications(id,recipient_id,actor_id,task_id,event_type,title,message,is_read,created_at,read_at) VALUES(?,?,?,?,?,?,?,?,?,NULL)",
-      randomUUID(),
-      recipient,
-      actor,
-      taskId,
-      type,
-      title,
-      message,
-      0,
-      now(),
-    );
+    createNotification(database, { recipientId: recipient, actorId: actor, taskId, eventType: type, title, message });
 }
 
 /** 任务所属组织的可用组织管理者（任务事件的通知对象，替代旧实现的全局「主人」） */
@@ -231,7 +220,16 @@ export function event(
   database: Db,
   taskId: string,
   user: User,
-  type: "task_created" | "task_reassigned" | "task_submitted" | "task_approved" | "task_returned" | "task_archived" | "task_restored",
+  type:
+    | "task_created"
+    | "task_reassigned"
+    | "task_submitted"
+    | "task_approved"
+    | "task_returned"
+    | "task_archived"
+    | "task_restored"
+    // 换所属组织（迁移 013 放开的取值）：时间线要能看出任务换过组织
+    | "task_moved",
   content: string,
 ): void {
   run(
@@ -258,17 +256,13 @@ export function notifyOverdueTasks(database: Db): void {
   for (const item of overdue) {
     const recipients = item.isPrivate ? [item.ownerId] : [item.ownerId, ...orgManagerIds(database, item.id)];
     for (const recipient of new Set(recipients.filter((value): value is string => Boolean(value))))
-      run(
-        database,
-        "INSERT INTO notifications(id,recipient_id,actor_id,task_id,event_type,title,message,is_read,created_at,read_at) VALUES(?,?,NULL,?,?,?, ?,0,?,NULL)",
-        randomUUID(),
-        recipient,
-        item.id,
-        "task_overdue",
-        "任务已逾期",
-        `任务“${item.title}”已超过截止日期`,
-        now(),
-      );
+      createNotification(database, {
+        recipientId: recipient,
+        taskId: item.id,
+        eventType: "task_overdue",
+        title: "任务已逾期",
+        message: `任务“${item.title}”已超过截止日期`,
+      });
     run(database, "UPDATE tasks SET overdue_notified_at=? WHERE id=?", now(), item.id);
   }
 }

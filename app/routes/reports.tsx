@@ -20,12 +20,12 @@ import {
   type TableProps,
   type UploadFile,
 } from "antd";
-import { DownloadOutlined, ReloadOutlined, UploadOutlined } from "@ant-design/icons";
+import { CheckOutlined, DownloadOutlined, ReloadOutlined, RollbackOutlined, UploadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import type { UserRole } from "../../shared/types/domain";
-import { confirmAction, RowActions } from "../components/crud-actions";
+import { confirmAction, IconActionButton, RowActions, type RowAction } from "../components/crud-actions";
 import { useListParams } from "../components/crud-hooks";
-import { FormModal } from "../components/crud-modal";
+import { FormDrawer } from "../components/crud-drawer";
 import { TableToolbar } from "../components/crud-toolbar";
 import { PageHeader } from "../components/page-header";
 import { listReportOwnersFor, listReportsFor } from "../lib/reports.server";
@@ -49,7 +49,6 @@ type ReportLike = {
 type MeLike = { id: string; name: string; role: UserRole; orgId: string | null; orgName: string | null };
 type OwnerLike = { id: string; name: string; orgName: string | null };
 type UploadValues = {
-  ownerId?: string;
   period?: [dayjs.Dayjs, dayjs.Dayjs];
   docType?: ReportDocTypeLike;
   note?: string;
@@ -84,6 +83,9 @@ const UPLOAD_DOC_TYPE_OPTIONS = [
  * 页面不通过 HTTP 调自己的 API。列表已按组织范围过滤：管理员看全部组织，
  * 组织管理者看本组织，普通用户只看自己提交的。
  * 未登录 / 待改密 / 未入组三类账号由 requireUserOrRedirect 统一挡在前面（ui.server.ts 的三道门）。
+ *
+ * `owners` 只服务于**列表的「归属人」筛选器**：D-46 起归属人恒为提交者本人，
+ * 上传表单里不再有归属人下拉，也不再支持代传。
  */
 export async function loader({ request }: { request: Request }) {
   const user = requireUserOrRedirect(request);
@@ -94,7 +96,7 @@ export async function loader({ request }: { request: Request }) {
   };
 }
 
-/** 管理员跨组织指派归属人时补上组织名，避免同名成员分不清 */
+/** 管理员跨组织筛选时补上组织名，避免同名成员分不清 */
 function ownerLabel(me: MeLike, owner: OwnerLike): string {
   return me.role === "admin" && owner.orgName ? `${owner.name}（${owner.orgName}）` : owner.name;
 }
@@ -138,8 +140,10 @@ export default function ReportsRoute(): React.ReactElement {
   const [error, setError] = useState("");
   const [rowBusy, setRowBusy] = useState("");
   const busy = navigation.state !== "idle" || revalidator.state !== "idle" || uploading;
-  // 管理员与组织管理者可以指派/筛选归属人，普通用户只能提交自己的
-  const canPickOwner = user.role !== "member";
+  // 审批权（通过 / 退回）在管理员与组织管理者手里；普通成员只能看自己的
+  const canReview = user.role !== "member";
+  // D-46：管理员不提交周报（他是全局角色、没有组织），上传入口对他整块隐藏
+  const canUpload = user.role !== "admin";
 
   const type = list.get("type", "all");
   const status = list.get("status", "all");
@@ -155,7 +159,7 @@ export default function ReportsRoute(): React.ReactElement {
     [reports, type, status, owner],
   );
   const ownerOptions = useMemo(
-    () => [{ value: "all", label: "全部成员" }, ...owners.map((item) => ({ value: item.id, label: ownerLabel(user, item) }))],
+    () => [{ value: "all", label: "全部归属人" }, ...owners.map((item) => ({ value: item.id, label: ownerLabel(user, item) }))],
     [owners, user],
   );
   const filtered = type !== "all" || status !== "all" || owner !== "all";
@@ -187,11 +191,10 @@ export default function ReportsRoute(): React.ReactElement {
     body.append("periodEnd", range[1].format("YYYY-MM-DD"));
     body.append("docType", values.docType ?? "weekly_report");
     body.append("note", (values.note ?? "").trim());
-    body.append("ownerId", canPickOwner ? (values.ownerId ?? "") : user.id);
     body.append("file", file);
     void postForm("/api/reports", body)
       .then(() => {
-        void message.success("已上传并提交审核");
+        void message.success("已提交，等待审核");
         setUploadOpen(false);
         refresh();
       })
@@ -269,84 +272,67 @@ export default function ReportsRoute(): React.ReactElement {
     {
       title: "操作",
       key: "actions",
-      width: 200,
+      width: 320,
       align: "right",
       render: (_value, report) => {
         const latest = report.files.at(-1);
-        const canReview = canPickOwner;
         const isOwnerOfReport = report.ownerId === user.id;
         const canResubmit = report.status === "returned" && (canReview || isOwnerOfReport);
         const rowDisabled = rowBusy === report.id || busy;
-        return (
-          <RowActions
-            disabled={rowDisabled}
-            extra={
-              report.status === "submitted" && canReview ? (
-                <Button
-                  size="small"
-                  color="primary"
-                  variant="solid"
-                  onClick={() =>
-                    confirmAction(modal, {
-                      title: `通过 ${report.ownerName ?? "该成员"} 的${DOC_TYPE_LABEL[report.docType]}？`,
-                      content: "通过后该文档进入已通过状态，如需修改需重新上传。",
-                      okText: "通过",
-                      onOk: () => run(report.id, () => postJson(`/api/reports/${report.id}/approve`), "已通过审核"),
-                    })
-                  }
-                >
-                  通过
-                </Button>
-              ) : canResubmit ? (
-                <Upload
-                  accept={ACCEPTED_DOCS}
-                  maxCount={1}
-                  showUploadList={false}
-                  disabled={rowDisabled}
-                  beforeUpload={(file) => {
-                    const body = new FormData();
-                    body.append("file", file);
-                    run(report.id, () => postForm(`/api/reports/${report.id}/file`, body), "已重新提交");
-                    return false;
-                  }}
-                >
-                  <Button size="small" icon={<UploadOutlined />} disabled={rowDisabled}>
-                    重新上传
-                  </Button>
-                </Upload>
-              ) : latest ? (
-                <Button
-                  size="small"
-                  color="default"
-                  variant="text"
-                  href={`/api/reports/${report.id}/file/${latest.version}`}
-                  icon={<DownloadOutlined />}
-                >
-                  下载
-                </Button>
-              ) : null
-            }
-            items={
-              [
-                latest
-                  ? {
-                      key: "download",
-                      label: `下载 v${latest.version}`,
-                      icon: <DownloadOutlined />,
-                      onClick: () => window.open(`/api/reports/${report.id}/file/${latest.version}`, "_blank"),
-                    }
-                  : null,
-                report.status === "submitted" && canReview
-                  ? {
-                      key: "return",
-                      label: "退回修改",
-                      onClick: () => setReturnTarget(report),
-                    }
-                  : null,
-              ].filter((item) => item !== null) as NonNullable<Parameters<typeof RowActions>[0]["items"]>
-            }
-          />
-        );
+        const reviewing = report.status === "submitted" && canReview;
+        const actions: RowAction[] = [];
+        if (reviewing) {
+          actions.push({
+            key: "approve",
+            label: "通过",
+            icon: <CheckOutlined />,
+            tone: "primary",
+            onClick: () =>
+              confirmAction(modal, {
+                title: `通过 ${report.ownerName ?? "该成员"} 的${DOC_TYPE_LABEL[report.docType]}？`,
+                content: "通过后如需改动，只能重新上传新版本。",
+                okText: "通过",
+                onOk: () => run(report.id, () => postJson(`/api/reports/${report.id}/approve`), "已通过审核"),
+              }),
+          });
+          actions.push({
+            key: "return",
+            label: "退回修改",
+            icon: <RollbackOutlined />,
+            onClick: () => setReturnTarget(report),
+          });
+        }
+        if (canResubmit) {
+          actions.push({
+            key: "resubmit",
+            label: "重新上传",
+            render: (
+              <Upload
+                accept={ACCEPTED_DOCS}
+                maxCount={1}
+                showUploadList={false}
+                disabled={rowDisabled}
+                beforeUpload={(file) => {
+                  const body = new FormData();
+                  body.append("file", file);
+                  run(report.id, () => postForm(`/api/reports/${report.id}/file`, body), "已重新提交，等待审核");
+                  return false;
+                }}
+              >
+                <IconActionButton label="重新上传" icon={<UploadOutlined />} disabled={rowDisabled} />
+              </Upload>
+            ),
+          });
+        }
+        if (latest) {
+          actions.push({
+            key: "download",
+            label: `下载 v${latest.version}`,
+            icon: <DownloadOutlined />,
+            onClick: () => window.open(`/api/reports/${report.id}/file/${latest.version}`, "_blank"),
+          });
+        }
+        return <RowActions actions={actions} disabled={rowDisabled} />;
       },
     },
   ];
@@ -354,24 +340,28 @@ export default function ReportsRoute(): React.ReactElement {
   return (
     <Flex vertical gap="large" className="page-stack">
       <PageHeader
-        title="周报/总结"
-        description="提交工作周报与总结，查看审核结果。"
+        title="周报 / 总结"
+        eyebrow="REPORTS"
+        description="提交、审核与退回周报和总结，历史版本随时可下载。"
+        help="被退回后重新上传会生成新版本。"
         extra={
           <>
             <Button icon={<ReloadOutlined />} onClick={refresh} loading={busy}>
               刷新
             </Button>
-            <Button
-              color="primary"
-              variant="solid"
-              icon={<UploadOutlined />}
-              onClick={() => {
-                setError("");
-                setUploadOpen(true);
-              }}
-            >
-              上传周报
-            </Button>
+            {canUpload ? (
+              <Button
+                color="primary"
+                variant="solid"
+                icon={<UploadOutlined />}
+                onClick={() => {
+                  setError("");
+                  setUploadOpen(true);
+                }}
+              >
+                上传周报
+              </Button>
+            ) : null}
           </>
         }
       />
@@ -394,7 +384,7 @@ export default function ReportsRoute(): React.ReactElement {
           <TableToolbar
             extra={
               <Typography.Text type="secondary">
-                共 {rows.length} 份{filtered ? `（总计 ${reports.length} 份）` : ""}
+                共 {reports.length} 份{filtered ? `，筛选出 ${rows.length} 份` : ""}
               </Typography.Text>
             }
           >
@@ -410,7 +400,7 @@ export default function ReportsRoute(): React.ReactElement {
               style={{ width: 140 }}
               onChange={(value: string) => list.patch({ status: value === "all" ? null : value })}
             />
-            {canPickOwner ? (
+            {canReview ? (
               <Select
                 value={owner}
                 options={ownerOptions}
@@ -445,14 +435,18 @@ export default function ReportsRoute(): React.ReactElement {
                     <Space orientation="vertical" size={2}>
                       <Typography.Text strong>{filtered ? "没有符合条件的周报" : "暂无周报"}</Typography.Text>
                       <Typography.Text type="secondary">
-                        {filtered ? "调整筛选条件，或重置后查看全部。" : "点击右上角「上传周报」提交第一份文档。"}
+                        {filtered
+                          ? "调整筛选条件，或重置后查看全部。"
+                          : canUpload
+                            ? "点击右上角「上传周报」提交第一份文档。"
+                            : "管理员只负责审核；成员提交后会显示在这里。"}
                       </Typography.Text>
                     </Space>
                   }
                 >
                   {filtered ? (
                     <Button onClick={() => list.reset()}>重置筛选</Button>
-                  ) : (
+                  ) : canUpload ? (
                     <Button
                       onClick={() => {
                         setError("");
@@ -461,7 +455,7 @@ export default function ReportsRoute(): React.ReactElement {
                     >
                       上传周报
                     </Button>
-                  )}
+                  ) : null}
                 </Empty>
               ),
             }}
@@ -469,7 +463,7 @@ export default function ReportsRoute(): React.ReactElement {
         </Flex>
       </Card>
 
-      <FormModal
+      <FormDrawer
         open={uploadOpen}
         title="上传周报 / 总结"
         okText="上传并提交"
@@ -479,22 +473,19 @@ export default function ReportsRoute(): React.ReactElement {
         error={error}
         initialValues={{
           docType: "weekly_report",
-          ownerId: canPickOwner ? "" : user.id,
           period: [dayjs().startOf("week"), dayjs().endOf("week")],
           file: [],
         }}
         onCancel={() => setUploadOpen(false)}
         onFinish={submitUpload}
       >
-        {canPickOwner ? (
-          <Form.Item name="ownerId" label="归属人" rules={[{ required: true, message: "请选择归属人" }]}>
-            <Select
-              placeholder="选择归属人"
-              showSearch={{ optionFilterProp: "label" }}
-              options={owners.map((item) => ({ value: item.id, label: ownerLabel(user, item) }))}
-            />
-          </Form.Item>
-        ) : null}
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+          title={`归属人：${user.name}`}
+          description="文档保存在 NAS 上，按「归属人 / 周期 / 文件名」归档。"
+        />
         <Form.Item name="period" label="周期" rules={[{ required: true, message: "请选择周期" }]}>
           <DatePicker.RangePicker style={{ width: "100%" }} format="YYYY-MM-DD" />
         </Form.Item>
@@ -503,7 +494,7 @@ export default function ReportsRoute(): React.ReactElement {
             <Select options={UPLOAD_DOC_TYPE_OPTIONS} />
           </Form.Item>
           <Form.Item name="note" label="备注" style={{ minWidth: 220, flex: 2 }}>
-            <Input placeholder="例如：第八周（可选）" maxLength={80} />
+            <Input placeholder="可选" maxLength={80} />
           </Form.Item>
         </Flex>
         <Form.Item
@@ -520,9 +511,9 @@ export default function ReportsRoute(): React.ReactElement {
             <Button icon={<UploadOutlined />}>选择文档</Button>
           </Upload>
         </Form.Item>
-      </FormModal>
+      </FormDrawer>
 
-      <FormModal
+      <FormDrawer
         open={returnTarget !== null}
         title={`退回「${returnTarget?.ownerName ?? "该成员"}」的${returnTarget ? DOC_TYPE_LABEL[returnTarget.docType] : ""}`}
         okText="确认退回"
@@ -538,11 +529,11 @@ export default function ReportsRoute(): React.ReactElement {
           run(target.id, () => postJson(`/api/reports/${target.id}/return`, { note }), "已退回");
         }}
       >
-        <Alert type="warning" showIcon title="退回后提交人需要重新上传文档，退回原因会写入审核批注并通知对方。" />
+        <Alert type="warning" showIcon title="退回后需重新上传；退回原因会写入审核批注并通知提交人。" />
         <Form.Item name="note" label="退回原因" rules={[{ required: true, message: "请填写退回原因" }]} style={{ marginTop: 16 }}>
           <Input.TextArea rows={3} maxLength={200} showCount placeholder="例如：缺少本周客户拜访记录，请补充后重新提交" />
         </Form.Item>
-      </FormModal>
+      </FormDrawer>
     </Flex>
   );
 }

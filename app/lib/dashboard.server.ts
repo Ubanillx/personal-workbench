@@ -1,6 +1,7 @@
-import { db, type User } from "./db.server";
+import type { TaskPriority, TaskStatus } from "../../shared/types/domain";
+import { db, one, type User } from "./db.server";
+import { listFiles } from "./files.server";
 import { listNotes } from "./notes.server";
-import { listOrganizations } from "./organization.server";
 import { notifyOverdueTasks, visible } from "./tasks.server";
 import { listTodos } from "./todos.server";
 
@@ -15,20 +16,6 @@ export function dashboardScopeLabel(user: User): string {
 }
 
 /**
- * 概览页「快捷新增待办」的可选组织：
- * 管理员是全局角色、不隶属任何组织（§3.2），写入时必须显式指定目标组织
- * （records.server 的 `resolveRecordOrg` 对 admin 要求请求里带 `orgId`），所以这里列出可选的组织，
- * 已解散的组织不能写入（`orgIsActive` 会拒绝）故不列出；
- * 普通用户与组织管理者写自己的组织，没有可选项。
- */
-export function dashboardTodoOrgs(user: User): Array<{ id: string; name: string }> {
-  if (user.role !== "admin") return [];
-  return listOrganizations(user)
-    .filter((org) => org.status === "active")
-    .map((org) => ({ id: org.id, name: org.name }));
-}
-
-/**
  * 概览数据：UI 的 loader 与 GET /api/dashboard 共用这一份实现。
  * 全栈迁移的关键约定——**页面不再通过 HTTP 调自己的 API**，而是与资源路由共用服务端函数，
  * 从而根除"两套实现漂移"的可能。
@@ -38,6 +25,9 @@ export function dashboardTodoOrgs(user: User): Array<{ id: string; name: string 
  * 随手记走 `notes.server.listNotes()`；它们的组织范围都由 `orgScope(user)` 推导
  * （管理员为 null = 全部组织的合并视图，D-28；尚未入组的账号在各域里显式兜底为「什么都看不到」）。
  * dashboard 只做汇总，不重复实现过滤——少写一处、也少一处漏过滤导致跨组织泄露的机会。
+ *
+ * ⚠️ 这个返回值就是 `GET /api/dashboard` 的响应载荷（契约 golden 逐字段比对），**字段不能增删改**。
+ * 概览页需要的额外展板数据放在下面的 `dashboardBoard()` 里，不进 API。
  */
 export function dashboardData(user: User): {
   user: User;
@@ -62,5 +52,188 @@ export function dashboardData(user: User): {
       pendingTodos: todos.filter((todo) => Number((todo as { isCompleted?: unknown }).isCompleted) === 0).length,
       notes: notes.length,
     },
+  };
+}
+
+/* ------------------------------------------------------------------ 只读展板（页面专用） */
+
+/** 「需要关注」的时间窗：截止日在今天 + 7 天以内（含已逾期） */
+const DUE_SOON_DAYS = 7;
+/** 展板每个列表最多渲染多少条 */
+const BOARD_LIST_SIZE = 6;
+
+export type BoardTask = {
+  id: string;
+  title: string;
+  priority: TaskPriority;
+  status: TaskStatus;
+  progress: number;
+  dueDate: string | null;
+  orgName: string | null;
+  ownerName: string | null;
+};
+
+export type BoardTodo = { id: string; content: string; todoDate: string | null; isCompleted: number };
+export type BoardNote = { id: string; content: string; isPinned: number; updatedAt: string };
+export type BoardFile = { id: string; name: string; category: string; lastUsedAt: string | null };
+export type AttentionTask = BoardTask & { overdue: boolean };
+
+export type DashboardBoard = {
+  /** 口径日期（YYYY-MM-DD），页面上标注「今日」用 */
+  today: string;
+  stats: {
+    overdueTasks: number;
+    pendingReview: number;
+    todayTodos: number;
+    overdueTodos: number;
+    unreadNotifications: number;
+  };
+  statusCounts: Array<{ status: TaskStatus; label: string; count: number }>;
+  completionRate: number;
+  /** 已逾期 + 未来 7 天内到期的未完成任务，按截止日升序 */
+  attentionTasks: AttentionTask[];
+  /** 未完成待办，按日期升序（逾期在前，无日期最后） */
+  openTodos: BoardTodo[];
+  recentNotes: BoardNote[];
+  /** 重要文件只对管理员与组织管理者开放（§4）；其他人是 null，页面据此不渲染该卡片 */
+  recentFiles: BoardFile[] | null;
+};
+
+const STATUS_LABEL: Record<TaskStatus, string> = { todo: "待办", in_progress: "进行中", pending_review: "待验收", completed: "已完成" };
+const STATUS_ORDER: TaskStatus[] = ["todo", "in_progress", "pending_review", "completed"];
+
+/**
+ * 逾期口径与 `review.server.ts` 的统计一致（截止日早于今天且未完成）；
+ * 日期一律用 `YYYY-MM-DD` 串比较，与库里 `due_date` / `todo_date` 的存储格式相同。
+ */
+function todayString(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function dateAfterDays(days: number): string {
+  const date = new Date();
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function text(value: unknown): string {
+  return String(value ?? "");
+}
+function nullableText(value: unknown): string | null {
+  return value === null || value === undefined || value === "" ? null : String(value);
+}
+
+function toBoardTask(row: unknown): BoardTask {
+  const task = row as Record<string, unknown>;
+  return {
+    id: text(task.id),
+    title: text(task.title),
+    priority: text(task.priority) as TaskPriority,
+    status: text(task.status) as TaskStatus,
+    progress: Number(task.progress ?? 0),
+    dueDate: nullableText(task.dueDate),
+    orgName: nullableText(task.orgName),
+    ownerName: nullableText(task.ownerName),
+  };
+}
+
+function toBoardTodo(row: unknown): BoardTodo {
+  const todo = row as Record<string, unknown>;
+  return {
+    id: text(todo.id),
+    content: text(todo.content),
+    todoDate: nullableText(todo.todoDate),
+    isCompleted: Number(todo.isCompleted ?? 0),
+  };
+}
+
+function toBoardNote(row: unknown): BoardNote {
+  const note = row as Record<string, unknown>;
+  return {
+    id: text(note.id),
+    content: text(note.content),
+    isPinned: Number(note.isPinned ?? 0),
+    updatedAt: text(note.updatedAt),
+  };
+}
+
+function toBoardFile(row: Record<string, unknown>): BoardFile {
+  return {
+    id: text(row.id),
+    name: text(row.name),
+    category: text(row.category),
+    lastUsedAt: nullableText(row.lastUsedAt),
+  };
+}
+
+/** 未读通知数与外壳右上角的铃铛徽标同源（同一张表、同一条件） */
+function unreadNotifications(userId: string): number {
+  return one<{ n: number }>(db(), "SELECT COUNT(*) AS n FROM notifications WHERE recipient_id=? AND is_read=0", userId)?.n ?? 0;
+}
+
+/**
+ * 概览页的只读展板：在 `dashboardData()` 的结果上做派生，**不再重复查任务/待办/随手记**
+ * （`base` 由调用方传入，页面 loader 只需取一次数据）。
+ *
+ * 页面只展示、不写入，所以这里没有任何写操作；组织范围仍由 base 里各域的读函数保证，
+ * 新增的两处查询（未读通知、重要文件）也各自带着自己的边界：通知按收件人，
+ * 文件复用 `files.server.listFiles()`（同 `recordClauses(user)`）且只给管理员 / 组织管理者取。
+ */
+export function dashboardBoard(user: User, base: { tasks: unknown[]; todos: unknown[]; notes: unknown[] }): DashboardBoard {
+  const today = todayString();
+  const dueSoon = dateAfterDays(DUE_SOON_DAYS);
+  const tasks = base.tasks.map(toBoardTask);
+  const todos = base.todos.map(toBoardTodo);
+  const notes = base.notes.map(toBoardNote);
+
+  // 未完成任务里「截止日 ≤ 今天 + 7 天」的都要盯（含已逾期，逾期日期必定早于今天）
+  const attentionTasks = tasks
+    .filter((task) => task.status !== "completed" && task.dueDate !== null && task.dueDate <= dueSoon)
+    .map((task) => ({
+      id: task.id,
+      title: task.title,
+      priority: task.priority,
+      status: task.status,
+      progress: task.progress,
+      dueDate: task.dueDate,
+      orgName: task.orgName,
+      ownerName: task.ownerName,
+      overdue: task.dueDate !== null && task.dueDate < today,
+    }))
+    .toSorted((left, right) => text(left.dueDate).localeCompare(text(right.dueDate)))
+    .slice(0, BOARD_LIST_SIZE);
+
+  // 未完成待办按日期升序：逾期的最前面，没有日期的排最后
+  const openTodos = todos
+    .filter((todo) => todo.isCompleted === 0)
+    .toSorted((left, right) => (left.todoDate ?? "9999-12-31").localeCompare(right.todoDate ?? "9999-12-31"))
+    .slice(0, BOARD_LIST_SIZE);
+
+  // 置顶优先，其次按更新时间（listNotes 已按 updated_at DESC 排序）
+  const recentNotes = notes.toSorted((left, right) => right.isPinned - left.isPinned).slice(0, BOARD_LIST_SIZE);
+
+  const canReadFiles = user.role === "admin" || user.role === "manager";
+  const recentFiles = canReadFiles ? listFiles(user, "", "", null).slice(0, BOARD_LIST_SIZE).map(toBoardFile) : null;
+  const completed = tasks.filter((task) => task.status === "completed").length;
+
+  return {
+    today,
+    stats: {
+      overdueTasks: tasks.filter((task) => task.status !== "completed" && task.dueDate !== null && task.dueDate < today).length,
+      pendingReview: tasks.filter((task) => task.status === "pending_review").length,
+      todayTodos: todos.filter((todo) => todo.isCompleted === 0 && todo.todoDate === today).length,
+      overdueTodos: todos.filter((todo) => todo.isCompleted === 0 && todo.todoDate !== null && todo.todoDate < today).length,
+      unreadNotifications: unreadNotifications(user.id),
+    },
+    statusCounts: STATUS_ORDER.map((status) => ({
+      status,
+      label: STATUS_LABEL[status],
+      count: tasks.filter((task) => task.status === status).length,
+    })),
+    completionRate: tasks.length ? Math.round((completed / tasks.length) * 100) : 0,
+    attentionTasks,
+    openTodos,
+    recentNotes,
+    recentFiles,
   };
 }

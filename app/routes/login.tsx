@@ -1,8 +1,9 @@
 import type React from "react";
 import { Link, redirect, useActionData, useNavigation, useSearchParams, useSubmit } from "react-router";
-import { Alert, Avatar, Button, Card, Form, Input, Space, Typography } from "antd";
+import { Alert, Button, Card, Form, Input, Space, Typography } from "antd";
 import { LockOutlined, UserOutlined } from "@ant-design/icons";
 import type { UserRole } from "../../shared/types/domain";
+import { BrandLogo } from "../components/brand-logo";
 import { appConfig } from "../lib/context.server";
 import { readPayload } from "../lib/form.server";
 import { authenticate, createSession, isSecureRequest, optionalUser, sessionCookie } from "../lib/session.server";
@@ -73,9 +74,7 @@ export default function LoginRoute(): React.ReactElement {
       <Card className="access-card">
         <Space orientation="vertical" size="large" className="access-stack">
           <Space orientation="vertical" size={4} align="center" className="access-brand">
-            <Avatar shape="square" size={48} className="brand-avatar">
-              台
-            </Avatar>
+            <BrandLogo height={40} />
             <Typography.Title level={4} className="access-title">
               登录个人工作台
             </Typography.Title>

@@ -2,12 +2,12 @@ import { getLanIPv4Addresses } from "../../server/src/network";
 import { appConfig } from "./context.server";
 
 /**
- * 访问信息共享逻辑：`/api/access-info` 资源路由与管理页共用。
+ * 访问信息组装逻辑，仅供 `/api/access-info` 使用。
  *
  * 权限：**仅全局管理员可见**（docs/harness/ACCOUNTS_AND_ORGS.md §7.2）——令牌登录已退役，
  * 这里的局域网地址只是「把服务地址告诉谁」的运维信息，因此门禁放在调用方
  * （`requireAdmin`，非 admin 一律 403 FORBIDDEN），本函数只负责组装返回体。
- * 返回字段结构保持不变（前端与管理页都在用）。
+ * 设置页不再展示访问地址（见 `app/routes/settings.tsx`），前端只通过该端点读取。
  */
 export function accessInfoPayload(): {
   port: number;
