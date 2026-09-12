@@ -100,8 +100,8 @@ const CONTROL_CHARS = /[\u0000-\u001f/\\]/gu;
 
 ```bash
 npm run lint          # 0 warning / 0 error
-npm run typecheck     # server + web
-npm test              # 16/16
+npm run typecheck     # server + tools + app + test
+npm test              # 423/423
 npm run build         # 前端 + 后端产物
 ```
 
@@ -197,21 +197,26 @@ npx antd lint app         # 必须 No issues found（当前 96 文件全过）
 | ------------------ | --------------------------------------------------------------------------- |
 | `page-header.tsx`  | 页头：栏目标识 + 标题（`level={4}`）+ 一句话说明；右侧 `extra` 放页级动作   |
 | `crud-toolbar.tsx` | `TableToolbar`（左筛选 / 右动作）与 `SelectionAlert`（批量操作条）          |
-| `crud-modal.tsx`   | `FormModal`：新建与编辑共用的表单弹窗（含服务端错误展示）                   |
-| `crud-actions.tsx` | `RowActions`（行内动作 + 「更多」下拉）、`confirmAction`、`confirmDanger`   |
-| `crud-hooks.ts`    | `useCrudFeedback`（成功 toast + 自动关弹窗）、`useListParams`（筛选进 URL） |
+| `crud-drawer.tsx`  | `FormDrawer`：新建与编辑共用的表单抽屉（含服务端错误展示）                  |
+| `crud-actions.tsx` | `RowActions`（行内动作平铺）、`confirmAction`、`confirmDanger`              |
+| `crud-hooks.ts`    | `useCrudFeedback`（成功 toast + 自动关抽屉）、`useListParams`（筛选进 URL） |
 
 必须遵守的交互约定：
 
-1. **结构**：`PageHeader` → 列表 `Card`（内含 `TableToolbar` + 可选 `SelectionAlert` + `Table`）→ 表单 `FormModal` / 详情 `Drawer`。
-2. **录入**：新建与编辑一律走 `FormModal`，页面上不出现常驻「裸表单」；查看详情用 `Drawer` 只读展示，编辑再从抽屉里点按钮打开弹窗。
+1. **结构**：`PageHeader` → 列表 `Card`（内含 `TableToolbar` + 可选 `SelectionAlert` + `Table`）→ 表单 `FormDrawer` / 详情 `Drawer`，录入与查看一律走右侧抽屉，不再用居中弹窗遮挡列表。
+2. **录入**：新建与编辑一律走 `FormDrawer`（右侧抽屉），页面上不出现常驻「裸表单」；查看详情同样用 `Drawer` 只读展示，编辑从抽屉里的按钮打开表单抽屉，两者都在侧边完成。**同一时刻只挂一个右侧抽屉**：编辑对象存成组件 state（如 `editingTask`），详情抽屉加 `!editing*` 条件渲染——两个同层浮层的层级只由 DOM 顺序决定，叠在一起会互相压住，出现「点了编辑看不见表单」。编辑态不必进 URL，选中对象本身才是数据源（与 `/todos`、`/notes`、`/files` 一致）。
+   浮层套浮层（例如表单抽屉里点「选择文件」打开一个选择器）可以，但**内层浮层必须挂在抽屉内容里**（`FormDrawer` 的 `afterForm`）：antd 会给嵌套浮层 +100 层级，保证内层稳稳盖在外层之上；不要写成两个同层抽屉靠 DOM 顺序压住彼此（`/files` 的 `WebDavFilePicker` 就是这么挂的，见 `WEBDAV.md` §2.2）。
 3. **筛选**：筛选与搜索条件写进 URL（`useListParams`），可刷新、可分享、可回退；搜索框用 `Input.Search` 并只在回车/点击时提交。
-4. **行操作**：每行最多 1 个高频文字按钮，其余（编辑、归档、删除…）收进「更多」下拉；危险项 `danger: true`。
+4. **行操作**：`RowActions` 把所有动作**直接平铺**展示（不再收进「更多」下拉），每个动作统一 `size="small"` + `variant="text"` + **纯图标**，文字只出现在悬停 `Tooltip` 里（`label` 同时充当 `aria-label`），用 `tone` 区分语义（`default` 中性 / `primary` 强调 / `danger` 危险），必要时自动换行；`Upload` / `Popconfirm` 包裹按钮走 `render`，内部复用 `IconActionButton` 保持同一视觉。
 5. **批量**：表格启用 `rowSelection` + `SelectionAlert`，批量动作逐条调用**同一个**服务函数并汇总成功/失败数，不新写 SQL。
-6. **反馈**：成功用 `useCrudFeedback` 弹全局提示并关闭弹窗；失败**必须**渲染成常驻 `Alert`（页面顶部与弹窗顶部各一处），不要只弹 toast——SSR 冒烟测试也正是靠 HTML 里的错误文案做断言。
+6. **反馈**：成功用 `useCrudFeedback` 弹全局提示并关闭抽屉；失败**必须**渲染成常驻 `Alert`（页面顶部与抽屉顶部各一处），不要只弹 toast——SSR 冒烟测试也正是靠 HTML 里的错误文案做断言。
 7. **确认**：破坏性操作（删除 / 归档 / 解散 / 停用）用 `confirmDanger`，文案要写清影响范围；普通操作（通过、启用、恢复）用 `confirmAction`，不用原生 `window.confirm`。
 8. **表格**：稳定 `rowKey`、`size="middle"`、受控 `loading`、分页带 `showTotal`、`locale.emptyText` 用带引导动作的 `Empty`、需要时给 `sorter` 与列 `filters`。
 9. **契约不变**：页面 `action` 只做 `intent → 服务函数` 映射与文案包装，业务规则全部留在 `app/lib/*.server.ts`；改写 UI 不得绕过域校验，也不得改变既有表单字段名（`content` / `todoDate` / `name` / `filePath` / `category` / `orgId` 等）。
+10. **字段对齐（D-47）**：**列表显示的每一列，都必须在新建/编辑抽屉里有对应字段或明确入口**；表单里的每个字段也必须在列表里有对应列（管理员专属字段就配管理员专属列）。同一个字段在**列头 / 筛选器 / 表单标签 / Tag 文案**里只用一个说法（例：`todos.is_completed` 一律叫「未完成 / 已完成」，不许列表里改叫「待处理」）。
+    - 动作驱动的字段（任务的状态与进度）不做成可自由填写的输入项，而是在抽屉里**只读展示当前值 + 平铺当前允许的流转按钮**（见 `TaskProgressPanel`）；理由见 [`ACCOUNTS_AND_ORGS.md`](ACCOUNTS_AND_ORGS.md) §22.1。
+    - 筛选器作用的字段必须在列表里看得见（例：`/tasks` 的「更新时间范围」对应「最近更新」列）；只能靠隐藏字段筛选时，要么补列，要么换筛选口径。
+    - 冒烟测试只断言字符串标记，**发现不了字段集合缺失**：改 CRUD 页面时请手工把列头与表单字段逐个对一遍。
 
 ## 11. 批量改文件的编码陷阱（2026-09 事故复盘）
 

@@ -6,17 +6,17 @@
 
 ## 存储位置
 
-| 路径                                               | 内容                                    | 是否纳入备份                              |
-| -------------------------------------------------- | --------------------------------------- | ----------------------------------------- |
-| `data/workbench.sqlite`                            | **正式数据库**（单文件 SQLite，256 KB） | ✅ 手动/自动备份                          |
-| `data/backups/workbench-<ISO时间戳>.sqlite.bak`    | 正式库备份，保留最近 5 份               | 自身即备份                                |
-| `data/uploads/reports/<reportId>/v<版本>.<ext>`    | 周报上传文件                            | ❌ **当前无备份**（`DEBT-08`）            |
-| `data/workbench.sqlite.before-migration-<ISO>.bak` | 应用新迁移前的自动快照                  | 由 `db/client.ts` 生成，不受 5 份裁剪约束 |
+| 路径                                               | 内容                                       | 是否纳入备份                                           |
+| -------------------------------------------------- | ------------------------------------------ | ------------------------------------------------------ |
+| `data/workbench.sqlite`                            | **正式数据库**（单文件 SQLite，约 332 KB） | ✅ 手动/自动备份                                       |
+| `data/backups/workbench-<ISO时间戳>.sqlite.bak`    | 正式库备份，保留最近 5 份                  | 自身即备份                                             |
+| `data/uploads/reports/<reportId>/v<版本>.<ext>`    | **老式**周报正文（迁移脚本还没搬走的那些） | ❌ 无备份；D-46 起新正文只写 NAS，本机不再持有唯一副本 |
+| `data/workbench.sqlite.before-migration-<ISO>.bak` | 应用新迁移前的自动快照                     | 由 `db/client.ts` 生成，不受 5 份裁剪约束              |
 
 - 时间戳统一为 ISO-8601 UTC 字符串（`new Date().toISOString()`），主键统一 `randomUUID()`（TEXT）。
 - 数据库路径由 `DATABASE_PATH` 决定，默认 `data/workbench.sqlite`。
 
-## 表清单（17 张活表 + 10 个迁移）
+## 表清单（19 张活表 + 14 个迁移）
 
 ### 身份、组织与认证（5）
 
@@ -32,18 +32,18 @@
 
 ### 任务（4）
 
-| 表                   | 关键字段                                                                                                                                                | 说明                                         |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
-| `tasks`              | `org_id`, `status`, `priority`, `progress`, `owner_id`, `created_by`, `source`, `is_private`, `archived_at`, `wecom_fingerprint`, `overdue_notified_at` | 主表，见下方状态机                           |
-| `task_progress_logs` | `task_id`, `content`, `progress_snapshot`                                                                                                               | 进度汇报流水（经 `task_id` 归属组织）        |
-| `task_comments`      | `task_id`, `author_role(admin/manager/member)`, `content`                                                                                               | 评论                                         |
-| `task_events`        | `task_id`, `event_type`, `content`                                                                                                                      | 时间线（创建/改派/提交/通过/退回/归档/恢复） |
+| 表                   | 关键字段                                                                                                                                                | 说明                                                  |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| `tasks`              | `org_id`, `status`, `priority`, `progress`, `owner_id`, `created_by`, `source`, `is_private`, `archived_at`, `wecom_fingerprint`, `overdue_notified_at` | 主表，见下方状态机                                    |
+| `task_progress_logs` | `task_id`, `content`, `progress_snapshot`                                                                                                               | 进度汇报流水（经 `task_id` 归属组织）                 |
+| `task_comments`      | `task_id`, `author_role(admin/manager/member)`, `content`                                                                                               | 评论                                                  |
+| `task_events`        | `task_id`, `event_type`, `content`                                                                                                                      | 时间线（创建/改派/提交/通过/退回/归档/恢复/调整组织） |
 
 ### 协作（1）
 
-| 表              | 关键字段                                                                               | 说明                                                     |
-| --------------- | -------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| `notifications` | `recipient_id`, `actor_id`, `task_id`, `report_id`, `event_type`, `is_read`, `read_at` | 站内通知，15 种事件类型（含 4 种组织事件），前端轮询未读 |
+| 表              | 关键字段                                                                               | 说明                                                                |
+| --------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `notifications` | `recipient_id`, `actor_id`, `task_id`, `report_id`, `event_type`, `is_read`, `read_at` | 站内通知，15 种事件类型（含 4 种组织事件），前端经 SSE 实时推送未读 |
 
 ### 个人（3）
 
@@ -53,6 +53,12 @@
 | `notes`           | `org_id`, `content`, `is_pinned`                                 | 随手记（同上）                             |
 | `important_files` | `org_id`, `name`, `file_path`, `category`, `last_used_at`        | 重要文件收藏（只存路径，不复制文件；同上） |
 
+> `important_files.file_path` 有两种取值，**没有加列、没有迁移**（D-41）：
+> 本机绝对路径 / 共享盘路径（`C:\work\x.xlsx`、`\\server\share\...`）原样存；
+> 从 WebDAV 选进来的存 `webdav:<相对「浏览根目录」的路径>`（例如 `webdav:报价/2026报价单.xlsx`）。
+> 页面按前缀区分两类条目并展示不同的「文件情况」（远端条目会实时探测大小/修改时间/是否还在），
+> 详见 [`WEBDAV.md`](WEBDAV.md)。
+
 ### 周报（2）
 
 | 表               | 关键字段                                                                                         | 说明                                   |
@@ -60,12 +66,25 @@
 | `weekly_reports` | `org_id`, `owner_id`, `period_start/end`, `doc_type`, `status`, `current_version`, `review_note` | 周报主体（经 `report_id` 归属组织）    |
 | `report_files`   | `report_id`, `version`, `original_name`, `stored_name`, `size_bytes`, `ext`, `mime_type`         | 文件版本，`UNIQUE(report_id, version)` |
 
+> `report_files.stored_name` 自 **D-46** 起换了值域（**表结构没动**，只换值的含义）：
+> 新记录存 `webdav:<相对 WebDAV 服务根的路径>`（含上传根目录，例如
+> `webdav:/周报/zhangsan/2026-09-01_2026-09-07/第八周周报.docx`）；
+> **没有前缀的值是迁移脚本还没搬到的老记录**，仍指向本机 `data/uploads/reports/<reportId>/v<N>.<ext>`。
+> 下载路由按前缀分派（远端流式代理 / 本地文件），见 [`REPORTS_WEBDAV.md`](REPORTS_WEBDAV.md) §3.4 与 §6.3。
+
 ### 系统（2）
 
 | 表                  | 关键字段                                         | 说明                                                   |
 | ------------------- | ------------------------------------------------ | ------------------------------------------------------ |
 | `schema_migrations` | `version`（迁移文件名去掉 `.sql`）, `applied_at` | 迁移记账                                               |
 | `migration_runs`    | `source_sha256`, `status`, `statistics_json`     | ⚠️ 仅一次性 JSON 迁移使用，现已无生产调用（`DEBT-05`） |
+
+### WebDAV（2）
+
+| 表                       | 关键字段                                                                                                       | 说明                                                                                                                                                                  |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `webdav_settings`        | `user_id` PK（→ `users` CASCADE）, `username`, `password`, `root`, `timeout_ms`                                | 每个账号一份远端连接凭据（「重要文件」用；D-43；地址已按 D-44 上收到环境变量 `WEBDAV_URL`，`011` 建表、`012` 删掉 `url` 列）；`password` 明文，页面只读 `hasPassword` |
+| `report_upload_settings` | `id` PK 固定为 1（`CHECK (id = 1)`）, `username`, `password`, `root`, `timeout_ms`, `updated_by`, `updated_at` | **单行**表：周报正文的统一上传账号与上传根目录（D-46，`014` 建表）。没有这一行 = 周报存储未配置（上传/下载 503）；`password` 同样明文、页面只读 `hasPassword`         |
 
 ### 组织隔离落在哪张表
 
@@ -76,22 +95,22 @@
 
 ## 状态机与枚举
 
-| 字段                                | 取值                                                                                                                          | 约束位置                                                                                                                                                                                                                   |
-| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tasks.status`                      | `todo` → `in_progress` → `pending_review` → `completed`                                                                       | CHECK 约束；**不能通过 `PATCH` 直接改**，必须走 `progress`/`submit-review`/`approve`/`return` 接口                                                                                                                         |
-| `tasks.priority`                    | `P0` / `P1` / `P2`                                                                                                            | CHECK                                                                                                                                                                                                                      |
-| `tasks.progress`                    | 0–100 整数                                                                                                                    | CHECK                                                                                                                                                                                                                      |
-| `tasks.source`                      | `manual` / `wecom` / `api` / `assistant`                                                                                      | CHECK                                                                                                                                                                                                                      |
-| `tasks.is_private`                  | 0/1；为 1 时只有管理员、以及创建它的本组织管理者可见                                                                          | 应用层校验                                                                                                                                                                                                                 |
-| `tasks.archived_at`                 | 非空表示已归档（归档任务不可 `PATCH`，需先 `restore`）                                                                        | 应用层                                                                                                                                                                                                                     |
-| `task_events.event_type`            | `task_created` / `task_reassigned` / `task_submitted` / `task_approved` / `task_returned` / `task_archived` / `task_restored` | CHECK                                                                                                                                                                                                                      |
-| `notifications.event_type`          | 共 15 种：11 种任务/周报事件 + `org_invited` / `org_join_approved` / `org_join_rejected` / `org_removed`                      | CHECK（008、009 两次重建后生效）                                                                                                                                                                                           |
-| `weekly_reports.status`             | `submitted` / `approved` / `returned`                                                                                         | CHECK                                                                                                                                                                                                                      |
-| `weekly_reports.doc_type`           | `weekly_report` / `summary` / `other`                                                                                         | CHECK                                                                                                                                                                                                                      |
-| `users.role`                        | `admin` / `manager` / `member`                                                                                                | CHECK；另有两条：`CHECK (role<>'manager' OR org_id IS NOT NULL)`（管理者必须有组织）与 `CHECK (role<>'admin' OR org_id IS NULL)`（管理员不得隶属组织）。**普通成员允许没有组织**（注册后、被解散/移出/退出后都是这个状态） |
-| `organizations.status`              | `active` / `archived`（解散 = archived，成员退回未加入，数据保留）                                                            | CHECK                                                                                                                                                                                                                      |
-| `organization_join_requests.kind`   | `join`（申请加入）/ `leave`（申请退出或被移出）/ `invite`（管理者直接拉人）                                                   | CHECK                                                                                                                                                                                                                      |
-| `organization_join_requests.status` | `pending` / `approved` / `rejected` / `cancelled`                                                                             | CHECK + 部分唯一索引：同一用户同时只能有一个 `pending`                                                                                                                                                                     |
+| 字段                                | 取值                                                                                                                                         | 约束位置                                                                                                                                                                                                                   |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tasks.status`                      | `todo` → `in_progress` → `pending_review` → `completed`                                                                                      | CHECK 约束；**不能通过 `PATCH` 直接改**，必须走 `progress`/`submit-review`/`approve`/`return` 接口                                                                                                                         |
+| `tasks.priority`                    | `P0` / `P1` / `P2`                                                                                                                           | CHECK                                                                                                                                                                                                                      |
+| `tasks.progress`                    | 0–100 整数                                                                                                                                   | CHECK                                                                                                                                                                                                                      |
+| `tasks.source`                      | `manual` / `wecom` / `api` / `assistant`                                                                                                     | CHECK                                                                                                                                                                                                                      |
+| `tasks.is_private`                  | 0/1；为 1 时只有管理员、以及创建它的本组织管理者可见                                                                                         | 应用层校验                                                                                                                                                                                                                 |
+| `tasks.archived_at`                 | 非空表示已归档（归档任务不可 `PATCH`，需先 `restore`）                                                                                       | 应用层                                                                                                                                                                                                                     |
+| `task_events.event_type`            | `task_created` / `task_reassigned` / `task_submitted` / `task_approved` / `task_returned` / `task_archived` / `task_restored` / `task_moved` | CHECK（`task_moved` 由迁移 013 放开，D-47）                                                                                                                                                                                |
+| `notifications.event_type`          | 共 15 种：11 种任务/周报事件 + `org_invited` / `org_join_approved` / `org_join_rejected` / `org_removed`                                     | CHECK（008、009 两次重建后生效）                                                                                                                                                                                           |
+| `weekly_reports.status`             | `submitted` / `approved` / `returned`                                                                                                        | CHECK                                                                                                                                                                                                                      |
+| `weekly_reports.doc_type`           | `weekly_report` / `summary` / `other`                                                                                                        | CHECK                                                                                                                                                                                                                      |
+| `users.role`                        | `admin` / `manager` / `member`                                                                                                               | CHECK；另有两条：`CHECK (role<>'manager' OR org_id IS NOT NULL)`（管理者必须有组织）与 `CHECK (role<>'admin' OR org_id IS NULL)`（管理员不得隶属组织）。**普通成员允许没有组织**（注册后、被解散/移出/退出后都是这个状态） |
+| `organizations.status`              | `active` / `archived`（解散 = archived，成员退回未加入，数据保留）                                                                           | CHECK                                                                                                                                                                                                                      |
+| `organization_join_requests.kind`   | `join`（申请加入）/ `leave`（申请退出或被移出）/ `invite`（管理者直接拉人）                                                                  | CHECK                                                                                                                                                                                                                      |
+| `organization_join_requests.status` | `pending` / `approved` / `rejected` / `cancelled`                                                                                            | CHECK + 部分唯一索引：同一用户同时只能有一个 `pending`                                                                                                                                                                     |
 
 ## 外键与删除策略
 
@@ -112,10 +131,14 @@
 
 **硬规则**：迁移一旦被应用就**不允许修改文件内容**；只能新增迁移（见 `DEBT-09`：当前没有内容校验和）。
 
-已有迁移：`001_initial_schema`、`002_indexes`、`003_sessions`、`004_collaboration_workflow`、`005_file_metadata`、`006_task_events`、`007_weekly_reports`、`008_report_notifications`、`009_accounts_and_organizations`（账号密码 + 多组织）、`010_drop_access_tokens`（令牌表退役）。
+已有迁移：`001_initial_schema`、`002_indexes`、`003_sessions`、`004_collaboration_workflow`、`005_file_metadata`、`006_task_events`、`007_weekly_reports`、`008_report_notifications`、`009_accounts_and_organizations`（账号密码 + 多组织）、`010_drop_access_tokens`（令牌表退役）、`011_webdav_settings`（WebDAV 配置落库）、`012_webdav_url_from_env`（WebDAV 地址改由 `WEBDAV_URL` 提供，删掉 `webdav_settings.url`）、`013_task_moved_event`（重建 `task_events` 放开 `task_moved`，D-47）、`014_report_upload_settings`（周报正文改存 NAS 的全局单行配置，D-46）。
 
 > `009` 里有一个必须记住的坑：初始组织只在「已存在主人账号」的库上创建（`WHERE u.role='owner' ... LIMIT 1`）。
 > 早期写法用子查询取 owner id，在**全新空库**上会得到 NULL 而违反 `created_by NOT NULL`，导致每一次全新初始化都失败。
+
+**全新空库的由谁补组织**：迁移层依旧保持「空库 = 0 账号 0 组织」（不写进迁移，否则会给每个测试/夹具空库插一个 `admin` 账号）。
+开箱即用由 `server/src/db/bootstrap.ts` 的自举负责，它在**应用启动、迁移之后**执行，见 `ACCOUNTS_AND_ORGS.md` §16（D-39）：
+有管理员没组织就补「默认组织」，两者都没有就建默认管理员 `admin` + 「默认组织」。自举幂等，已有数据的库不会被改动。
 
 ## 备份与恢复
 
@@ -131,5 +154,6 @@
 
 - 会话**只存 sha256 哈希**（`session_hash`），明文 cookie 值只在创建时下发一次。
 - 密码**只存 scrypt 哈希**（格式 `scrypt$N$r$p$salt$hash`），盐与参数都在串里；`locked$` 前缀表示「尚未设置密码」，任何输入都校验失败。
-- 无 `.env` 实际加载（`DEBT-02`），因此不要把任何密钥写进 `.env` 期待生效。
+- `webdav_settings.password` 是**例外**：WebDAV 走 Basic 认证需要原文，因此明文存储；它只进 `Authorization` 头，页面与 API 响应只读 `hasPassword`。
+- `.env` 会被自动加载（`loadDotEnv`），但**进程环境变量优先**；`.env` 已被 gitignore，不要把密钥提交上去。
 - 备份文件、`data/` 目录、上传文件都不应提交到公开仓库（见 `TODO-01` 的 `.gitignore`）。
