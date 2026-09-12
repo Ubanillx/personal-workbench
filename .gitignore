@@ -5,6 +5,10 @@ build/
 *.tsbuildinfo
 coverage/
 
+# CI 打包中间产物与发布包（在 Jenkins 工作区里生成，不入库）
+.release/
+/dist/
+
 # 运行时数据（含隐私：任务正文、上传的周报文件、数据库备份）
 /data/
 

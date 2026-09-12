@@ -1,0 +1,6 @@
+# personal-workbench：允许 Jenkins 的 SSH 部署账号免密执行目标机部署脚本。
+#
+# 只授权这一个绝对路径（参数不限），不要写成 `NOPASSWD: ALL`。
+# 由 `deploy.sh init` 渲染后写入 /etc/sudoers.d/personal-workbench（权限 0440）。
+Defaults:@DEPLOY_USER@ !requiretty
+@DEPLOY_USER@ ALL=(root) NOPASSWD: @ROOT@/bin/deploy.sh

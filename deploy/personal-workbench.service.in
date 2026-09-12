@@ -1,0 +1,40 @@
+[Unit]
+Description=Personal Workbench (React Router 8 SSR + SQLite)
+Documentation=file://@ROOT@/current/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=@SERVICE_USER@
+Group=@SERVICE_GROUP@
+WorkingDirectory=@ROOT@/current
+
+# NODE_ENV 必须显式给 production：npm run serve 自己不设它，缺了会被当成 development。
+Environment=NODE_ENV=production
+Environment=NODE_OPTIONS=--max-old-space-size=1024
+
+# 直接用 node 跑适配器，不经 npm：少一层进程，systemd 的停止/重启信号直达 Node。
+# --env-file-if-exists 用绝对路径，因此 .env 放在 shared/ 下、不随 release 替换。
+# 该开关写进环境变量时不会覆盖已存在的进程环境，与项目自身 loadDotEnv 的语义一致。
+ExecStart=@NODE_BIN@ --env-file-if-exists=@ROOT@/shared/.env @ROOT@/current/node_modules/@react-router/serve/bin.cjs @ROOT@/current/build/server/index.js
+
+Restart=always
+RestartSec=3
+KillSignal=SIGTERM
+TimeoutStopSec=30
+SyslogIdentifier=@SERVICE_NAME@
+StandardOutput=journal
+StandardError=journal
+
+# 最小权限：进程只能读代码，写只发生在 shared/ 下（SQLite / 上传文件）。
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target

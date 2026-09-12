@@ -1,0 +1,10 @@
+# 换行符策略：只钉住「必须是 LF」的部署相关文件。
+#
+# 为什么必须有这一段：这些文件从 Windows 检出时若被转成 CRLF，
+#   - bash 会报 `bad interpreter: /usr/bin/env bash^M`；
+#   - `.env` 的每个值尾部都会多一个 \r，PORT/HOST 静默失效，排查成本极高。
+# 其余文件保持 git 默认行为，不影响 Windows 上的日常开发。
+*.sh text eol=lf
+Jenkinsfile text eol=lf
+deploy/*.in text eol=lf
+deploy/*.example text eol=lf
