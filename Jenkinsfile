@@ -214,8 +214,10 @@ pipeline {
           tar -czf "dist/${APP_NAME}-${GIT_SHA}-${BUILD_NUMBER}.tar.gz" -C .release .
           (
             cd dist
+            # 名字必须与 jenkins-remote.sh 的预期一致：它找的是 "$tarball.sha256"，
+            # 也就是 <...>.tar.gz.sha256（少了中间的 .tar.gz 会在部署阶段找不到校验文件）
             sha256sum "${APP_NAME}-${GIT_SHA}-${BUILD_NUMBER}.tar.gz" \
-              > "${APP_NAME}-${GIT_SHA}-${BUILD_NUMBER}.sha256"
+              > "${APP_NAME}-${GIT_SHA}-${BUILD_NUMBER}.tar.gz.sha256"
           )
           ls -lh dist
         '''
