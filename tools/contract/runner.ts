@@ -30,6 +30,15 @@ export type GoldenFile = {
   responses: RecordedResponse[];
 };
 
+/**
+ * `lanUrls` 是「本机当下有几张网卡」的函数：开 WSL / VPN / Hyper-V 虚拟交换机会多出地址，
+ * 逐条记进快照会让用例跟**机器状态**绑定（实测：本机多一张 `vEthernet` 就红一条）。
+ * 这里只保留「有没有局域网地址」这个有意义的形状，条数不进快照，也不影响其它字段。
+ */
+function normalizeLanUrls(value: unknown): unknown {
+  return Array.isArray(value) && value.length > 0 ? ["<lan-url>"] : [];
+}
+
 /** 易变值归一化：uuid / ISO 时间 / 令牌 / IP / 端口 —— 让 golden 与运行时刻、机器无关 */
 export function normalizeValue(value: unknown, port: number): unknown {
   if (typeof value === "string") {
@@ -44,7 +53,7 @@ export function normalizeValue(value: unknown, port: number): unknown {
   if (value !== null && typeof value === "object") {
     const output: Record<string, unknown> = {};
     for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
-      output[key] = key === "port" ? "<port>" : normalizeValue(item, port);
+      output[key] = key === "port" ? "<port>" : key === "lanUrls" ? normalizeLanUrls(item) : normalizeValue(item, port);
     }
     return output;
   }
@@ -66,7 +75,18 @@ export async function findFreePort(): Promise<number> {
 /** 启动被测服务只需要这两个字段：允许调用方传入自定义库（例如"重置主人令牌后"的场景库） */
 export type ServerFixture = Pick<Fixture, "databasePath" | "uploadsDir">;
 
-export async function startServer(options: { entry?: string; serveNpm?: string; fixture: ServerFixture; port: number }): Promise<{
+/**
+ * `webdavUrl` 是**周报正文的远端**（D-46）：契约与冒烟环境里放的是本地假 WebDAV
+ * （`tools/webdav/fake-server.ts`）。没有它，`POST /api/reports` 会整体 503，
+ * 上传/下载类用例就没法在契约里留下快照（见 docs/harness/REPORTS_WEBDAV.md §10 方案 A）。
+ */
+export async function startServer(options: {
+  entry?: string;
+  serveNpm?: string;
+  fixture: ServerFixture;
+  port: number;
+  webdavUrl?: string;
+}): Promise<{
   stop: () => Promise<void>;
   output: () => string;
 }> {
@@ -77,6 +97,7 @@ export async function startServer(options: { entry?: string; serveNpm?: string; 
     PORT: String(options.port),
     DATABASE_PATH: options.fixture.databasePath,
     UPLOADS_DIR: options.fixture.uploadsDir,
+    ...(options.webdavUrl ? { WEBDAV_URL: options.webdavUrl } : {}),
   };
   // serveNpm：被测实现用一个 npm script 启动（当前实现是 `npm run serve` —— 由 react-router-serve
   // 适配器监听端口，而 build/server/index.js 本身只导出请求处理器、不会监听）。

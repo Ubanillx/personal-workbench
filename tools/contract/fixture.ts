@@ -81,6 +81,8 @@ export const IDS = {
   todoOpen: "todo-open",
   noteOne: "note-1",
   fileOne: "file-1",
+  /** 指向 `webdav:` 远端的索引（D-49 起给「下载」用例当未配置 503 的靶子） */
+  fileRemote: "file-remote",
   reportSubmitted: "report-submitted",
   // 贝塔组的业务数据（最小一批，用来验证隔离）
   taskOfB: "t-of-b",
@@ -447,6 +449,7 @@ export function createFixture(): Fixture {
     "INSERT INTO important_files(id,org_id,name,file_path,category,last_used_at,created_at,updated_at) VALUES(?,?,?,?,?,NULL,?,?)",
   );
   insertFile.run(IDS.fileOne, IDS.orgAlpha, "报价单模板", "C:\\fixture\\quote-template.xlsx", "报价", STAMP, STAMP);
+  insertFile.run(IDS.fileRemote, IDS.orgAlpha, "2026 报价单", "webdav:报价/2026报价单.xlsx", "报价", STAMP, STAMP);
   insertFile.run(IDS.fileOfB, IDS.orgBeta, "贝塔报价单", "C:\\fixture\\beta-quote.xlsx", "报价", STAMP, STAMP);
 
   const insertReport = db.prepare(
@@ -489,6 +492,13 @@ export function createFixture(): Fixture {
       STAMP,
     );
   }
+
+  // 「周报上传」的全局单行配置（D-46）：契约与冒烟环境里也必须**有远端可写**，
+  // 否则 POST /api/reports 会整体 503，上传/下载类用例就没有黑盒快照了。
+  // 地址不在这张表里（来自 WEBDAV_URL，由 runner 注入假 NAS 的地址），这里只放统一账号与上传根。
+  db.prepare(
+    "INSERT INTO report_upload_settings(id,username,password,root,timeout_ms,updated_by,updated_at) VALUES(1,'','','/周报',15000,?,?)",
+  ).run(firstAdmin.id, STAMP);
 
   db.close();
   return { directory, databasePath, uploadsDir, ids: IDS };

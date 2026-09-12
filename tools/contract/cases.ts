@@ -859,6 +859,41 @@ export const CASES: ContractCase[] = [
   { name: "files.delete.managerB.cross-org", role: "managerB", method: "DELETE", path: "/api/files/{{fileOne}}" },
   { name: "files.delete.managerA", role: "managerA", method: "DELETE", path: "/api/files/{{fileId}}" },
 
+  // ---------- 重要文件下载（D-49） ----------
+  // 远端文件经服务端**流式代理**下载（GET /api/files/:id/download），边界与文件库一致：
+  // 401 / 403 权限门槛、400 本机路径不可下载、503 本账号未配置 WebDAV、404 跨组织或不存在。
+  // 夹具账号没有 webdav_settings（真连远端会让用例依赖外部环境），所以这里录的是**确定**的失败面；
+  // 「上传 → 登记 → 下载」的闭环由 smoke:ui 用假 WebDAV 覆盖（同 reports.download 的口径）。
+  { name: "files.download.anon", role: "anon", method: "GET", path: "/api/files/{{fileOne}}/download" },
+  { name: "files.download.memberA", role: "memberA", method: "GET", path: "/api/files/{{fileOne}}/download" },
+  { name: "files.download.local-path", role: "managerA", method: "GET", path: "/api/files/{{fileOne}}/download" },
+  { name: "files.download.webdav.disabled", role: "managerA", method: "GET", path: "/api/files/{{fileRemote}}/download" },
+  { name: "files.download.managerB.cross-org", role: "managerB", method: "GET", path: "/api/files/{{fileOne}}/download" },
+  { name: "files.download.missing", role: "managerA", method: "GET", path: "/api/files/no-such-file/download" },
+
+  // ---------- WebDAV 网关（可选接入）----------
+  // 契约夹具的账号**没有**配 WebDAV（也不该配：真连远端会让用例依赖外部环境），
+  // 所以这组用例录的是「权限门槛 + 未配置时的 503」这两件确定的事；
+  // 协议细节（PROPFIND 解析、路径越界、上传补建目录）由 test/webdav/client.test.ts 用本地假服务器覆盖。
+  { name: "webdav.list.anon", role: "anon", method: "GET", path: "/api/webdav" },
+  { name: "webdav.list.memberA", role: "memberA", method: "GET", path: "/api/webdav" },
+  { name: "webdav.list.managerA.disabled", role: "managerA", method: "GET", path: "/api/webdav" },
+  { name: "webdav.list.admin.disabled", role: "admin", method: "GET", path: "/api/webdav?path=%E6%8A%A5%E4%BB%B7" },
+  {
+    name: "webdav.upload.memberA.disabled",
+    role: "memberA",
+    method: "POST",
+    path: "/api/webdav",
+    upload: { fields: { dir: "", register: "0" }, filename: "contract.txt", content: "hello" },
+  },
+  {
+    name: "webdav.upload.managerA.disabled",
+    role: "managerA",
+    method: "POST",
+    path: "/api/webdav",
+    upload: { fields: { dir: "", register: "0" }, filename: "contract.txt", content: "hello" },
+  },
+
   // ---------- 周报：读与隔离 ----------
   { name: "reports.list.admin", role: "admin", method: "GET", path: "/api/reports" },
   { name: "reports.list.managerA", role: "managerA", method: "GET", path: "/api/reports" },
@@ -914,6 +949,8 @@ export const CASES: ContractCase[] = [
   },
 
   // ---------- 周报：上传、退回后重传、下载 ----------
+  // 周报正文自 D-46 起只写 NAS（契约环境里是一个本地假 WebDAV），归属人**恒为提交者本人**：
+  // 下面这些用例同时盯着「落点写在 NAS 上」与「ownerId 被忽略、代传已取消」两件事。
   {
     name: "reports.create.memberA.upload",
     role: "memberA",
@@ -926,7 +963,7 @@ export const CASES: ContractCase[] = [
     },
     capture: { reportNew: "data.id" },
   },
-  // member 只能提交自己的：ownerId 写了别人也无效
+  // ownerId 指向别人也无效：member 只能提交自己的（D-46 后这个字段整体不再读取）
   {
     name: "reports.create.memberA.other-owner",
     role: "memberA",
@@ -938,8 +975,9 @@ export const CASES: ContractCase[] = [
       content: "fake-xlsx-contract",
     },
   },
+  // 组织管理者只能提交**自己的**（代传已取消）：ownerId 写了别人也归自己
   {
-    name: "reports.create.managerA.proxy",
+    name: "reports.create.managerA.own",
     role: "managerA",
     method: "POST",
     path: "/api/reports",
@@ -950,8 +988,9 @@ export const CASES: ContractCase[] = [
     },
     capture: { reportProxy: "data.id" },
   },
+  // 跨组织指派同样失效：归属人就是 managerA 自己（改前是 400「归属人必须属于本组织」）
   {
-    name: "reports.create.managerA.cross-org-owner",
+    name: "reports.create.managerA.owner-ignored",
     role: "managerA",
     method: "POST",
     path: "/api/reports",
@@ -987,6 +1026,18 @@ export const CASES: ContractCase[] = [
   {
     name: "reports.create.noOrg",
     role: "noOrg",
+    method: "POST",
+    path: "/api/reports",
+    upload: {
+      fields: { periodStart: "2026-09-01", periodEnd: "2026-09-07", docType: "weekly_report" },
+      filename: "contract-week1.xlsx",
+      content: "fake-xlsx-contract",
+    },
+  },
+  // 管理员是全局角色（没有组织），D-46 起**不参与提交**：403，页面也不给上传入口
+  {
+    name: "reports.create.admin.forbidden",
+    role: "admin",
     method: "POST",
     path: "/api/reports",
     upload: {
@@ -1114,6 +1165,52 @@ export const CASES: ContractCase[] = [
     path: "/api/organizations/no-such-org",
     body: { name: "不存在的组织" },
   },
+
+  // ---------- 任务：换所属组织（D-47，只有管理员能改） ----------
+  // 刻意排在**所有读类用例之后、收尾解散组织之前**：这组用例会写库（改归属 + 写时间线 + 发通知），
+  // 放在前面会改变列表顺序与通知列表的载荷，让 golden 的 diff 变得难以审阅。
+  // 用的是夹具里没有任何用例引用的 `taskDone`（阿尔法组、负责人成员甲），前后各换一次，最终状态不变。
+  {
+    name: "tasks.patch.managerA.move-org-rejected",
+    role: "managerA",
+    method: "PATCH",
+    path: "/api/tasks/{{taskDone}}",
+    body: { orgId: IDS.orgBeta },
+  },
+  // 负责人必须属于目标组织：只改组织、不动负责人 → 拒绝
+  {
+    name: "tasks.patch.admin.move-org.owner-conflict",
+    role: "admin",
+    method: "PATCH",
+    path: "/api/tasks/{{taskDone}}",
+    body: { orgId: IDS.orgBeta },
+  },
+  // 已解散的组织不能再接收任务
+  {
+    name: "tasks.patch.admin.move-org.archived-org",
+    role: "admin",
+    method: "PATCH",
+    path: "/api/tasks/{{taskDone}}",
+    body: { orgId: IDS.orgArchived },
+  },
+  // 管理员换组织 + 同时改派给目标组织的成员 → 成功
+  {
+    name: "tasks.patch.admin.move-org",
+    role: "admin",
+    method: "PATCH",
+    path: "/api/tasks/{{taskDone}}",
+    body: { orgId: IDS.orgBeta, ownerId: IDS.userMemberB },
+  },
+  // 换回原组织与原负责人（最终状态与夹具一致）
+  {
+    name: "tasks.patch.admin.move-org.back",
+    role: "admin",
+    method: "PATCH",
+    path: "/api/tasks/{{taskDone}}",
+    body: { orgId: IDS.orgAlpha, ownerId: IDS.userMemberA },
+  },
+  // 时间线要记下这两次换组织（event_type = task_moved，迁移 013 放开的取值）
+  { name: "activity.task-moved", role: "admin", method: "GET", path: "/api/tasks/{{taskDone}}/activity" },
 
   // ---------- 收尾：解散 / 恢复组织（不变式 5） ----------
   { name: "org.archive.managerA.cross-org", role: "managerA", method: "POST", path: "/api/organizations/{{orgBeta}}/archive" },

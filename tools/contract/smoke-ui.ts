@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { startFakeWebDav } from "../webdav/fake-server";
 import { ACCOUNTS, IDS, createFixture, removeFixture } from "./fixture";
 import { findFreePort, startServer } from "./runner";
 
@@ -78,23 +79,25 @@ async function loginAs(base: string, account: { username: string; password: stri
 /**
  * 每个页面在夹具库下必然渲染出的**页面正文**特征串：用来验证 loader 真的取到数据并渲染，
  * 而不是只返回 200 空壳。注意不能用导航标签（外壳里也有），要用页面正文或夹具数据里的独有内容。
- * `/collaboration` 在账号改造后从「长期令牌」改成组织成员展示，因此标记改为成员相关内容。
+ * `/settings` 是三个旧管理页（`/admin`、`/organization`、`/collaboration`）合并后的默认 Tab。
  *
  * 每个页面除了夹具数据，还带一个「新版列表页骨架」的结构标记（页头主操作或工具栏搜索框），
  * 这样页面被改回空壳、或统一骨架被拆掉时，冒烟测试会立刻报出来。
  */
 const PAGE_MARKERS: Record<string, string[]> = {
-  "/tasks": ["逾期任务", "待验收任务", "新建任务", "搜索任务标题或负责人"],
-  "/todos": ["跟进报价", "新建待办", "搜索待办内容"],
-  "/notes": ["会议要点", "新建记录", "搜索记录内容"],
-  "/inbox": ["粘贴聊天记录", "解析消息"],
-  "/reports": ["第八周", "上传周报", "全部类型"],
-  "/collaboration": ["成员"],
-  "/files": ["报价单模板", "添加文件", "搜索文件名称或路径"],
-  "/review": ["任务明细", "完成率"],
+  // 「最近更新」列与「更新时间范围」筛选器一一对应（D-47）：筛选字段必须在列表里看得见。
+  // 企微导入（粘贴解析 → 批量导入）已并入本页页头的抽屉，因此这里盯着它的入口按钮
+  "/tasks": ["逾期任务", "待验收任务", "新建任务", "从企微导入", "搜索任务标题或负责人", "完成率", "全部时间", "最近更新", "所属组织"],
+  "/todos": ["跟进报价", "新建待办", "搜索待办内容", "所属组织"],
+  "/notes": ["会议要点", "新建记录", "搜索记录内容", "所属组织"],
+  // 这一轮用的是**管理员**会话：D-46 起管理员不提交周报，页面上不该有「上传周报」入口，
+  // 「上传入口按身份出现/隐藏」由后面的专项断言盯着
+  "/reports": ["第八周", "全部类型", "全部状态", "归属人"],
+  "/settings": ["组织与成员", "成员列表", "待审批申请", "阿尔法成员甲"],
+  "/files": ["报价单模板", "添加文件", "搜索文件名称或路径", "所属组织"],
 };
 
-const DEFAULT_PAGES = "/tasks,/todos,/notes,/inbox,/reports,/collaboration,/files,/review";
+const DEFAULT_PAGES = "/tasks,/todos,/notes,/reports,/settings,/files";
 
 async function main(): Promise<void> {
   const baseUrlArg = argValue("--base-url", "");
@@ -107,11 +110,15 @@ async function main(): Promise<void> {
 
   const fixture = baseUrlArg ? null : createFixture();
   const buildNote = fixture ? staleBuildNote() : "";
+  // 周报上传自 D-46 起要往 NAS 写（设置页/周报页的 SSR 断言与它相关），
+  // 这里给夹具一个本地假远端，免得页面上出现「周报存储未配置」的告警
+  const webdav = fixture ? await startFakeWebDav() : null;
   let server: Awaited<ReturnType<typeof startServer>> | null = null;
   let base = baseUrlArg;
   if (fixture) {
     const port = await findFreePort();
-    server = await startServer({ serveNpm, fixture, port });
+    // `exactOptionalPropertyTypes` 下不能显式传 undefined，所以按需展开
+    server = await startServer({ serveNpm, fixture, port, ...(webdav ? { webdavUrl: webdav.baseUrl } : {}) });
     base = `http://127.0.0.1:${port}`;
   }
   base = base.replace(/\/$/u, "");
@@ -273,41 +280,167 @@ async function main(): Promise<void> {
         noOrgJoinHtml.includes("阿尔法组"),
       `status=${noOrgJoin.status}`,
     );
-
-    // 4e) 两个组织管理页：/admin（仅管理员）与 /organization（管理员或组织管理者）
-    const adminPage = await fetch(`${base}/admin`, { headers: { cookie } });
-    const adminPageHtml = await adminPage.text();
-    check("管理员 GET /admin 返回 200", adminPage.status === 200, `status=${adminPage.status}`);
     check(
-      "/admin 渲染出组织总览与账号总览（含夹具组织）",
-      adminPageHtml.includes("全局管理") && adminPageHtml.includes("组织总览") && adminPageHtml.includes("阿尔法组"),
+      "未入组 /join 为全屏页（无工作台侧栏）",
+      !noOrgJoinHtml.includes("每日概览") &&
+        !noOrgJoinHtml.includes("app-sider") &&
+        noOrgJoinHtml.includes("join-screen") &&
+        noOrgJoinHtml.includes("退出登录"),
     );
+
+    // 4e) 设置页：三个旧管理页（/admin、/organization、/collaboration）合并为 /settings
+    const settingsPage = await fetch(`${base}/settings`, { headers: { cookie } });
+    const settingsHtml = await settingsPage.text();
+    check("管理员 GET /settings 返回 200", settingsPage.status === 200, `status=${settingsPage.status}`);
+    check(
+      "/settings 默认 Tab 渲染出组织信息、成员列表与待审批申请（含夹具成员）",
+      settingsHtml.includes("设置") &&
+        settingsHtml.includes("组织与成员") &&
+        settingsHtml.includes("成员列表") &&
+        settingsHtml.includes("待审批申请") &&
+        settingsHtml.includes("阿尔法成员甲"),
+    );
+
+    const settingsOrgsHtml = await pageHtml("/settings?tab=orgs", cookie);
+    check(
+      "/settings?tab=orgs 渲染出组织总览（含夹具组织）",
+      settingsOrgsHtml.includes("组织总览") && settingsOrgsHtml.includes("阿尔法组"),
+    );
+    const settingsAccountsHtml = await pageHtml("/settings?tab=accounts", cookie);
+    check(
+      "/settings?tab=accounts 渲染出账号总览（含夹具账号）",
+      settingsAccountsHtml.includes("账号总览") && settingsAccountsHtml.includes("阿尔法成员甲"),
+    );
+
+    // WebDAV 配置按账号走：管理员与组织管理者都能打开这个 Tab（D-43）；
+    // 「周报上传」是全局单行配置（D-46），只有管理员能看到那张卡
+    const settingsWebdavHtml = await pageHtml("/settings?tab=webdav", cookie);
+    check(
+      "管理员 /settings?tab=webdav 渲染出 WebDAV 配置表单",
+      settingsWebdavHtml.includes("WebDAV 地址") && settingsWebdavHtml.includes("测试连接"),
+    );
+    check(
+      "管理员能看到「周报上传」配置卡（统一账号 + 上传根目录）",
+      settingsWebdavHtml.includes("周报上传") && settingsWebdavHtml.includes("上传根目录") && settingsWebdavHtml.includes("统一上传账号"),
+    );
+
+    // 「周报上传」的保存 / 清除链路（页面 action，D-46）——这是管理员上线后点的第一步，必须验到
+    const uploadConfig = { intent: "save-report-upload", username: "", password: "", root: "/周报", timeoutMs: "15000" };
+    const savedUpload = await pagePost("/settings?tab=webdav", uploadConfig, cookie, true);
+    check("管理员保存「周报上传」配置成功（action 返回页面）", savedUpload !== "");
+    check("保存后「周报上传」显示已启用", (await pageHtml("/settings?tab=webdav", cookie)).includes("已启用"));
+    const clearedUpload = await pagePost("/settings?tab=webdav", { intent: "clear-report-upload" }, cookie, true);
+    check("管理员清除「周报上传」配置成功", clearedUpload !== "");
+    check("清除后提示周报上传尚未配置", (await pageHtml("/settings?tab=webdav", cookie)).includes("周报上传还没配置"));
+    // 还原配置，避免影响后面的断言（周报页的存储状态）
+    await pagePost("/settings?tab=webdav", uploadConfig, cookie, true);
+
+    // 「重要文件」的 WebDAV 通道（D-41 / D-48）：按账号保存凭据后才亮起；
+    // 新建/编辑抽屉里的「选择文件」与页头的「浏览 WebDAV」都依赖它（SSR 只验证入口与说明文案，
+    // 抽屉里的浏览 / 选择是客户端交互，运行时验证仍缺——见 DEBT-16 / TODO-12）
+    const filesBeforeWebdav = await pageHtml("/files", cookie);
+    check(
+      "本账号未保存 WebDAV 凭据时 /files 只有「配置 WebDAV」，没有远端入口",
+      !filesBeforeWebdav.includes("浏览 WebDAV") && filesBeforeWebdav.includes("配置 WebDAV"),
+    );
+    const savedWebdav = await pagePost(
+      "/settings?tab=webdav",
+      { intent: "save-webdav", username: "", password: "", root: "/", timeoutMs: "15000" },
+      cookie,
+      true,
+    );
+    check("管理员保存本账号 WebDAV 凭据成功（假 WebDAV 匿名可用）", savedWebdav !== "");
+    const filesWithWebdav = await pageHtml("/files", cookie);
+    check(
+      "/files 配置后亮出「浏览 WebDAV」入口与远端说明",
+      filesWithWebdav.includes("浏览 WebDAV") && filesWithWebdav.includes("从 WebDAV"),
+    );
+
+    // 下载闭环（D-49）：上传到假 NAS 并登记索引 → 走 /api/files/:id/download 取回，内容与文件名一致；
+    // 本机路径的 400、跨组织的 404 等失败面由契约的 files.download.* 用例盯，这里只验成功链路
+    const uploadBody = new FormData();
+    uploadBody.append("dir", "冒烟下载");
+    uploadBody.append("register", "1");
+    uploadBody.append("category", "临时");
+    uploadBody.append("orgId", IDS.orgAlpha);
+    uploadBody.append("file", new File(["冒烟下载内容"], "smoke-download.txt", { type: "text/plain" }), "smoke-download.txt");
+    const uploaded = await fetch(`${base}/api/webdav`, { method: "POST", headers: { cookie }, body: uploadBody });
+    const uploadResult = (await uploaded.json().catch(() => null)) as {
+      ok?: boolean;
+      data?: { path?: string; registered?: boolean; file?: { id?: string } };
+    } | null;
+    check(
+      "上传到假 WebDAV 并登记索引成功（下载的前置）",
+      uploaded.status === 201 && uploadResult?.ok === true && uploadResult.data?.registered === true,
+    );
+    const downloaded = await fetch(`${base}/api/files/${uploadResult?.data?.file?.id ?? "missing"}/download`, {
+      headers: { cookie },
+    });
+    const downloadText = downloaded.status === 200 ? await downloaded.text() : "";
+    check(
+      "下载端点取回的内容与上传一致",
+      downloaded.status === 200 && downloadText === "冒烟下载内容",
+      `status=${downloaded.status} body=${JSON.stringify(downloadText)}`,
+    );
+    const downloadDisposition = downloaded.headers.get("content-disposition") ?? "";
+    check(
+      "下载响应带 attachment 与 UTF-8 文件名",
+      downloadDisposition.includes("attachment") && downloadDisposition.includes("smoke-download.txt"),
+      `disposition=${JSON.stringify(downloadDisposition)}`,
+    );
+    const filesWithDownload = await pageHtml("/files", cookie);
+    check("远端条目在列表里有「下载」入口（本机条目没有）", filesWithDownload.includes('aria-label="下载"'));
+
+    const clearedWebdav = await pagePost("/settings?tab=webdav", { intent: "clear-webdav" }, cookie, true);
+    check("管理员清除本账号 WebDAV 凭据成功", clearedWebdav !== "");
+    check("清除后 /files 回到「配置 WebDAV」", (await pageHtml("/files", cookie)).includes("配置 WebDAV"));
 
     const manager = await loginAs(base, ACCOUNTS.managerA);
-    const managerOrgPage = await fetch(`${base}/organization`, { headers: { cookie: manager.cookie } });
-    const managerOrgHtml = await managerOrgPage.text();
-    check("组织管理者 GET /organization 返回 200", managerOrgPage.status === 200, `status=${managerOrgPage.status}`);
+    const managerSettings = await fetch(`${base}/settings`, { headers: { cookie: manager.cookie }, redirect: "manual" });
+    const managerSettingsHtml = await managerSettings.text();
+    check("组织管理者 GET /settings 返回 200", managerSettings.status === 200, `status=${managerSettings.status}`);
     check(
-      "/organization 渲染出成员列表与待审批申请（含夹具成员）",
-      managerOrgHtml.includes("组织管理") &&
-        managerOrgHtml.includes("成员列表") &&
-        managerOrgHtml.includes("待审批申请") &&
-        managerOrgHtml.includes("阿尔法成员甲"),
+      "/settings 对组织管理者渲染出本组织成员与待审批申请（含夹具成员）",
+      managerSettingsHtml.includes("组织与成员") &&
+        managerSettingsHtml.includes("成员列表") &&
+        managerSettingsHtml.includes("待审批申请") &&
+        managerSettingsHtml.includes("阿尔法成员甲"),
+    );
+    const managerOrgs = await fetch(`${base}/settings?tab=orgs`, { headers: { cookie: manager.cookie }, redirect: "manual" });
+    const managerOrgsHtml = await managerOrgs.text();
+    check(
+      "组织管理者访问 ?tab=orgs 回落到「组织与成员」，看不到组织总览",
+      managerOrgs.status === 200 && managerOrgsHtml.includes("组织与成员") && !managerOrgsHtml.includes("组织总览"),
+      `status=${managerOrgs.status}`,
+    );
+    const managerWebdavHtml = await pageHtml("/settings?tab=webdav", manager.cookie);
+    check(
+      "组织管理者也能打开 WebDAV 配置 Tab（配置按账号走）",
+      managerWebdavHtml.includes("WebDAV 地址") && !managerWebdavHtml.includes("组织总览"),
+    );
+    check("组织管理者看不到「周报上传」全局配置卡", !managerWebdavHtml.includes("统一上传账号"));
+
+    const member = await loginAs(base, ACCOUNTS.memberA);
+    const settingsByMember = await fetch(`${base}/settings`, { headers: { cookie: member.cookie }, redirect: "manual" });
+    check(
+      "普通成员访问 /settings 被送回首页",
+      settingsByMember.status === 302 && (settingsByMember.headers.get("location") ?? "") === "/",
+      `status=${settingsByMember.status} location=${settingsByMember.headers.get("location") ?? ""}`,
     );
 
-    const adminByManager = await fetch(`${base}/admin`, { headers: { cookie: manager.cookie }, redirect: "manual" });
-    check(
-      "组织管理者访问 /admin 被送回首页（不是 200/403）",
-      adminByManager.status === 302 && (adminByManager.headers.get("location") ?? "") === "/",
-      `status=${adminByManager.status} location=${adminByManager.headers.get("location") ?? ""}`,
-    );
-    const member = await loginAs(base, ACCOUNTS.memberA);
-    const orgByMember = await fetch(`${base}/organization`, { headers: { cookie: member.cookie }, redirect: "manual" });
-    check(
-      "普通成员访问 /organization 被送回首页",
-      orgByMember.status === 302 && (orgByMember.headers.get("location") ?? "") === "/",
-      `status=${orgByMember.status} location=${orgByMember.headers.get("location") ?? ""}`,
-    );
+    // 周报上传入口按身份出现/隐藏，且上传表单里不再有「归属人」（D-46）
+    const adminReportsHtml = await pageHtml("/reports", cookie);
+    check("/reports 管理员看不到「上传周报」入口", !adminReportsHtml.includes("上传周报"));
+    const managerReportsHtml = await pageHtml("/reports", manager.cookie);
+    check("/reports 组织管理者能看到「上传周报」入口", managerReportsHtml.includes("上传周报"));
+    const memberReportsHtml = await pageHtml("/reports", member.cookie);
+    check("/reports 普通成员能看到「上传周报」入口", memberReportsHtml.includes("上传周报"));
+
+    // 旧管理页已合并删除（不做重定向）：直接 404
+    for (const legacyPath of ["/admin", "/organization", "/collaboration"]) {
+      const legacyPage = await fetch(`${base}${legacyPath}`, { headers: { cookie }, redirect: "manual" });
+      check(`已合并的旧页面 ${legacyPath} 不再存在（404）`, legacyPage.status === 404, `status=${legacyPage.status}`);
+    }
 
     /* ------------------------------------------------ 5) 记录页面的 action 与组织口径 */
 
@@ -319,13 +452,20 @@ async function main(): Promise<void> {
     const noOrgHint = "管理员必须指定记录所属组织";
     const stamp = Date.now();
 
-    // 概览页：待办快捷新增
-    const dashMarker = `冒烟待办-${stamp}`;
-    const dashNoOrg = await pagePost("/?index", { content: dashMarker, todoDate: "2026-09-01" }, cookie);
-    check("概览页新增待办不带 orgId → 提示必须指定组织", dashNoOrg.includes(noOrgHint));
-    const dashAdd = await pagePost("/?index", { content: dashMarker, todoDate: "2026-09-01", orgId: IDS.orgAlpha }, cookie);
-    check("概览页新增待办带 orgId → 不报错", dashAdd !== "" && !dashAdd.includes(noOrgHint));
-    check("新增后概览页出现该待办", (await pageHtml("/", cookie)).includes(dashMarker));
+    // 概览页（D-40）：改成只读展板，新增待办的 action 已移除 —— POST / 必须写不进去。
+    // 展板内容本身由上面第 4 步的首页标记与下面的文案检查覆盖。
+    const dashPost = await fetch(`${base}/?index`, {
+      method: "POST",
+      redirect: "manual",
+      headers: { cookie, "content-type": "application/x-www-form-urlencoded" },
+      body: formBody({ content: `冒烟待办-${stamp}`, todoDate: "2026-09-01", orgId: IDS.orgAlpha }),
+    });
+    check("概览页已移除新增待办（POST / 被拒绝，不再有 action）", dashPost.status >= 400, `status=${dashPost.status}`);
+    const dashBoard = await pageHtml("/", cookie);
+    check(
+      "概览页为只读展板（含任务状态分布、需要关注的任务、最近随手记）",
+      dashBoard.includes("任务状态分布") && dashBoard.includes("需要关注的任务") && dashBoard.includes("最近随手记"),
+    );
 
     // 待办清单页（JSON 提交，payload.intent=create）
     const todoMarker = `冒烟待办页-${stamp}`;
@@ -380,10 +520,29 @@ async function main(): Promise<void> {
     }
 
     // 回顾统计：「全部」筛选不能被解释为 owner_id='' 或日期上界=''。
-    const reviewAll = await pageHtml("/review?range=all", cookie);
+    const legacyReview = await fetch(`${base}/review?range=all&ownerId=${IDS.userMemberA}`, { headers: { cookie }, redirect: "manual" });
+    check(
+      "旧回顾链接保留筛选并跳转任务页",
+      legacyReview.status === 302 && legacyReview.headers.get("location") === `/tasks?range=all&assignee=${IDS.userMemberA}`,
+    );
+    const reviewAll = await pageHtml("/tasks?range=all", cookie);
     check("回顾统计全部时间包含不同负责人的任务", reviewAll.includes("待办任务") && reviewAll.includes("成员乙的任务"));
-    const reviewOwner = await pageHtml(`/review?range=all&ownerId=${IDS.userMemberA}`, cookie);
+    const reviewOwner = await pageHtml(`/tasks?range=all&assignee=${IDS.userMemberA}`, cookie);
     check("回顾统计可按负责人筛选", reviewOwner.includes("待办任务") && !reviewOwner.includes("成员乙的任务"));
+    const emptyRange = await pageHtml("/tasks?range=custom&from=1900-01-01&to=1900-01-02", cookie);
+    check(
+      "自定义更新时间筛选作用于任务列表",
+      emptyRange.includes("没有符合条件的任务") && emptyRange.includes("完成率") && !emptyRange.includes("成员乙的任务"),
+    );
+    check("导航不再重复显示回顾统计入口", !reviewAll.includes('href="/review"'));
+    // 企微导入并入「任务进展」后：导航里不再有独立页面入口，老链接仍然落到任务页
+    const legacyInbox = await fetch(`${base}/inbox`, { headers: { cookie }, redirect: "manual" });
+    check(
+      "旧企微收件箱链接跳转任务页",
+      legacyInbox.status === 302 && legacyInbox.headers.get("location") === "/tasks",
+      `status=${legacyInbox.status} location=${legacyInbox.headers.get("location")}`,
+    );
+    check("导航不再单独显示企微收件箱入口", !reviewAll.includes("企微收件箱"));
 
     // 7) 退出登录并确认会话失效
     const logout = await fetch(`${base}/logout`, { method: "POST", redirect: "manual", headers: { cookie } });
@@ -392,6 +551,7 @@ async function main(): Promise<void> {
     check("退出后会话失效（/ 再次重定向）", afterLogout.status === 302, `status=${afterLogout.status}`);
   } finally {
     await server?.stop();
+    await webdav?.close();
     if (fixture) removeFixture(fixture);
   }
 

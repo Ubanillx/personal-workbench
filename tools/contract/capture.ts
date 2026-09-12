@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { startFakeWebDav } from "../webdav/fake-server";
 import { CASES } from "./cases";
 import { createFixture, removeFixture } from "./fixture";
 import { findFreePort, runCases, startServer, type GoldenFile } from "./runner";
@@ -10,6 +11,9 @@ import { findFreePort, runCases, startServer, type GoldenFile } from "./runner";
  * Phase 4 之后只有一套实现（React Router 8 单进程），默认用 `npm run serve` 拉起
  * ——注意 `build/server/index.js` 只导出请求处理器、不监听端口，必须由 react-router-serve 起。
  * `--entry` 只在需要跑别的入口时使用（例如复现某个历史实现）。
+ *
+ * 周报正文自 D-46 起只写 NAS，所以这里先起一个**本地假 WebDAV**并把地址通过 `WEBDAV_URL`
+ * 注入被测服务（`tools/webdav/fake-server.ts`）——契约因此仍覆盖真实的上传/下载链路。
  */
 const DEFAULT_SERVE_NPM = "serve";
 const DEFAULT_OUT = "test/contract/golden/contract.golden.json";
@@ -24,8 +28,9 @@ async function main(): Promise<void> {
   const serveNpm = argValue("--serve-npm", entry ? "" : DEFAULT_SERVE_NPM);
   const outFile = path.resolve(process.cwd(), argValue("--out", DEFAULT_OUT));
   const fixture = createFixture();
+  const webdav = await startFakeWebDav();
   const port = await findFreePort();
-  const server = await startServer({ entry, serveNpm, fixture, port });
+  const server = await startServer({ entry, serveNpm, fixture, port, webdavUrl: webdav.baseUrl });
   try {
     const responses = await runCases({ baseUrl: `http://127.0.0.1:${port}`, fixture, port, cases: CASES });
     const golden: GoldenFile = {
@@ -50,6 +55,7 @@ async function main(): Promise<void> {
     console.log(`状态码分布：${statusSummary}`);
   } finally {
     await server.stop();
+    await webdav.close();
     removeFixture(fixture);
   }
 }

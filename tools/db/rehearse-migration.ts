@@ -13,6 +13,14 @@ import { createDatabaseClient } from "../../server/src/db/client";
  * 为什么需要它：009 给 5 张业务表加的是 NOT NULL org_id，只有在「所有插入都带 org_id」的代码
  * 落地之后才能进 migrations/。在此之前用本工具验证迁移本身正确，正式库始终不动。
  *
+ * **前提：源库还没应用 009/010**（即停在 008）。009/010 一旦落地，正式库的「迁移后初始态」
+ * （全部账号 `locked$`、全部待改密、占位邮箱、非管理员都在初始组织、组织管理者取自最早的助理…）
+ * 就会被之后的真实使用改写，这些断言不再成立——这是**前提失效，不是回归**。因此源库已迁移时
+ * 本工具会自动跳过这类断言并说明原因，只核对仍然有效的结构与约束。要完整演练迁移过程，
+ * 请显式指向迁移前副本：
+ *
+ *   npm run db:rehearse -- --source data/backups/workbench-BEFORE-ORGS-*.sqlite.bak
+ *
  * 退出码 0 = 全部核对通过。
  */
 
@@ -45,8 +53,27 @@ const USERNAME_RE = /^[a-z0-9_-]{3,32}$/u;
 type Check = { name: string; ok: boolean; detail: string };
 const checks: Check[] = [];
 
+/** 源库已应用 009/010 时为 true：「迁移后初始态」类断言不再适用，改为跳过 */
+let sourceAlreadyMigrated = false;
+/** 被跳过的断言名 */
+const skipped: string[] = [];
+
 function record(name: string, ok: boolean, detail = ""): void {
   checks.push({ name, ok, detail });
+}
+
+/**
+ * 记录一条「只在迁移首次落地时才有意义」的断言。
+ *
+ * 源库已应用 009/010 时跳过而不是判失败：这些初始态会被真实使用改写
+ * （密码被设置、邮箱被改成真实地址、账号被移出/加入组织……），此时报 ✗ 是假红灯。
+ */
+function recordInitial(name: string, ok: boolean, detail = ""): void {
+  if (sourceAlreadyMigrated) {
+    skipped.push(name);
+    return;
+  }
+  record(name, ok, detail);
 }
 
 function argValue(name: string, fallback: string): string {
@@ -130,6 +157,14 @@ async function main(): Promise<void> {
   before.close();
 
   console.log(`已应用迁移：${beforeMigrations.length} 个（最新 ${beforeMigrations.at(-1) ?? "无"}）`);
+
+  sourceAlreadyMigrated = beforeMigrations.includes("009_accounts_and_organizations");
+  if (sourceAlreadyMigrated) {
+    console.warn("注意：源库已应用 009/010，没有待落地的迁移。");
+    console.warn("      「迁移后初始态」类断言会被跳过（真实使用已改写它们），本次只核对结构与约束。");
+    console.warn("      要完整演练迁移过程，请指向迁移前副本：npm run db:rehearse -- --source <迁移前副本>");
+  }
+
   const staged = stageMigrations(stagingDir);
   console.log(`临时迁移目录合成 ${staged} 个文件，开始执行…`);
 
@@ -141,7 +176,7 @@ async function main(): Promise<void> {
 
   // ---------------------------------------------------------------- 迁移执行
   record(
-    "两个待启用迁移都已记录",
+    "两个迁移都已记录（009/010）",
     applied.includes("009_accounts_and_organizations") && applied.includes("010_drop_access_tokens"),
     applied.slice(-2).join(", "),
   );
@@ -170,7 +205,7 @@ async function main(): Promise<void> {
   }>;
   record("只有一个初始组织", org.length === 1, JSON.stringify(org));
   record("初始组织 id/状态正确", org[0]?.id === "org-default" && org[0]?.status === "active", `${org[0]?.id} / ${org[0]?.status}`);
-  record("初始组织 created_by 指向管理员", ownerRow !== undefined && org[0]?.created_by === ownerRow.id, `${org[0]?.created_by}`);
+  recordInitial("初始组织 created_by 指向管理员", ownerRow !== undefined && org[0]?.created_by === ownerRow.id, `${org[0]?.created_by}`);
 
   // ---------------------------------------------------------------- 账号映射
   const users = db
@@ -200,15 +235,15 @@ async function main(): Promise<void> {
     "管理员不隶属组织",
     users.filter((user) => user.role === "admin").every((user) => user.org_id === null),
   );
-  record(
+  recordInitial(
     "其他账号都挂在初始组织",
     users.filter((user) => user.role !== "admin").every((user) => user.org_id === "org-default"),
   );
-  record(
+  recordInitial(
     "全部账号密码为 locked 占位",
     users.every((user) => user.password_hash === "locked$"),
   );
-  record(
+  recordInitial(
     "全部账号强制改密",
     users.every((user) => user.must_change_password === 1),
   );
@@ -217,11 +252,11 @@ async function main(): Promise<void> {
     users.every((user) => USERNAME_RE.test(user.username)) && new Set(users.map((user) => user.username)).size === users.length,
     users.map((user) => user.username).join(", "),
   );
-  record(
+  recordInitial(
     "邮箱是占位域名",
     users.every((user) => user.email.endsWith("@local.invalid")),
   );
-  record(
+  recordInitial(
     "组织管理者是创建时间最早的助理",
     earliestAssistant !== undefined && users.find((user) => user.role === "manager")?.id === earliestAssistant.id,
     `${users.find((user) => user.role === "manager")?.username} (${earliestAssistant?.id})`,
@@ -379,7 +414,11 @@ async function main(): Promise<void> {
   for (const check of checks) {
     console.log(`  ${check.ok ? "✓" : "✗"} ${check.name}${check.detail ? `  [${check.detail}]` : ""}`);
   }
-  console.log(`\n共 ${checks.length} 项，失败 ${failed.length} 项`);
+  if (skipped.length > 0) {
+    console.log("\n跳过核对（源库已应用 009/010，迁移后初始态已被真实使用改写）：");
+    for (const name of skipped) console.log(`  – ${name}`);
+  }
+  console.log(`\n共 ${checks.length} 项，失败 ${failed.length} 项${skipped.length > 0 ? `，跳过 ${skipped.length} 项` : ""}`);
 
   if (keep) console.log(`\n副本保留在：${workDir}`);
   else fs.rmSync(workDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 });

@@ -1,9 +1,9 @@
 {
   "meta": {
-    "generatedAt": "2026-09-10T05:37:32.814Z",
+    "generatedAt": "2026-09-11T10:11:21.921Z",
     "entry": "npm run serve",
     "node": "24.19.0",
-    "caseCount": 305
+    "caseCount": 324
   },
   "responses": [
     {
@@ -986,8 +986,7 @@
           "host": "<ip>",
           "localUrl": "http://<ip>:<port>",
           "lanUrls": [
-            "http://<ip>:<port>",
-            "http://<ip>:<port>"
+            "<lan-url>"
           ],
           "warning": "仅将局域网地址发给本组织成员，不要发送 <ip> 等本机地址"
         }
@@ -3187,7 +3186,7 @@
       "role": "admin",
       "request": {
         "method": "POST",
-        "path": "/api/organizations/503b2905-17a2-4e17-887c-f18a5f45af57/invite",
+        "path": "/api/organizations/8a6b5114-2bb0-4f43-b562-6c4cfade413f/invite",
         "body": {
           "userId": "user-no-org"
         }
@@ -3218,7 +3217,7 @@
       "role": "admin",
       "request": {
         "method": "GET",
-        "path": "/api/organizations/503b2905-17a2-4e17-887c-f18a5f45af57/members"
+        "path": "/api/organizations/8a6b5114-2bb0-4f43-b562-6c4cfade413f/members"
       },
       "status": 200,
       "headers": {
@@ -3805,7 +3804,7 @@
       "role": "memberA",
       "request": {
         "method": "DELETE",
-        "path": "/api/join-requests/fd53ad67-0961-4d4b-80b0-43d693ee9e64"
+        "path": "/api/join-requests/f395b47e-feb0-46ff-8772-6786814198bc"
       },
       "status": 404,
       "headers": {
@@ -3833,7 +3832,7 @@
       "role": "noOrg",
       "request": {
         "method": "DELETE",
-        "path": "/api/join-requests/fd53ad67-0961-4d4b-80b0-43d693ee9e64"
+        "path": "/api/join-requests/f395b47e-feb0-46ff-8772-6786814198bc"
       },
       "status": 200,
       "headers": {
@@ -3861,7 +3860,7 @@
       "role": "noOrg",
       "request": {
         "method": "DELETE",
-        "path": "/api/join-requests/fd53ad67-0961-4d4b-80b0-43d693ee9e64"
+        "path": "/api/join-requests/f395b47e-feb0-46ff-8772-6786814198bc"
       },
       "status": 400,
       "headers": {
@@ -3933,7 +3932,7 @@
       "role": "managerB",
       "request": {
         "method": "POST",
-        "path": "/api/join-requests/468cc5f1-2103-411c-b61b-538c589104c4/approve",
+        "path": "/api/join-requests/3de64729-9374-4248-a409-acb8e758f333/approve",
         "body": {}
       },
       "status": 404,
@@ -3962,7 +3961,7 @@
       "role": "managerA",
       "request": {
         "method": "POST",
-        "path": "/api/join-requests/468cc5f1-2103-411c-b61b-538c589104c4/reject",
+        "path": "/api/join-requests/3de64729-9374-4248-a409-acb8e758f333/reject",
         "body": {
           "note": "名额已满"
         }
@@ -4049,7 +4048,7 @@
       "role": "admin",
       "request": {
         "method": "POST",
-        "path": "/api/join-requests/e8aa4ea5-8d7e-4db6-a719-3191b61e89c9/approve",
+        "path": "/api/join-requests/dc5fc9d2-66db-4f05-a387-70dd7c704fff/approve",
         "body": {
           "note": "同意加入"
         }
@@ -4350,7 +4349,7 @@
       "role": "managerB",
       "request": {
         "method": "POST",
-        "path": "/api/join-requests/339858b2-453e-4dcb-9d94-e47c0e06faf3/approve",
+        "path": "/api/join-requests/b36d4008-4d78-4dc1-83fa-a5ea030c749a/approve",
         "body": {}
       },
       "status": 404,
@@ -4379,7 +4378,7 @@
       "role": "managerA",
       "request": {
         "method": "POST",
-        "path": "/api/join-requests/339858b2-453e-4dcb-9d94-e47c0e06faf3/approve",
+        "path": "/api/join-requests/b36d4008-4d78-4dc1-83fa-a5ea030c749a/approve",
         "body": {
           "note": "同意退出"
         }
@@ -6312,7 +6311,7 @@
       "role": "managerA",
       "request": {
         "method": "PATCH",
-        "path": "/api/tasks/6e3d888c-7def-4d74-ba1f-8203788fc793",
+        "path": "/api/tasks/6f41e681-5e6b-4c15-86aa-12cacecfaeaf",
         "body": {
           "title": "契约-改名",
           "priority": "P2"
@@ -6361,7 +6360,7 @@
       "role": "managerA",
       "request": {
         "method": "PATCH",
-        "path": "/api/tasks/6e3d888c-7def-4d74-ba1f-8203788fc793",
+        "path": "/api/tasks/6f41e681-5e6b-4c15-86aa-12cacecfaeaf",
         "body": {
           "progress": 50
         }
@@ -6392,7 +6391,7 @@
       "role": "managerA",
       "request": {
         "method": "PATCH",
-        "path": "/api/tasks/6e3d888c-7def-4d74-ba1f-8203788fc793",
+        "path": "/api/tasks/6f41e681-5e6b-4c15-86aa-12cacecfaeaf",
         "body": {
           "ownerId": "no-such-user"
         }
@@ -6423,7 +6422,7 @@
       "role": "managerA",
       "request": {
         "method": "PATCH",
-        "path": "/api/tasks/6e3d888c-7def-4d74-ba1f-8203788fc793",
+        "path": "/api/tasks/6f41e681-5e6b-4c15-86aa-12cacecfaeaf",
         "body": {
           "ownerId": "user-member-b"
         }
@@ -6485,7 +6484,7 @@
       "role": "memberA",
       "request": {
         "method": "PATCH",
-        "path": "/api/tasks/6e3d888c-7def-4d74-ba1f-8203788fc793",
+        "path": "/api/tasks/6f41e681-5e6b-4c15-86aa-12cacecfaeaf",
         "body": {
           "title": "契约-成员改元信息"
         }
@@ -6578,7 +6577,7 @@
       "role": "memberA",
       "request": {
         "method": "POST",
-        "path": "/api/tasks/6e3d888c-7def-4d74-ba1f-8203788fc793/progress",
+        "path": "/api/tasks/6f41e681-5e6b-4c15-86aa-12cacecfaeaf/progress",
         "body": {
           "progress": 30,
           "note": "已完成三成"
@@ -6627,7 +6626,7 @@
       "role": "memberA",
       "request": {
         "method": "POST",
-        "path": "/api/tasks/6e3d888c-7def-4d74-ba1f-8203788fc793/submit-review",
+        "path": "/api/tasks/6f41e681-5e6b-4c15-86aa-12cacecfaeaf/submit-review",
         "body": {}
       },
       "status": 400,
@@ -6656,7 +6655,7 @@
       "role": "memberA",
       "request": {
         "method": "POST",
-        "path": "/api/tasks/6e3d888c-7def-4d74-ba1f-8203788fc793/progress",
+        "path": "/api/tasks/6f41e681-5e6b-4c15-86aa-12cacecfaeaf/progress",
         "body": {
           "progress": 200
         }
@@ -6766,7 +6765,7 @@
       "role": "memberA",
       "request": {
         "method": "POST",
-        "path": "/api/tasks/6e3d888c-7def-4d74-ba1f-8203788fc793/submit-review",
+        "path": "/api/tasks/6f41e681-5e6b-4c15-86aa-12cacecfaeaf/submit-review",
         "body": {}
       },
       "status": 200,
@@ -6812,7 +6811,7 @@
       "role": "memberA",
       "request": {
         "method": "POST",
-        "path": "/api/tasks/6e3d888c-7def-4d74-ba1f-8203788fc793/approve",
+        "path": "/api/tasks/6f41e681-5e6b-4c15-86aa-12cacecfaeaf/approve",
         "body": {}
       },
       "status": 403,
@@ -6841,7 +6840,7 @@
       "role": "managerB",
       "request": {
         "method": "POST",
-        "path": "/api/tasks/6e3d888c-7def-4d74-ba1f-8203788fc793/approve",
+        "path": "/api/tasks/6f41e681-5e6b-4c15-86aa-12cacecfaeaf/approve",
         "body": {}
       },
       "status": 404,
@@ -6870,7 +6869,7 @@
       "role": "managerA",
       "request": {
         "method": "POST",
-        "path": "/api/tasks/6e3d888c-7def-4d74-ba1f-8203788fc793/approve",
+        "path": "/api/tasks/6f41e681-5e6b-4c15-86aa-12cacecfaeaf/approve",
         "body": {
           "note": "验收通过"
         }
@@ -6918,7 +6917,7 @@
       "role": "memberA2",
       "request": {
         "method": "POST",
-        "path": "/api/tasks/2fdb0596-93a6-4002-88dc-9d393a29bba0/progress",
+        "path": "/api/tasks/bcba181a-af73-460e-aa13-39a49ba03730/progress",
         "body": {
           "progress": 100,
           "note": "做完了"
@@ -6967,7 +6966,7 @@
       "role": "memberA",
       "request": {
         "method": "POST",
-        "path": "/api/tasks/2fdb0596-93a6-4002-88dc-9d393a29bba0/return",
+        "path": "/api/tasks/bcba181a-af73-460e-aa13-39a49ba03730/return",
         "body": {
           "note": "越权退回"
         }
@@ -6998,7 +6997,7 @@
       "role": "managerB",
       "request": {
         "method": "POST",
-        "path": "/api/tasks/2fdb0596-93a6-4002-88dc-9d393a29bba0/return",
+        "path": "/api/tasks/bcba181a-af73-460e-aa13-39a49ba03730/return",
         "body": {
           "note": "跨组织退回"
         }
@@ -7029,7 +7028,7 @@
       "role": "managerA",
       "request": {
         "method": "POST",
-        "path": "/api/tasks/2fdb0596-93a6-4002-88dc-9d393a29bba0/return",
+        "path": "/api/tasks/bcba181a-af73-460e-aa13-39a49ba03730/return",
         "body": {
           "note": "请补充截图"
         }
@@ -7077,7 +7076,7 @@
       "role": "managerA",
       "request": {
         "method": "POST",
-        "path": "/api/tasks/6e3d888c-7def-4d74-ba1f-8203788fc793/archive"
+        "path": "/api/tasks/6f41e681-5e6b-4c15-86aa-12cacecfaeaf/archive"
       },
       "status": 200,
       "headers": {
@@ -7102,7 +7101,7 @@
       "role": "managerA",
       "request": {
         "method": "POST",
-        "path": "/api/tasks/6e3d888c-7def-4d74-ba1f-8203788fc793/archive"
+        "path": "/api/tasks/6f41e681-5e6b-4c15-86aa-12cacecfaeaf/archive"
       },
       "status": 200,
       "headers": {
@@ -7127,7 +7126,7 @@
       "role": "managerA",
       "request": {
         "method": "POST",
-        "path": "/api/tasks/6e3d888c-7def-4d74-ba1f-8203788fc793/restore"
+        "path": "/api/tasks/6f41e681-5e6b-4c15-86aa-12cacecfaeaf/restore"
       },
       "status": 200,
       "headers": {
@@ -7172,7 +7171,7 @@
       "role": "managerA",
       "request": {
         "method": "POST",
-        "path": "/api/tasks/6e3d888c-7def-4d74-ba1f-8203788fc793/restore"
+        "path": "/api/tasks/6f41e681-5e6b-4c15-86aa-12cacecfaeaf/restore"
       },
       "status": 200,
       "headers": {
@@ -7217,7 +7216,7 @@
       "role": "memberA",
       "request": {
         "method": "POST",
-        "path": "/api/tasks/6e3d888c-7def-4d74-ba1f-8203788fc793/archive"
+        "path": "/api/tasks/6f41e681-5e6b-4c15-86aa-12cacecfaeaf/archive"
       },
       "status": 403,
       "headers": {
@@ -7245,7 +7244,7 @@
       "role": "admin",
       "request": {
         "method": "POST",
-        "path": "/api/tasks/5f080724-2fc6-4faf-9bdd-f2ac9c3e8439/archive"
+        "path": "/api/tasks/4b70a6f1-812d-4975-bfd4-3d3c790f53a1/archive"
       },
       "status": 200,
       "headers": {
@@ -7270,7 +7269,7 @@
       "role": "managerA",
       "request": {
         "method": "DELETE",
-        "path": "/api/tasks/76d755e8-4e64-4327-872b-4586564cd98f"
+        "path": "/api/tasks/b428de01-6560-4e33-b99a-1a251ad98af1"
       },
       "status": 400,
       "headers": {
@@ -7298,7 +7297,7 @@
       "role": "managerB",
       "request": {
         "method": "DELETE",
-        "path": "/api/tasks/76d755e8-4e64-4327-872b-4586564cd98f"
+        "path": "/api/tasks/b428de01-6560-4e33-b99a-1a251ad98af1"
       },
       "status": 404,
       "headers": {
@@ -7326,7 +7325,7 @@
       "role": "managerA",
       "request": {
         "method": "POST",
-        "path": "/api/tasks/76d755e8-4e64-4327-872b-4586564cd98f/archive"
+        "path": "/api/tasks/b428de01-6560-4e33-b99a-1a251ad98af1/archive"
       },
       "status": 200,
       "headers": {
@@ -7351,7 +7350,7 @@
       "role": "managerA",
       "request": {
         "method": "DELETE",
-        "path": "/api/tasks/76d755e8-4e64-4327-872b-4586564cd98f"
+        "path": "/api/tasks/b428de01-6560-4e33-b99a-1a251ad98af1"
       },
       "status": 200,
       "headers": {
@@ -10374,7 +10373,7 @@
       "role": "managerA",
       "request": {
         "method": "PATCH",
-        "path": "/api/todos/e1947865-20e5-4149-a2d5-e3668e224542",
+        "path": "/api/todos/b28be5a1-6c9b-49ba-9981-5c8c37f5c33d",
         "body": {
           "isCompleted": true
         }
@@ -10472,7 +10471,7 @@
       "role": "memberA",
       "request": {
         "method": "DELETE",
-        "path": "/api/todos/2f829c11-fd60-4a0f-95a1-f008ea05bf95"
+        "path": "/api/todos/1c7fe242-f6e6-454d-960a-3d8b3ef5444f"
       },
       "status": 200,
       "headers": {
@@ -10497,7 +10496,7 @@
       "role": "managerA",
       "request": {
         "method": "DELETE",
-        "path": "/api/todos/e1947865-20e5-4149-a2d5-e3668e224542"
+        "path": "/api/todos/b28be5a1-6c9b-49ba-9981-5c8c37f5c33d"
       },
       "status": 200,
       "headers": {
@@ -10806,7 +10805,7 @@
       "role": "managerA",
       "request": {
         "method": "PATCH",
-        "path": "/api/notes/3cd4d818-01ff-4a17-af29-e27dd02df49a",
+        "path": "/api/notes/34e70a20-4583-4d47-844b-0acb47c0c75b",
         "body": {
           "content": "改过的随手记"
         }
@@ -10930,7 +10929,7 @@
       "role": "managerA",
       "request": {
         "method": "DELETE",
-        "path": "/api/notes/3cd4d818-01ff-4a17-af29-e27dd02df49a"
+        "path": "/api/notes/34e70a20-4583-4d47-844b-0acb47c0c75b"
       },
       "status": 200,
       "headers": {
@@ -11011,6 +11010,15 @@
             "updatedAt": "<ts>"
           },
           {
+            "id": "file-remote",
+            "name": "2026 报价单",
+            "filePath": "webdav:报价/2026报价单.xlsx",
+            "category": "报价",
+            "lastUsedAt": null,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>"
+          },
+          {
             "id": "file-b",
             "name": "贝塔报价单",
             "filePath": "C:\\fixture\\beta-quote.xlsx",
@@ -11049,6 +11057,15 @@
             "id": "file-1",
             "name": "报价单模板",
             "filePath": "C:\\fixture\\quote-template.xlsx",
+            "category": "报价",
+            "lastUsedAt": null,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>"
+          },
+          {
+            "id": "file-remote",
+            "name": "2026 报价单",
+            "filePath": "webdav:报价/2026报价单.xlsx",
             "category": "报价",
             "lastUsedAt": null,
             "createdAt": "<ts>",
@@ -11151,6 +11168,15 @@
             "lastUsedAt": null,
             "createdAt": "<ts>",
             "updatedAt": "<ts>"
+          },
+          {
+            "id": "file-remote",
+            "name": "2026 报价单",
+            "filePath": "webdav:报价/2026报价单.xlsx",
+            "category": "报价",
+            "lastUsedAt": null,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>"
           }
         ]
       }
@@ -11182,6 +11208,15 @@
             "id": "file-1",
             "name": "报价单模板",
             "filePath": "C:\\fixture\\quote-template.xlsx",
+            "category": "报价",
+            "lastUsedAt": null,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>"
+          },
+          {
+            "id": "file-remote",
+            "name": "2026 报价单",
+            "filePath": "webdav:报价/2026报价单.xlsx",
             "category": "报价",
             "lastUsedAt": null,
             "createdAt": "<ts>",
@@ -11265,7 +11300,7 @@
       "role": "managerA",
       "request": {
         "method": "POST",
-        "path": "/api/files/0d89d132-d161-4b03-8e32-394635a46fdf/use"
+        "path": "/api/files/7a0cfc3f-7b52-4386-b832-a1fef825ad08/use"
       },
       "status": 200,
       "headers": {
@@ -11382,7 +11417,7 @@
       "role": "managerA",
       "request": {
         "method": "DELETE",
-        "path": "/api/files/0d89d132-d161-4b03-8e32-394635a46fdf"
+        "path": "/api/files/7a0cfc3f-7b52-4386-b832-a1fef825ad08"
       },
       "status": 200,
       "headers": {
@@ -11400,6 +11435,344 @@
       "body": {
         "ok": true,
         "data": null
+      }
+    },
+    {
+      "name": "files.download.anon",
+      "role": "anon",
+      "request": {
+        "method": "GET",
+        "path": "/api/files/file-1/download"
+      },
+      "status": 401,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "UNAUTHENTICATED",
+          "message": "请先完成访问验证"
+        }
+      }
+    },
+    {
+      "name": "files.download.memberA",
+      "role": "memberA",
+      "request": {
+        "method": "GET",
+        "path": "/api/files/file-1/download"
+      },
+      "status": 403,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "FORBIDDEN",
+          "message": "只有管理员或组织管理者可以执行此操作"
+        }
+      }
+    },
+    {
+      "name": "files.download.local-path",
+      "role": "managerA",
+      "request": {
+        "method": "GET",
+        "path": "/api/files/file-1/download"
+      },
+      "status": 400,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "NOT_REMOTE",
+          "message": "这条索引指向本机路径，只能复制、不能下载"
+        }
+      }
+    },
+    {
+      "name": "files.download.webdav.disabled",
+      "role": "managerA",
+      "request": {
+        "method": "GET",
+        "path": "/api/files/file-remote/download"
+      },
+      "status": 503,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "WEBDAV_DISABLED",
+          "message": "未配置 WebDAV：请到「设置 → WebDAV」填写地址与账号"
+        }
+      }
+    },
+    {
+      "name": "files.download.managerB.cross-org",
+      "role": "managerB",
+      "request": {
+        "method": "GET",
+        "path": "/api/files/file-1/download"
+      },
+      "status": 404,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "未找到该文件索引"
+        }
+      }
+    },
+    {
+      "name": "files.download.missing",
+      "role": "managerA",
+      "request": {
+        "method": "GET",
+        "path": "/api/files/no-such-file/download"
+      },
+      "status": 404,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "未找到该文件索引"
+        }
+      }
+    },
+    {
+      "name": "webdav.list.anon",
+      "role": "anon",
+      "request": {
+        "method": "GET",
+        "path": "/api/webdav"
+      },
+      "status": 401,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "UNAUTHENTICATED",
+          "message": "请先完成访问验证"
+        }
+      }
+    },
+    {
+      "name": "webdav.list.memberA",
+      "role": "memberA",
+      "request": {
+        "method": "GET",
+        "path": "/api/webdav"
+      },
+      "status": 403,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "FORBIDDEN",
+          "message": "只有管理员或组织管理者可以执行此操作"
+        }
+      }
+    },
+    {
+      "name": "webdav.list.managerA.disabled",
+      "role": "managerA",
+      "request": {
+        "method": "GET",
+        "path": "/api/webdav"
+      },
+      "status": 503,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "WEBDAV_DISABLED",
+          "message": "未配置 WebDAV：请到「设置 → WebDAV」填写地址与账号"
+        }
+      }
+    },
+    {
+      "name": "webdav.list.admin.disabled",
+      "role": "admin",
+      "request": {
+        "method": "GET",
+        "path": "/api/webdav?path=%E6%8A%A5%E4%BB%B7"
+      },
+      "status": 503,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "WEBDAV_DISABLED",
+          "message": "未配置 WebDAV：请到「设置 → WebDAV」填写地址与账号"
+        }
+      }
+    },
+    {
+      "name": "webdav.upload.memberA.disabled",
+      "role": "memberA",
+      "request": {
+        "method": "POST",
+        "path": "/api/webdav",
+        "upload": "contract.txt"
+      },
+      "status": 403,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "FORBIDDEN",
+          "message": "只有管理员或组织管理者可以执行此操作"
+        }
+      }
+    },
+    {
+      "name": "webdav.upload.managerA.disabled",
+      "role": "managerA",
+      "request": {
+        "method": "POST",
+        "path": "/api/webdav",
+        "upload": "contract.txt"
+      },
+      "status": 503,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "WEBDAV_DISABLED",
+          "message": "未配置 WebDAV：请到「设置 → WebDAV」填写地址与账号"
+        }
       }
     },
     {
@@ -12250,7 +12623,7 @@
               "reportId": "<uuid>",
               "version": 1,
               "originalName": "contract-week1.xlsx",
-              "storedName": "v1.xlsx",
+              "storedName": "webdav:/周报/member-a/2026-09-01_2026-09-07/contract-week1.xlsx",
               "sizeBytes": 18,
               "ext": ".xlsx",
               "mimeType": "application/octet-stream",
@@ -12307,7 +12680,7 @@
               "reportId": "<uuid>",
               "version": 1,
               "originalName": "contract-week1.xlsx",
-              "storedName": "v1.xlsx",
+              "storedName": "webdav:/周报/member-a/2026-09-01_2026-09-07/contract-week1_2.xlsx",
               "sizeBytes": 18,
               "ext": ".xlsx",
               "mimeType": "application/octet-stream",
@@ -12319,7 +12692,7 @@
       }
     },
     {
-      "name": "reports.create.managerA.proxy",
+      "name": "reports.create.managerA.own",
       "role": "managerA",
       "request": {
         "method": "POST",
@@ -12343,8 +12716,8 @@
         "ok": true,
         "data": {
           "id": "<uuid>",
-          "ownerId": "user-member-a2",
-          "ownerName": "阿尔法成员乙",
+          "ownerId": "user-manager-a",
+          "ownerName": "阿尔法管理者",
           "periodStart": "2026-09-01",
           "periodEnd": "2026-09-07",
           "docType": "summary",
@@ -12364,7 +12737,7 @@
               "reportId": "<uuid>",
               "version": 1,
               "originalName": "contract-summary.docx",
-              "storedName": "v1.docx",
+              "storedName": "webdav:/周报/manager-a/2026-09-01_2026-09-07/contract-summary.docx",
               "sizeBytes": 18,
               "ext": ".docx",
               "mimeType": "application/octet-stream",
@@ -12376,14 +12749,14 @@
       }
     },
     {
-      "name": "reports.create.managerA.cross-org-owner",
+      "name": "reports.create.managerA.owner-ignored",
       "role": "managerA",
       "request": {
         "method": "POST",
         "path": "/api/reports",
         "upload": "contract-summary.docx"
       },
-      "status": 400,
+      "status": 201,
       "headers": {
         "contentType": "application/json; charset=utf-8",
         "contentDisposition": null,
@@ -12397,10 +12770,38 @@
         "xContentTypeOptions": true
       },
       "body": {
-        "ok": false,
-        "error": {
-          "code": "VALIDATION_ERROR",
-          "message": "归属人必须属于本组织"
+        "ok": true,
+        "data": {
+          "id": "<uuid>",
+          "ownerId": "user-manager-a",
+          "ownerName": "阿尔法管理者",
+          "periodStart": "2026-09-01",
+          "periodEnd": "2026-09-07",
+          "docType": "summary",
+          "note": "",
+          "status": "submitted",
+          "currentVersion": 1,
+          "uploadedBy": "user-manager-a",
+          "reviewNote": null,
+          "createdAt": "<ts>",
+          "updatedAt": "<ts>",
+          "submittedAt": "<ts>",
+          "reviewedAt": null,
+          "returnedAt": null,
+          "files": [
+            {
+              "id": "<uuid>",
+              "reportId": "<uuid>",
+              "version": 1,
+              "originalName": "contract-summary.docx",
+              "storedName": "webdav:/周报/manager-a/2026-09-01_2026-09-07/contract-summary_2.docx",
+              "sizeBytes": 18,
+              "ext": ".docx",
+              "mimeType": "application/octet-stream",
+              "uploadedBy": "user-manager-a",
+              "uploadedAt": "<ts>"
+            }
+          ]
         }
       }
     },
@@ -12450,7 +12851,7 @@
               "reportId": "<uuid>",
               "version": 1,
               "originalName": "contract-week1.xlsx",
-              "storedName": "v1.xlsx",
+              "storedName": "webdav:/周报/member-b/2026-09-01_2026-09-07/contract-week1.xlsx",
               "sizeBytes": 18,
               "ext": ".xlsx",
               "mimeType": "application/octet-stream",
@@ -12520,11 +12921,40 @@
       }
     },
     {
+      "name": "reports.create.admin.forbidden",
+      "role": "admin",
+      "request": {
+        "method": "POST",
+        "path": "/api/reports",
+        "upload": "contract-week1.xlsx"
+      },
+      "status": 403,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "FORBIDDEN",
+          "message": "管理员不提交周报，请由成员本人提交"
+        }
+      }
+    },
+    {
       "name": "reports.return.managerA.uploaded",
       "role": "managerA",
       "request": {
         "method": "POST",
-        "path": "/api/reports/11ec5e7a-b8a5-4092-bfde-e288980ac0c4/return",
+        "path": "/api/reports/d7de5854-b813-4ea1-a644-398f800b18d2/return",
         "body": {
           "note": "请补充数据"
         }
@@ -12567,7 +12997,7 @@
               "reportId": "<uuid>",
               "version": 1,
               "originalName": "contract-week1.xlsx",
-              "storedName": "v1.xlsx",
+              "storedName": "webdav:/周报/member-a/2026-09-01_2026-09-07/contract-week1.xlsx",
               "sizeBytes": 18,
               "ext": ".xlsx",
               "mimeType": "application/octet-stream",
@@ -12583,7 +13013,7 @@
       "role": "memberA",
       "request": {
         "method": "POST",
-        "path": "/api/reports/11ec5e7a-b8a5-4092-bfde-e288980ac0c4/file",
+        "path": "/api/reports/d7de5854-b813-4ea1-a644-398f800b18d2/file",
         "upload": "contract-week1-v2.xlsx"
       },
       "status": 201,
@@ -12624,7 +13054,7 @@
               "reportId": "<uuid>",
               "version": 1,
               "originalName": "contract-week1.xlsx",
-              "storedName": "v1.xlsx",
+              "storedName": "webdav:/周报/member-a/2026-09-01_2026-09-07/contract-week1.xlsx",
               "sizeBytes": 18,
               "ext": ".xlsx",
               "mimeType": "application/octet-stream",
@@ -12636,7 +13066,7 @@
               "reportId": "<uuid>",
               "version": 2,
               "originalName": "contract-week1-v2.xlsx",
-              "storedName": "v2.xlsx",
+              "storedName": "webdav:/周报/member-a/2026-09-01_2026-09-07/contract-week1-v2_v2.xlsx",
               "sizeBytes": 21,
               "ext": ".xlsx",
               "mimeType": "application/octet-stream",
@@ -12652,7 +13082,7 @@
       "role": "managerA",
       "request": {
         "method": "GET",
-        "path": "/api/reports/11ec5e7a-b8a5-4092-bfde-e288980ac0c4/file/1"
+        "path": "/api/reports/d7de5854-b813-4ea1-a644-398f800b18d2/file/1"
       },
       "status": 200,
       "headers": {
@@ -12674,7 +13104,7 @@
       "role": "managerA",
       "request": {
         "method": "GET",
-        "path": "/api/reports/11ec5e7a-b8a5-4092-bfde-e288980ac0c4/file/2"
+        "path": "/api/reports/d7de5854-b813-4ea1-a644-398f800b18d2/file/2"
       },
       "status": 200,
       "headers": {
@@ -12696,7 +13126,7 @@
       "role": "managerA",
       "request": {
         "method": "GET",
-        "path": "/api/reports/0f3a2aea-0b08-4243-b413-2582740a4243"
+        "path": "/api/reports/daa89cff-643c-4661-b875-a214ec9af5b3"
       },
       "status": 200,
       "headers": {
@@ -12715,8 +13145,8 @@
         "ok": true,
         "data": {
           "id": "<uuid>",
-          "ownerId": "user-member-a2",
-          "ownerName": "阿尔法成员乙",
+          "ownerId": "user-manager-a",
+          "ownerName": "阿尔法管理者",
           "periodStart": "2026-09-01",
           "periodEnd": "2026-09-07",
           "docType": "summary",
@@ -12736,7 +13166,7 @@
               "reportId": "<uuid>",
               "version": 1,
               "originalName": "contract-summary.docx",
-              "storedName": "v1.docx",
+              "storedName": "webdav:/周报/manager-a/2026-09-01_2026-09-07/contract-summary.docx",
               "sizeBytes": 18,
               "ext": ".docx",
               "mimeType": "application/octet-stream",
@@ -12752,7 +13182,7 @@
       "role": "admin",
       "request": {
         "method": "POST",
-        "path": "/api/reports/d4a2a8bc-ffea-4d01-a44d-abb945df40ed/approve",
+        "path": "/api/reports/6a439684-af76-4f18-9f4a-ddb3eb6ce240/approve",
         "body": {
           "note": "管理员审批贝塔周报"
         }
@@ -12795,7 +13225,7 @@
               "reportId": "<uuid>",
               "version": 1,
               "originalName": "contract-week1.xlsx",
-              "storedName": "v1.xlsx",
+              "storedName": "webdav:/周报/member-b/2026-09-01_2026-09-07/contract-week1.xlsx",
               "sizeBytes": 18,
               "ext": ".xlsx",
               "mimeType": "application/octet-stream",
@@ -12811,7 +13241,7 @@
       "role": "memberB",
       "request": {
         "method": "GET",
-        "path": "/api/reports/d4a2a8bc-ffea-4d01-a44d-abb945df40ed"
+        "path": "/api/reports/6a439684-af76-4f18-9f4a-ddb3eb6ce240"
       },
       "status": 200,
       "headers": {
@@ -12851,7 +13281,7 @@
               "reportId": "<uuid>",
               "version": 1,
               "originalName": "contract-week1.xlsx",
-              "storedName": "v1.xlsx",
+              "storedName": "webdav:/周报/member-b/2026-09-01_2026-09-07/contract-week1.xlsx",
               "sizeBytes": 18,
               "ext": ".xlsx",
               "mimeType": "application/octet-stream",
@@ -13393,7 +13823,7 @@
       "role": "admin",
       "request": {
         "method": "PATCH",
-        "path": "/api/organizations/503b2905-17a2-4e17-887c-f18a5f45af57",
+        "path": "/api/organizations/8a6b5114-2bb0-4f43-b562-6c4cfade413f",
         "body": {
           "name": "契约新组织（改名）"
         }
@@ -13457,6 +13887,259 @@
       }
     },
     {
+      "name": "tasks.patch.managerA.move-org-rejected",
+      "role": "managerA",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/tasks/t-done",
+        "body": {
+          "orgId": "org-beta"
+        }
+      },
+      "status": 403,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "FORBIDDEN",
+          "message": "只有管理员可以修改任务所属组织"
+        }
+      }
+    },
+    {
+      "name": "tasks.patch.admin.move-org.owner-conflict",
+      "role": "admin",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/tasks/t-done",
+        "body": {
+          "orgId": "org-beta"
+        }
+      },
+      "status": 400,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "负责人必须属于该任务所在组织"
+        }
+      }
+    },
+    {
+      "name": "tasks.patch.admin.move-org.archived-org",
+      "role": "admin",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/tasks/t-done",
+        "body": {
+          "orgId": "org-archived"
+        }
+      },
+      "status": 400,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "VALIDATION_ERROR",
+          "message": "组织不存在或已解散，不能改到该组织"
+        }
+      }
+    },
+    {
+      "name": "tasks.patch.admin.move-org",
+      "role": "admin",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/tasks/t-done",
+        "body": {
+          "orgId": "org-beta",
+          "ownerId": "user-member-b"
+        }
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "id": "t-done",
+          "title": "已完成任务",
+          "description": "",
+          "priority": "P2",
+          "status": "completed",
+          "progress": 100,
+          "dueDate": "2026-09-10",
+          "ownerId": "user-member-b",
+          "createdBy": "user-manager-a",
+          "source": "manual",
+          "isPrivate": false,
+          "createdAt": "<ts>",
+          "updatedAt": "<ts>",
+          "completedAt": "<ts>",
+          "archivedAt": null,
+          "orgId": "org-beta",
+          "orgName": "贝塔组",
+          "ownerName": "贝塔成员",
+          "ownerRole": "member"
+        }
+      }
+    },
+    {
+      "name": "tasks.patch.admin.move-org.back",
+      "role": "admin",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/tasks/t-done",
+        "body": {
+          "orgId": "org-alpha",
+          "ownerId": "user-member-a"
+        }
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "id": "t-done",
+          "title": "已完成任务",
+          "description": "",
+          "priority": "P2",
+          "status": "completed",
+          "progress": 100,
+          "dueDate": "2026-09-10",
+          "ownerId": "user-member-a",
+          "createdBy": "user-manager-a",
+          "source": "manual",
+          "isPrivate": false,
+          "createdAt": "<ts>",
+          "updatedAt": "<ts>",
+          "completedAt": "<ts>",
+          "archivedAt": null,
+          "orgId": "org-alpha",
+          "orgName": "阿尔法组",
+          "ownerName": "阿尔法成员甲",
+          "ownerRole": "member"
+        }
+      }
+    },
+    {
+      "name": "activity.task-moved",
+      "role": "admin",
+      "request": {
+        "method": "GET",
+        "path": "/api/tasks/t-done/activity"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": [
+          {
+            "id": "<uuid>",
+            "kind": "task_reassigned",
+            "authorId": "user-admin",
+            "authorName": "管理员",
+            "content": "负责人从 阿尔法成员甲 改为 贝塔成员",
+            "progress": null,
+            "createdAt": "<ts>"
+          },
+          {
+            "id": "<uuid>",
+            "kind": "task_moved",
+            "authorId": "user-admin",
+            "authorName": "管理员",
+            "content": "所属组织从 阿尔法组 改为 贝塔组",
+            "progress": null,
+            "createdAt": "<ts>"
+          },
+          {
+            "id": "<uuid>",
+            "kind": "task_reassigned",
+            "authorId": "user-admin",
+            "authorName": "管理员",
+            "content": "负责人从 贝塔成员 改为 阿尔法成员甲",
+            "progress": null,
+            "createdAt": "<ts>"
+          },
+          {
+            "id": "<uuid>",
+            "kind": "task_moved",
+            "authorId": "user-admin",
+            "authorName": "管理员",
+            "content": "所属组织从 贝塔组 改为 阿尔法组",
+            "progress": null,
+            "createdAt": "<ts>"
+          }
+        ]
+      }
+    },
+    {
       "name": "org.archive.managerA.cross-org",
       "role": "managerA",
       "request": {
@@ -13517,7 +14200,7 @@
       "role": "admin",
       "request": {
         "method": "POST",
-        "path": "/api/organizations/503b2905-17a2-4e17-887c-f18a5f45af57/archive"
+        "path": "/api/organizations/8a6b5114-2bb0-4f43-b562-6c4cfade413f/archive"
       },
       "status": 200,
       "headers": {
@@ -13551,7 +14234,7 @@
       "role": "managerA",
       "request": {
         "method": "POST",
-        "path": "/api/organizations/503b2905-17a2-4e17-887c-f18a5f45af57/restore"
+        "path": "/api/organizations/8a6b5114-2bb0-4f43-b562-6c4cfade413f/restore"
       },
       "status": 403,
       "headers": {
@@ -13579,7 +14262,7 @@
       "role": "admin",
       "request": {
         "method": "POST",
-        "path": "/api/organizations/503b2905-17a2-4e17-887c-f18a5f45af57/restore"
+        "path": "/api/organizations/8a6b5114-2bb0-4f43-b562-6c4cfade413f/restore"
       },
       "status": 200,
       "headers": {
@@ -13783,6 +14466,27 @@
       "body": {
         "ok": true,
         "data": [
+          {
+            "id": "t-done",
+            "title": "已完成任务",
+            "description": "",
+            "priority": "P2",
+            "status": "completed",
+            "progress": 100,
+            "dueDate": "2026-09-10",
+            "ownerId": "user-member-a",
+            "createdBy": "user-manager-a",
+            "source": "manual",
+            "isPrivate": false,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "completedAt": "<ts>",
+            "archivedAt": null,
+            "orgId": "org-alpha",
+            "orgName": "阿尔法组",
+            "ownerName": "阿尔法成员甲",
+            "ownerRole": "member"
+          },
           {
             "id": "<uuid>",
             "title": "成员甲导入",
@@ -14050,27 +14754,6 @@
             "createdAt": "<ts>",
             "updatedAt": "<ts>",
             "completedAt": null,
-            "archivedAt": null,
-            "orgId": "org-alpha",
-            "orgName": "阿尔法组",
-            "ownerName": "阿尔法成员甲",
-            "ownerRole": "member"
-          },
-          {
-            "id": "t-done",
-            "title": "已完成任务",
-            "description": "",
-            "priority": "P2",
-            "status": "completed",
-            "progress": 100,
-            "dueDate": "2026-09-10",
-            "ownerId": "user-member-a",
-            "createdBy": "user-manager-a",
-            "source": "manual",
-            "isPrivate": false,
-            "createdAt": "<ts>",
-            "updatedAt": "<ts>",
-            "completedAt": "<ts>",
             "archivedAt": null,
             "orgId": "org-alpha",
             "orgName": "阿尔法组",

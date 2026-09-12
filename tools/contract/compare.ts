@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
+import { startFakeWebDav } from "../webdav/fake-server";
 import { CASES } from "./cases";
 import { createFixture, removeFixture } from "./fixture";
 import { findFreePort, runCases, startServer, type GoldenFile, type RecordedResponse } from "./runner";
@@ -56,12 +57,16 @@ async function main(): Promise<void> {
   if (golden.responses.length === 0) throw new Error(`--only ${only.join(",")} 没有匹配到任何用例`);
 
   const fixture = createFixture();
+  // 周报正文只写 NAS（D-46）：比对同样要用一个本地假远端，否则上传类用例会整体 503
+  const webdav = baseUrlArg ? null : await startFakeWebDav();
+  // `exactOptionalPropertyTypes` 下不能显式传 undefined，所以按需展开
+  const webdavArg = webdav ? { webdavUrl: webdav.baseUrl } : {};
   const port = baseUrlArg ? Number(new URL(baseUrlArg).port) : await findFreePort();
   const server = baseUrlArg
     ? null
     : serveNpm
-      ? await startServer({ serveNpm, fixture, port })
-      : await startServer({ entry, fixture, port });
+      ? await startServer({ serveNpm, fixture, port, ...webdavArg })
+      : await startServer({ entry, fixture, port, ...webdavArg });
   const baseUrl = baseUrlArg || `http://127.0.0.1:${port}`;
   try {
     const selectedNames = new Set(golden.responses.map((item) => item.name));
@@ -89,6 +94,7 @@ async function main(): Promise<void> {
     process.exitCode = 1;
   } finally {
     await server?.stop();
+    await webdav?.close();
     removeFixture(fixture);
   }
 }
