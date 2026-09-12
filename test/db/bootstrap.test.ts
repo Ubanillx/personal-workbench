@@ -77,6 +77,8 @@ test("全新空库自举出默认管理员与默认组织，组织挂在管理�
     createdAdmin: true,
     createdOrganization: true,
     adminAwaitingPassword: true,
+    adminPasswordFromEnv: false,
+    adminPasswordInvalid: false,
     adminUsername: DEFAULT_ADMIN_USERNAME,
   });
 
@@ -108,10 +110,14 @@ test("自举幂等：重复执行不再插入，已有数据一个字段都不�
   const afterFirst = readSnapshot(temp.databasePath);
 
   const second = await withMigratedDatabase(temp.databasePath, (database) => ensureDefaultAdminAndOrganization(database));
+  // 管理员仍是 locked$ 占位（没给 env 密码），所以状态如实报「还没有密码」；
+  // 老实现这里硬编码 false，会让「重启后管理员仍无密码」不再被提示。
   assert.deepEqual(second, {
     createdAdmin: false,
     createdOrganization: false,
-    adminAwaitingPassword: false,
+    adminAwaitingPassword: true,
+    adminPasswordFromEnv: false,
+    adminPasswordInvalid: false,
     adminUsername: DEFAULT_ADMIN_USERNAME,
   });
   assert.deepEqual(readSnapshot(temp.databasePath), afterFirst, "第二次执行不应有任何写入");
@@ -182,6 +188,8 @@ test("夹具式库（已有管理员与组织）完全不动；admin 用户名�
     createdAdmin: false,
     createdOrganization: false,
     adminAwaitingPassword: false,
+    adminPasswordFromEnv: false,
+    adminPasswordInvalid: false,
     adminUsername: null,
   });
   const after = readSnapshot(second.databasePath);

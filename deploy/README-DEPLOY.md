@@ -137,9 +137,23 @@ ssh deploy@<目标机> 'sudo vi /opt/personal-workbench/shared/.env'
 ssh deploy@<目标机> 'sudo /opt/personal-workbench/bin/deploy.sh status'
 ```
 
-### 第 6 步：给管理员生成初始密码
+### 第 6 步：管理员初始密码
 
-全新数据库第一次启动后，默认管理员 `admin` 的密码是锁定占位值，任何密码都登不进。需要在数据所在的机器上生成一次：
+默认管理员 `admin` 的密码**由部署环境决定**（D-51），两种方式二选一：
+
+**A. 走环境变量（推荐，部署自包含、不需要登机器）** —— 在 `shared/.env` 里写一行，然后重启服务：
+
+```bash
+ssh deploy@<目标机> 'sudo vi /opt/personal-workbench/shared/.env'   # 加 WORKBENCH_ADMIN_PASSWORD=<你的密码>
+ssh deploy@<目标机> 'sudo systemctl restart personal-workbench'
+```
+
+- 服务启动、自举数据库时读一次：**只在 `admin` 还没有密码时生效**；
+- 之后再改这个值不会覆盖已设密码（改密码走 `npm run user:passwd`）；
+- 空值/非法（少于 8 位）会被忽略并写进 `journalctl` 告警，管理员保持「无密码」状态；
+- 密码会明文躺在 `shared/.env`（0640 root:workbench）。要更严就用下面的 B。
+
+**B. 本机 CLI（临时密码 + 强制改密）**：
 
 ```bash
 ssh deploy@<目标机> 'sudo systemctl stop personal-workbench'
@@ -147,9 +161,9 @@ ssh deploy@<目标机> 'cd /opt/personal-workbench/current && sudo -u workbench 
 ssh deploy@<目标机> 'sudo systemctl start personal-workbench'
 ```
 
-密码只在终端打印一次，用它登录 `admin`，首次登录会强制改密。
+随机密码只在终端打印一次，用它登录后**首次登录强制改密**。
 
-> 为什么停服再做：这一步要独占写数据库，避免和服务进程抢 SQLite 写锁。
+> 为什么 B 要停服再做：这一步要独占写数据库，避免和服务进程抢 SQLite 写锁。A 方式不用停服（重启即生效）。
 
 ---
 

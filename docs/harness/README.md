@@ -34,35 +34,35 @@
 
 ## 命令速查
 
-| 场景             | 命令                                                                     | 说明                                                                                                    |
-| ---------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
-| 日常使用（本机） | `npm start`                                                              | 构建后以 `HOST=127.0.0.1 PORT=17500` 前台启动单进程服务                                                 |
-| 局域网共享       | `npm run start:lan`                                                      | 同上，但绑定 `0.0.0.0`                                                                                  |
-| 只重启不重建     | `npm run serve`                                                          | 直接跑 `build/` 产物；**不要**裸调 `react-router-serve`（会默认 3000 并绑定所有网卡）                   |
-| 开发（热更新）   | `npm run dev`                                                            | `react-router dev`，单进程同时提供页面与 API（默认 5173，仅本机）                                       |
-| 构建             | `npm run build`                                                          | 先跑 `tools/build/prebuild.ts` 解锁 `build/`，再产出客户端 + SSR                                        |
-| 类型检查         | `npm run typecheck`                                                      | server + tools + app + test 四个 tsconfig                                                               |
-| Lint             | `npm run lint` / `npm run lint:fix`                                      | oxlint，门禁 0 warning / 0 error                                                                        |
-| 格式化           | `npm run format` / `npm run format:check`                                | Prettier，全量或只检查漂移                                                                              |
-| 契约快照录制     | `npm run contract:capture`                                               | 黑盒跑 324 条用例，写入 `test/contract/golden/`（**先 `npm run build`**；自动拉起假 WebDAV）            |
-| 契约回放比对     | `npm run contract:compare`                                               | 默认自己拉起 `npm run serve` + 夹具库 + 假 WebDAV，逐条比对                                             |
-| antd 用法检查    | `npx antd lint app`                                                      | **提交前必跑**：废弃用法 / a11y / 性能                                                                  |
-| antd API 查询    | `npx antd info` / `demo` / `doc <组件>`                                  | 写 antd 代码前先查，禁止凭记忆写 v6 API                                                                 |
-| antd 项目诊断    | `npx antd doctor`                                                        | 版本冲突、重复安装、主题配置                                                                            |
-| 全部测试         | `npm test`                                                               | 依次 `test:db` → `test:webdav` → `test:api` → `test:auth` → `test:ui`                                   |
-| 单项测试         | `npm run test:db` / `test:webdav` / `test:api` / `test:auth` / `test:ui` | 数据层 / WebDAV 客户端（假服务器）/ 324 条契约回放 / 注册登录改密端到端 / SSR 冒烟                      |
-| 生成夹具库       | `npm run contract:fixture`                                               | 输出可直接用作 `DATABASE_PATH` 的临时库（含固定令牌与周报上传配置行）                                   |
-| SSR 冒烟         | `npm run smoke:ui -- --require-migrated`                                 | 逐页验收；`--paths` 限定页面，`--require-migrated` 把占位页计为失败                                     |
-| 手动备份         | `npm run db:backup`                                                      | 写入 `data/backups/`，保留最近 5 份                                                                     |
-| 周报正文搬迁     | `npm run reports:migrate-webdav [-- --dry-run] [-- --purge]`             | 把本地老周报推到 NAS 并回写索引（幂等）；默认不删本地，`--purge` 才清                                   |
-| 账号清单         | `npm run user:list`                                                      | 用户名 / 邮箱 / 角色 / 组织 / 是否待改密                                                                |
-| 重置账号密码     | `npm run user:passwd -- <用户名> [--generate]`                           | 本机唯一的重置途径；也可用 `WORKBENCH_PASSWORD` 环境变量或管道输入                                      |
-| 初始化初始密码   | `npm run user:init -- --confirm`                                         | 给仍是 `locked$` 的账号生成初始密码并打印（幂等；全新空库自举的 `admin` 也走它）                        |
-| 迁移演练         | `npm run db:rehearse [-- --keep] [-- --source <路径>]`                   | 在库副本上试跑 `server/src/db/migrations/`，逐表核对（迁移前库 44 项；已迁移库自动跳过 6 项初始态断言） |
-| 局域网放行端口   | 见根 README「局域网访问」                                                | 管理员 PowerShell 执行 `New-NetFirewallRule`                                                            |
-| 部署（自动）     | Jenkins 任务 → `ACTION=deploy`                                           | push `main` 由 webhook 触发；详见 `deploy/README-DEPLOY.md`                                             |
-| 部署（查状态）   | `sudo /opt/personal-workbench/bin/deploy.sh status`                      | 目标机上执行：当前 release / 服务状态 / 健康检查 / 历史版本                                             |
-| 部署（回滚）     | `sudo …/deploy.sh rollback` 或 Jenkins `ACTION=rollback`                 | 切回上一个 release 并重启；**只回代码不回数据库结构**                                                   |
+| 场景             | 命令                                                                     | 说明                                                                                                                                          |
+| ---------------- | ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| 日常使用（本机） | `npm start`                                                              | 构建后以 `HOST=127.0.0.1 PORT=17500` 前台启动单进程服务                                                                                       |
+| 局域网共享       | `npm run start:lan`                                                      | 同上，但绑定 `0.0.0.0`                                                                                                                        |
+| 只重启不重建     | `npm run serve`                                                          | 直接跑 `build/` 产物；**不要**裸调 `react-router-serve`（会默认 3000 并绑定所有网卡）                                                         |
+| 开发（热更新）   | `npm run dev`                                                            | `react-router dev`，单进程同时提供页面与 API（默认 5173，仅本机）                                                                             |
+| 构建             | `npm run build`                                                          | 先跑 `tools/build/prebuild.ts` 解锁 `build/`，再产出客户端 + SSR                                                                              |
+| 类型检查         | `npm run typecheck`                                                      | server + tools + app + test 四个 tsconfig                                                                                                     |
+| Lint             | `npm run lint` / `npm run lint:fix`                                      | oxlint，门禁 0 warning / 0 error                                                                                                              |
+| 格式化           | `npm run format` / `npm run format:check`                                | Prettier，全量或只检查漂移                                                                                                                    |
+| 契约快照录制     | `npm run contract:capture`                                               | 黑盒跑 324 条用例，写入 `test/contract/golden/`（**先 `npm run build`**；自动拉起假 WebDAV）                                                  |
+| 契约回放比对     | `npm run contract:compare`                                               | 默认自己拉起 `npm run serve` + 夹具库 + 假 WebDAV，逐条比对                                                                                   |
+| antd 用法检查    | `npx antd lint app`                                                      | **提交前必跑**：废弃用法 / a11y / 性能                                                                                                        |
+| antd API 查询    | `npx antd info` / `demo` / `doc <组件>`                                  | 写 antd 代码前先查，禁止凭记忆写 v6 API                                                                                                       |
+| antd 项目诊断    | `npx antd doctor`                                                        | 版本冲突、重复安装、主题配置                                                                                                                  |
+| 全部测试         | `npm test`                                                               | 依次 `test:db` → `test:webdav` → `test:api` → `test:auth` → `test:ui`                                                                         |
+| 单项测试         | `npm run test:db` / `test:webdav` / `test:api` / `test:auth` / `test:ui` | 数据层 / WebDAV 客户端（假服务器）/ 324 条契约回放 / 注册登录改密端到端 / SSR 冒烟                                                            |
+| 生成夹具库       | `npm run contract:fixture`                                               | 输出可直接用作 `DATABASE_PATH` 的临时库（含固定令牌与周报上传配置行）                                                                         |
+| SSR 冒烟         | `npm run smoke:ui -- --require-migrated`                                 | 逐页验收；`--paths` 限定页面，`--require-migrated` 把占位页计为失败                                                                           |
+| 手动备份         | `npm run db:backup`                                                      | 写入 `data/backups/`，保留最近 5 份                                                                                                           |
+| 周报正文搬迁     | `npm run reports:migrate-webdav [-- --dry-run] [-- --purge]`             | 把本地老周报推到 NAS 并回写索引（幂等）；默认不删本地，`--purge` 才清                                                                         |
+| 账号清单         | `npm run user:list`                                                      | 用户名 / 邮箱 / 角色 / 组织 / 是否待改密                                                                                                      |
+| 重置账号密码     | `npm run user:passwd -- <用户名> [--generate]`                           | 本机唯一的重置途径；也可用 `WORKBENCH_PASSWORD` 环境变量或管道输入                                                                            |
+| 初始化初始密码   | `npm run user:init -- --confirm`                                         | 给仍是 `locked$` 的账号生成初始密码并打印（幂等）。或者用环境变量 `WORKBENCH_ADMIN_PASSWORD`（D-51）：自举时直接给 `admin` 设密码，不用跑 CLI |
+| 迁移演练         | `npm run db:rehearse [-- --keep] [-- --source <路径>]`                   | 在库副本上试跑 `server/src/db/migrations/`，逐表核对（迁移前库 44 项；已迁移库自动跳过 6 项初始态断言）                                       |
+| 局域网放行端口   | 见根 README「局域网访问」                                                | 管理员 PowerShell 执行 `New-NetFirewallRule`                                                                                                  |
+| 部署（自动）     | Jenkins 任务 → `ACTION=deploy`                                           | push `main` 由 webhook 触发；详见 `deploy/README-DEPLOY.md`                                                                                   |
+| 部署（查状态）   | `sudo /opt/personal-workbench/bin/deploy.sh status`                      | 目标机上执行：当前 release / 服务状态 / 健康检查 / 历史版本                                                                                   |
+| 部署（回滚）     | `sudo …/deploy.sh rollback` 或 Jenkins `ACTION=rollback`                 | 切回上一个 release 并重启；**只回代码不回数据库结构**                                                                                         |
 
 ## 文档索引
 

@@ -31,7 +31,7 @@
     "test:api": "node --import tsx tools/contract/compare.ts --serve-npm serve",
     "test:auth": "node --import tsx --test test/api/auth.spec.ts",
     "test:ui": "node --import tsx tools/contract/smoke-ui.ts --require-migrated",
-    "test:db": "node --import tsx --test test/db/backup.test.ts test/db/json-migration.test.ts test/db/migration-backup.test.ts test/db/password.test.ts test/db/account.test.ts test/db/bootstrap.test.ts test/db/report-storage.test.ts",
+    "test:db": "node --import tsx --test test/db/backup.test.ts test/db/json-migration.test.ts test/db/migration-backup.test.ts test/db/password.test.ts test/db/account.test.ts test/db/bootstrap.test.ts test/db/bootstrap-admin-env.test.ts test/db/report-storage.test.ts",
     "user:list": "node --import tsx server/src/cli/list-users.ts",
     "test:webdav": "node --import tsx --test test/webdav/client.test.ts",
     "user:passwd": "node --import tsx server/src/cli/set-password.ts",

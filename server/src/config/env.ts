@@ -2,12 +2,15 @@ import fs from "node:fs";
 import path from "node:path";
 
 /**
- * 进程环境变量配置（数据库路径、监听地址、上传目录、WebDAV 地址）。
+ * 进程环境变量配置（数据库路径、监听地址、上传目录、WebDAV 地址、管理员初始密码）。
  *
  * WebDAV 拆成两半（见 docs/harness/WEBDAV.md）：
  * - **地址**是部署级的，来自 `WEBDAV_URL`——一个团队通常共用一个 NAS；
  * - **用户名 / 密码 / 浏览根目录 / 超时**是每个账号自己的，在设置页里维护、落库
  *   （`webdav_settings`）。
+ *
+ * 管理员初始密码走 `WORKBENCH_ADMIN_PASSWORD`（D-51）：它只被自举读一次，
+ * 而且只在账号还是 `locked$` 占位时生效，之后无论 env 怎么改都不会覆盖已设的密码。
  */
 export type AppConfig = {
   nodeEnv: "development" | "test" | "production";
@@ -18,6 +21,11 @@ export type AppConfig = {
   uploadsDir: string;
   /** 「重要文件」的 WebDAV 地址（`WEBDAV_URL`）；空串 = 整个远端通道未接入 */
   webdavUrl: string;
+  /**
+   * 管理员**初始**密码（`WORKBENCH_ADMIN_PASSWORD`）；空串 = 不启用。
+   * 只在自举时用一次，且仅当 `admin` 还没有密码（`locked$` 占位）时生效 —— 见 db/bootstrap.ts。
+   */
+  adminPassword: string;
 };
 
 function positivePort(value: string | undefined): number {
@@ -68,5 +76,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, cwd = process.c
     sessionCookieName: env.SESSION_COOKIE_NAME ?? "workbench_session",
     uploadsDir: path.resolve(cwd, env.UPLOADS_DIR ?? "data/uploads/reports"),
     webdavUrl: (env.WEBDAV_URL ?? "").trim(),
+    // 刻意**不** trim：密码原样使用（写 .env 时不要加引号、不要带行尾注释）
+    adminPassword: env.WORKBENCH_ADMIN_PASSWORD ?? "",
   };
 }

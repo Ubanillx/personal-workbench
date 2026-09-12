@@ -78,13 +78,18 @@ npm run start:lan
 - 建默认管理员 `admin`（`password_hash` 是 `locked$` 占位值，任何密码都登不进去）；
 - 建默认组织「默认组织」，`created_by` 指向这个管理员。
 
-因此首次启动后要先在本机给管理员生成初始密码（只在终端打印一次）：
+管理员的初始密码有两种给法（D-51）：
+
+**A. 环境变量（部署推荐）**：在 `.env` 里写 `WORKBENCH_ADMIN_PASSWORD=<至少 8 位>` 再启动服务。自举时读一次，**只在 `admin` 还没有密码时生效**；之后改这个值不会覆盖已设密码。
+
+**B. 本机 CLI**：不给环境变量时，首次启动后在本机生成随机初始密码（只在终端打印一次）：
 
 ```bash
 npm run user:init -- --confirm
 ```
 
-用打印出来的密码在 `http://127.0.0.1:17500/login` 登录 `admin`，首次登录强制改密；之后就能创建组织、
+不管走哪条路，都用 `admin` 在 `http://127.0.0.1:17500/login` 登录；B 的随机密码**首次登录强制改密**，
+A 的密码被当作长期密码（要强制改密就用 `npm run user:passwd -- admin`）。之后就能创建组织、
 把注册进来的账号拉进组织。自举是幂等的：已有管理员与组织的库（例如正式库）不会被改动，
 初始组织只在「一个组织都没有」时创建。规则见 [`docs/harness/ACCOUNTS_AND_ORGS.md`](docs/harness/ACCOUNTS_AND_ORGS.md) §16。
 
@@ -129,7 +134,11 @@ DATABASE_PATH=data/workbench.sqlite
 SESSION_COOKIE_NAME=workbench_session
 UPLOADS_DIR=data/uploads/reports
 WEBDAV_URL=http://192.168.0.242:5005
+WORKBENCH_ADMIN_PASSWORD=
 ```
+
+`WORKBENCH_ADMIN_PASSWORD` 是唯一一个「秘密」变量：只在自举时用来给管理员 `admin` 设初始密码，
+留空就退回 `npm run user:init` 的随机密码流程（见上面的「首次启动」一节）。
 
 `.env` 会被**自动加载**（`npm run serve` / `dev` 与各 CLI 都会读，见 `docs/harness/TECH_DEBT.md` 的 DEBT-02）：
 

@@ -4,6 +4,7 @@ import { loadConfig, loadDotEnv, type AppConfig } from "../../server/src/config/
 import { assertSupportedNodeRuntime } from "../../server/src/runtime";
 import { createDatabaseClient, type DatabaseClient } from "../../server/src/db/client";
 import { databaseHealth } from "../../server/src/db/health";
+import { MIN_PASSWORD_LENGTH } from "../../server/src/security/password";
 
 const MIGRATIONS_DIRECTORY = path.resolve(process.cwd(), "server/src/db/migrations");
 
@@ -43,10 +44,23 @@ export function appDatabase(): DatabaseClient | undefined {
       readOnly: false,
       migrationsDirectory: MIGRATIONS_DIRECTORY,
     });
-    const bootstrap = ensureDefaultAdminAndOrganization(client.getDatabase());
+    const bootstrap = ensureDefaultAdminAndOrganization(client.getDatabase(), { adminPassword: appConfig().adminPassword });
     if (bootstrap.createdAdmin && bootstrap.adminUsername) {
+      console.info(`已初始化默认管理员「${bootstrap.adminUsername}」与「${DEFAULT_ORG_NAME}」`);
+    }
+    if (bootstrap.adminPasswordFromEnv) {
+      // 只说"设过了"，绝不把密码本身写进日志
+      console.info(
+        `已用 WORKBENCH_ADMIN_PASSWORD 设置管理员「${bootstrap.adminUsername}」的初始密码；` +
+          `该变量只在账号还没有密码时生效一次，之后改它不会覆盖已设密码（改密走 npm run user:passwd）`,
+      );
+    } else if (bootstrap.adminPasswordInvalid) {
+      console.warn(`WORKBENCH_ADMIN_PASSWORD 不合法（至少 ${MIN_PASSWORD_LENGTH} 位），已忽略；管理员仍没有密码`);
+    }
+    if (bootstrap.adminAwaitingPassword && bootstrap.adminUsername) {
       console.warn(
-        `已初始化默认管理员「${bootstrap.adminUsername}」与「${DEFAULT_ORG_NAME}」；首次登录前请在本机执行：npm run user:init -- --confirm`,
+        `管理员「${bootstrap.adminUsername}」还没有密码。二选一：在部署环境的 shared/.env 里设置 ` +
+          `WORKBENCH_ADMIN_PASSWORD 后重启，或在本机执行 npm run user:init -- --confirm`,
       );
     }
     cachedDatabase = client;

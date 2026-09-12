@@ -1,4 +1,4 @@
-import { randomBytes, scrypt, timingSafeEqual } from "node:crypto";
+import { randomBytes, scrypt, scryptSync, timingSafeEqual } from "node:crypto";
 
 /**
  * 密码哈希：Node 内置 scrypt，不引第三方依赖。
@@ -36,10 +36,28 @@ function derive(password: string, salt: Buffer, n: number, r: number, p: number,
   });
 }
 
+/** 存储串的组装（同步/异步两条路径共用，免得格式漂移） */
+function formatHash(salt: Buffer, key: Buffer): string {
+  return `scrypt$${SCRYPT_N}$${SCRYPT_R}$${SCRYPT_P}$${salt.toString("base64")}$${key.toString("base64")}`;
+}
+
 export async function hashPassword(password: string): Promise<string> {
   const salt = randomBytes(SALT_LENGTH);
   const key = await derive(password, salt, SCRYPT_N, SCRYPT_R, SCRYPT_P, KEY_LENGTH);
-  return `scrypt$${SCRYPT_N}$${SCRYPT_R}$${SCRYPT_P}$${salt.toString("base64")}$${key.toString("base64")}`;
+  return formatHash(salt, key);
+}
+
+/**
+ * 同步版本。只有一处用途：**数据库自举时用 `WORKBENCH_ADMIN_PASSWORD` 给 `admin` 设初始密码**。
+ *
+ * 为什么必须是同步的：自举跑在同步的 `node:sqlite` API 里（`appDatabase()` 也是同步函数，
+ * 调用点遍布请求路径），为它把整条启动链改成 async 不划算。默认参数下一次约 50-100ms，
+ * 而且只在「首次建库」或「管理员还没有密码」时各发生一次。
+ */
+export function hashPasswordSync(password: string): string {
+  const salt = randomBytes(SALT_LENGTH);
+  const key = scryptSync(password, salt, KEY_LENGTH, { N: SCRYPT_N, r: SCRYPT_R, p: SCRYPT_P, maxmem: MAX_MEM });
+  return formatHash(salt, key);
 }
 
 /**
