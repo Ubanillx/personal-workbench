@@ -380,7 +380,7 @@ export function OrgMembersTab({
         <Card variant="outlined" title="组织信息">
           <Empty
             image={Empty.PRESENTED_IMAGE_SIMPLE}
-            description={isAdmin ? "还没有任何组织，请到「组织总览」新建一个。" : "当前账号不属于任何组织。"}
+            description={isAdmin ? "还没有组织，请先在「组织总览」新建。" : "当前账号不属于任何组织。"}
           />
         </Card>
       ) : (
@@ -405,8 +405,8 @@ export function OrgMembersTab({
                 <Alert
                   type="warning"
                   showIcon
-                  title="该组织已解散（归档）"
-                  description="成员已全部退回「未加入」状态，数据保留但不可访问；只有管理员能在「组织总览」恢复组织。"
+                  title="该组织已解散"
+                  description="成员已退回「未加入」，数据保留；管理员可在「组织总览」恢复。"
                 />
               ) : null}
             </Flex>
@@ -522,7 +522,7 @@ export function OrgMembersTab({
           {!archived && !isAdmin ? (
             <Card variant="outlined" title="危险操作">
               <Flex vertical gap="small">
-                <Typography.Text type="secondary">解散后，成员将退出组织，数据保留但暂时无法访问。管理员可恢复组织。</Typography.Text>
+                <Typography.Text type="secondary">解散后成员退出组织，数据保留；管理员可恢复。</Typography.Text>
                 <Button
                   color="danger"
                   variant="outlined"
@@ -531,7 +531,7 @@ export function OrgMembersTab({
                   onClick={() =>
                     confirmDanger(modal, {
                       title: `确认解散「${current.name}」？`,
-                      content: "成员会被退回未加入状态，数据保留；之后只有管理员能恢复组织。",
+                      content: "成员将退回「未加入」，数据保留；仅管理员可恢复。",
                       okText: "解散组织",
                       onOk: () => post({ intent: "archive", orgId: current.id }),
                     })
@@ -566,7 +566,7 @@ export function OrgMembersTab({
             <Input maxLength={40} placeholder="2-40 个字符" showCount />
           </AntdForm.Item>
           <AntdForm.Item name="description" label="组织说明">
-            <Input.TextArea rows={3} maxLength={200} showCount placeholder="可选：这个组织是做什么的" />
+            <Input.TextArea rows={3} maxLength={200} showCount placeholder="可选，简述职责" />
           </AntdForm.Item>
         </FormDrawer>
       ) : null}
@@ -586,12 +586,7 @@ export function OrgMembersTab({
             post({ intent: "invite", orgId: current.id, accountId: values.accountId });
           }}
         >
-          <Alert
-            type="info"
-            showIcon
-            title="从「无组织账号」里选择一个直接加入本组织"
-            description="可直接添加尚未加入组织的账号，成员将收到站内通知。"
-          />
+          <Alert type="info" showIcon title="可直接添加未加入组织的账号" description="添加后成员会收到通知。" />
           <AntdForm.Item
             name="accountId"
             label="无组织账号"

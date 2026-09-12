@@ -493,12 +493,29 @@ export function createFixture(): Fixture {
     );
   }
 
-  // 「周报上传」的全局单行配置（D-46）：契约与冒烟环境里也必须**有远端可写**，
+  // 「周报上传」**共用管理员那份连接**（D-52）：契约与冒烟环境里也必须**有远端可写**，
   // 否则 POST /api/reports 会整体 503，上传/下载类用例就没有黑盒快照了。
-  // 地址不在这张表里（来自 WEBDAV_URL，由 runner 注入假 NAS 的地址），这里只放统一账号与上传根。
-  db.prepare(
-    "INSERT INTO report_upload_settings(id,username,password,root,timeout_ms,updated_by,updated_at) VALUES(1,'','','/周报',15000,?,?)",
-  ).run(firstAdmin.id, STAMP);
+  // 地址不在这张表里（来自 WEBDAV_URL，由 runner 注入假 NAS 的地址），这里只放凭据与浏览根；
+  // 上传根目录**刻意不预置** `report_upload_settings`：不预置 = 跟随这份连接的浏览根目录（`/`），
+  // 也正是「默认是根目录」这条口径，于是正文落在 `/<用户名>/<起止日期>/<文件名>`。
+  db.prepare("INSERT INTO webdav_settings(user_id,username,password,root,timeout_ms,created_at,updated_at) VALUES(?,?,?,?,?,?,?)").run(
+    firstAdmin.id,
+    "",
+    "",
+    "/",
+    15000,
+    STAMP,
+    STAMP,
+  );
+
+  // 上传根目录**按组织**（D-53）：阿尔法配了 `/阿尔法`，贝塔**故意不配**。
+  // 一份夹具同时钉住两条口径：配过的组织各写各的目录，没配的用连接的浏览根（`/`）。
+  db.prepare("INSERT INTO report_upload_settings(org_id,root,updated_by,updated_at) VALUES(?,?,?,?)").run(
+    IDS.orgAlpha,
+    "/阿尔法",
+    firstAdmin.id,
+    STAMP,
+  );
 
   db.close();
   return { directory, databasePath, uploadsDir, ids: IDS };

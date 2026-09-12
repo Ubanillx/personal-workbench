@@ -29,8 +29,9 @@ type Props = {
   /** 选中某个目录作为浏览根 */
   onPick: (path: string) => void;
   /**
-   * 提交给设置页 action 的 intent，默认 `browse-webdav`（按账号那份配置）。
-   * 「周报上传」区块传 `browse-report-upload`——它用**统一账号**的配置去列目录，两者不能混。
+   * 提交给设置页 action 的 intent，默认 `browse-webdav`（用**表单当前值**那份按账号配置去连）。
+   * 「周报上传」区块传 `browse-report-upload`——那里没有表单凭据，服务端一律用**共用连接**
+   * （管理员在「WebDAV 连接」里保存的那份），两者不能混。
    */
   intent?: string;
   /** Drawer 标题，默认「选择浏览根目录」 */
@@ -186,9 +187,7 @@ export function WebDavDirPicker({
           pagination={false}
           scroll={{ y: 360 }}
           locale={{
-            emptyText: (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={loading ? "读取中" : "这个目录下没有子目录，可以直接选择它"} />
-            ),
+            emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={loading ? "读取中" : "没有子目录，可直接选择此目录"} />,
           }}
         />
       </Flex>

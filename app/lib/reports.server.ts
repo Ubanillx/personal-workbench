@@ -274,6 +274,7 @@ export async function createReport(user: User, upload: Upload): Promise<ServiceR
   let stored: { storedName: string; size: number };
   try {
     stored = await uploadReportFile({
+      orgId: owner.orgId,
       username: user.username,
       periodStart,
       periodEnd,
@@ -425,6 +426,7 @@ export async function reuploadReport(user: User, target: ScopedReport, upload: U
   let stored: { storedName: string; size: number };
   try {
     stored = await uploadReportFile({
+      orgId: target.orgId,
       username: usernameOf(report.ownerId),
       periodStart: report.periodStart,
       periodEnd: report.periodEnd,

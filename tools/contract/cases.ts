@@ -862,8 +862,9 @@ export const CASES: ContractCase[] = [
   // ---------- 重要文件下载（D-49） ----------
   // 远端文件经服务端**流式代理**下载（GET /api/files/:id/download），边界与文件库一致：
   // 401 / 403 权限门槛、400 本机路径不可下载、503 本账号未配置 WebDAV、404 跨组织或不存在。
-  // 夹具账号没有 webdav_settings（真连远端会让用例依赖外部环境），所以这里录的是**确定**的失败面；
-  // 「上传 → 登记 → 下载」的闭环由 smoke:ui 用假 WebDAV 覆盖（同 reports.download 的口径）。
+  // 夹具里管理者 / 成员账号没有 `webdav_settings`（D-52 之后只有管理员那份是「周报上传共用连接」），
+  // 所以这里录的是**确定**的失败面；「上传 → 登记 → 下载」的闭环由 smoke:ui 用假 WebDAV 覆盖
+  // （同 reports.download 的口径）。
   { name: "files.download.anon", role: "anon", method: "GET", path: "/api/files/{{fileOne}}/download" },
   { name: "files.download.memberA", role: "memberA", method: "GET", path: "/api/files/{{fileOne}}/download" },
   { name: "files.download.local-path", role: "managerA", method: "GET", path: "/api/files/{{fileOne}}/download" },
@@ -872,13 +873,14 @@ export const CASES: ContractCase[] = [
   { name: "files.download.missing", role: "managerA", method: "GET", path: "/api/files/no-such-file/download" },
 
   // ---------- WebDAV 网关（可选接入）----------
-  // 契约夹具的账号**没有**配 WebDAV（也不该配：真连远端会让用例依赖外部环境），
-  // 所以这组用例录的是「权限门槛 + 未配置时的 503」这两件确定的事；
+  // 契约夹具里只有**管理员**配了 WebDAV（D-52：周报上传共用他那份连接），
+  // 所以这组用例录的是「权限门槛 + 管理者/成员未配置时的 503 + 管理员已配置时的空目录」；
   // 协议细节（PROPFIND 解析、路径越界、上传补建目录）由 test/webdav/client.test.ts 用本地假服务器覆盖。
   { name: "webdav.list.anon", role: "anon", method: "GET", path: "/api/webdav" },
   { name: "webdav.list.memberA", role: "memberA", method: "GET", path: "/api/webdav" },
   { name: "webdav.list.managerA.disabled", role: "managerA", method: "GET", path: "/api/webdav" },
-  { name: "webdav.list.admin.disabled", role: "admin", method: "GET", path: "/api/webdav?path=%E6%8A%A5%E4%BB%B7" },
+  // 管理员有连接，但假 NAS 上没有「报价」这个目录 → 200 + 空列表（不是 503）
+  { name: "webdav.list.admin.missing-dir", role: "admin", method: "GET", path: "/api/webdav?path=%E6%8A%A5%E4%BB%B7" },
   {
     name: "webdav.upload.memberA.disabled",
     role: "memberA",
@@ -951,6 +953,8 @@ export const CASES: ContractCase[] = [
   // ---------- 周报：上传、退回后重传、下载 ----------
   // 周报正文自 D-46 起只写 NAS（契约环境里是一个本地假 WebDAV），归属人**恒为提交者本人**：
   // 下面这些用例同时盯着「落点写在 NAS 上」与「ownerId 被忽略、代传已取消」两件事。
+  // 落点根目录自 D-53 起**按组织**：夹具给阿尔法配了 `/阿尔法`、贝塔不配（用连接的浏览根），
+  // 于是快照里能直接看到两个组织的 `storedName` 前缀不同。
   {
     name: "reports.create.memberA.upload",
     role: "memberA",

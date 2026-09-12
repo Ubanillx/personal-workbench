@@ -38,18 +38,18 @@ import {
   type OrgSuccess,
 } from "../lib/organization.server";
 import { requireManagerOrRedirect } from "../lib/ui.server";
+import { assertOrgManage } from "../lib/session.server";
 import {
-  clearReportUploadSettings,
   clearWebDavSettings,
   reportUploadSettingsView,
-  resolveReportUploadTestConfig,
+  resetReportUploadSettings,
   resolveWebDavTestConfig,
   saveReportUploadSettings,
   saveWebDavSettings,
   UNCONFIGURED_REPORT_UPLOAD_VIEW,
   webDavSettingsView,
 } from "../lib/webdav-settings.server";
-import { browseWithConfig, pingWebDav, webDavErrorMessage } from "../lib/webdav.server";
+import { browseWithConfig, pingWebDav, sharedConnectionConfig, webDavErrorMessage } from "../lib/webdav.server";
 
 /**
  * 设置页（docs/harness/ACCOUNTS_AND_ORGS.md §8）。
@@ -135,8 +135,13 @@ export async function loader({ request }: { request: Request }) {
     unassignedCount: allAccounts.filter((account) => account.orgId === null && account.role !== "admin").length,
     // WebDAV 连接配置是**按账号**的，管理员与组织管理者各自维护自己那份
     webdav: webDavSettingsView(user.id),
-    // 「周报上传」是**全局单行**配置（D-46）：只有管理员能看能改，其余角色拿到的是未配置视图
-    reportUpload: isAdmin ? reportUploadSettingsView() : UNCONFIGURED_REPORT_UPLOAD_VIEW,
+    // 「周报上传」的作用域是**当前组织**（D-53）：组织管理者配本组织，管理员可换组织；
+    // 没有可管理的组织（组织列表为空 / 本组织已解散）时给未配置视图
+    reportUpload: current ? reportUploadSettingsView(current) : UNCONFIGURED_REPORT_UPLOAD_VIEW,
+    // 管理员在「周报上传」卡里切换组织用；组织管理者固定为本组织，所以候选为空
+    reportOrgOptions: isAdmin
+      ? organizations.filter((org) => org.status === "active").map((org) => ({ value: org.id, label: org.name }))
+      : [],
   };
 }
 
@@ -225,52 +230,38 @@ export async function action({ request }: { request: Request }): Promise<ActionR
         return { error: webDavErrorMessage(error) };
       }
     }
-    // 「周报上传」是**全局单行**配置（D-46）：四个动作都必须再确认一次管理员身份——
-    // action 的统一门禁只到 manager，而这几个动作改的是所有人的周报落点。
+    // 「周报上传」是**按组织**的目录配置（D-53）：连接共用管理员那份（D-52），
+    // 组织管理者只能改本组织，管理员可改任意组织（`assertOrgManage` 就是这条规则）。
+    // 管理员的 orgId 来自表单（卡片里的组织选择器）；组织管理者由上面的统一口径固定成自己的组织。
     case "save-report-upload": {
-      if (!isAdmin) return { error: "只有管理员可以修改周报上传配置" };
-      const saved = saveReportUploadSettings(user.id, {
-        username: payload.username,
-        password: payload.password,
-        root: payload.root,
-        timeoutMs: payload.timeoutMs,
-      });
-      return saved.ok ? { ok: true, notice: "周报上传配置已保存" } : { error: saved.message };
+      if (!orgId) return { error: "请先选择要配置的组织" };
+      if (assertOrgManage(user, orgId)) return { error: "只能配置本组织的周报上传目录" };
+      const saved = saveReportUploadSettings(user.id, orgId, { root: payload.root });
+      return saved.ok ? { ok: true, notice: "周报上传目录已保存" } : { error: saved.message };
     }
-    case "clear-report-upload": {
-      if (!isAdmin) return { error: "只有管理员可以修改周报上传配置" };
-      clearReportUploadSettings();
-      return { ok: true, notice: "周报上传配置已清除：成员暂时无法提交周报" };
+    case "reset-report-upload": {
+      if (!orgId) return { error: "请先选择要配置的组织" };
+      if (assertOrgManage(user, orgId)) return { error: "只能配置本组织的周报上传目录" };
+      resetReportUploadSettings(orgId);
+      return { ok: true, notice: "已恢复默认：本组织的周报写到连接的浏览根目录下" };
     }
     case "test-report-upload": {
-      if (!isAdmin) return { error: "只有管理员可以测试周报上传配置" };
-      const prepared = resolveReportUploadTestConfig({
-        username: payload.username,
-        password: payload.password,
-        root: payload.root,
-        timeoutMs: payload.timeoutMs,
-      });
-      if (!prepared.ok) return { error: prepared.message };
+      const config = sharedConnectionConfig();
+      if (!config) return { error: "还没有可用的 WebDAV 连接：请先在上面「WebDAV 连接」里保存一次" };
       try {
-        await pingWebDav(prepared.config);
-        const target = `${prepared.config.url}${prepared.config.root === "/" ? "" : prepared.config.root}`;
+        await pingWebDav(config);
+        const target = `${config.url}${config.root === "/" ? "" : config.root}`;
         return { ok: true, notice: `连接成功：${target}` };
       } catch (error) {
         return { error: webDavErrorMessage(error) };
       }
     }
-    // 与 `browse-webdav` 同一件事，只是用**统一上传账号**的表单值去连
+    // 与 `browse-webdav` 同一件事，只是用**共用连接**（管理员那份）去列目录：与组织无关
     case "browse-report-upload": {
-      if (!isAdmin) return { error: "只有管理员可以选择周报上传目录" };
-      const prepared = resolveReportUploadTestConfig({
-        username: payload.username,
-        password: payload.password,
-        root: payload.root,
-        timeoutMs: payload.timeoutMs,
-      });
-      if (!prepared.ok) return { error: prepared.message };
+      const config = sharedConnectionConfig();
+      if (!config) return { error: "还没有可用的 WebDAV 连接：请先在上面「WebDAV 连接」里保存一次" };
       try {
-        return { ok: true, browse: await browseWithConfig(prepared.config, String(payload.path ?? "")) };
+        return { ok: true, browse: await browseWithConfig(config, String(payload.path ?? "")) };
       } catch (error) {
         return { error: webDavErrorMessage(error) };
       }
@@ -340,6 +331,8 @@ export default function SettingsRoute(): React.ReactElement {
         <WebDavTab
           settings={data.webdav}
           reportUpload={data.reportUpload}
+          reportOrgOptions={data.reportOrgOptions}
+          onSelectOrg={(orgId) => patchParams({ org: orgId })}
           isAdmin={data.isAdmin}
           post={post}
           busy={busy}
@@ -390,8 +383,8 @@ export default function SettingsRoute(): React.ReactElement {
       <PageHeader
         title="设置"
         eyebrow="SETTINGS"
-        description={data.isAdmin ? "管理全部组织、成员与账号，审批加入与退出申请。" : "管理本组织成员，审批加入与退出申请。"}
-        help="未加入组织的账号需先被拉入组织，才能访问业务页面。"
+        description={data.isAdmin ? "管理组织、成员与账号。" : "管理本组织成员。"}
+        help="账号加入组织后才能访问业务页面。"
         extra={
           <Button icon={<ReloadOutlined />} onClick={() => void revalidator.revalidate()} loading={busy}>
             刷新

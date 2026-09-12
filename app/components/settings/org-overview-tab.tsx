@@ -117,7 +117,7 @@ export function OrgOverviewTab({ organizations, post, busy, error, successTick, 
                   onClick: () =>
                     confirmDanger(modal, {
                       title: `解散组织「${org.name}」？`,
-                      content: "成员会被退回未加入状态，数据保留但不可访问；之后只有管理员能恢复。",
+                      content: "成员将退回「未加入」，数据保留；仅管理员可恢复。",
                       okText: "解散",
                       onOk: () => post({ intent: "archive", orgId: org.id }),
                     }),
@@ -181,10 +181,10 @@ export function OrgOverviewTab({ organizations, post, busy, error, successTick, 
         }}
       >
         <AntdForm.Item name="name" label="组织名称" rules={[{ required: true, message: "请输入组织名称" }]}>
-          <Input maxLength={40} showCount placeholder="2-40 个字符，例如：华东销售组" />
+          <Input maxLength={40} showCount placeholder="2-40 个字符" />
         </AntdForm.Item>
         <AntdForm.Item name="description" label="组织说明">
-          <Input.TextArea rows={3} maxLength={200} showCount placeholder="可选：这个组织负责什么" />
+          <Input.TextArea rows={3} maxLength={200} showCount placeholder="可选，简述职责" />
         </AntdForm.Item>
       </FormDrawer>
 

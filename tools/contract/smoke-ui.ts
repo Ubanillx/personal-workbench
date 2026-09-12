@@ -313,36 +313,63 @@ async function main(): Promise<void> {
     );
 
     // WebDAV 配置按账号走：管理员与组织管理者都能打开这个 Tab（D-43）；
-    // 「周报上传」是全局单行配置（D-46），只有管理员能看到那张卡
+    // 「周报上传」卡的作用域是**一个组织**（D-53）：组织管理者配本组织，管理员可换组织。
+    // 这张卡**不回显连接信息**——它就显示在正上方那张卡里，重复一遍属于信息层级错误。
     const settingsWebdavHtml = await pageHtml("/settings?tab=webdav", cookie);
     check(
       "管理员 /settings?tab=webdav 渲染出 WebDAV 配置表单",
       settingsWebdavHtml.includes("WebDAV 地址") && settingsWebdavHtml.includes("测试连接"),
     );
     check(
-      "管理员能看到「周报上传」配置卡（统一账号 + 上传根目录）",
-      settingsWebdavHtml.includes("周报上传") && settingsWebdavHtml.includes("上传根目录") && settingsWebdavHtml.includes("统一上传账号"),
+      "管理员能看到「周报上传」配置卡（上传根目录 + 组织，不填账号密码、也不回显连接）",
+      settingsWebdavHtml.includes("周报上传") &&
+        settingsWebdavHtml.includes("上传根目录") &&
+        !settingsWebdavHtml.includes("统一上传账号") &&
+        !settingsWebdavHtml.includes("共用连接"),
+    );
+    check(
+      "管理员这张卡默认落在第一个组织上（阿尔法组）",
+      settingsWebdavHtml.includes("周报上传") && settingsWebdavHtml.includes("阿尔法组"),
+    );
+    check("夹具里管理员那份连接就是周报用的连接 → 周报上传开箱可用", settingsWebdavHtml.includes("已启用"));
+
+    // 「周报上传」的保存 / 恢复默认链路（页面 action，D-53）——组织管理者上线后点的第一步。
+    // 这张卡只改目录：连接用上面那份，作用域是当前组织（管理员的 orgId 由卡片里的选择器带上）。
+    const uploadConfig = { intent: "save-report-upload", orgId: IDS.orgAlpha, root: "/周报" };
+    const savedUpload = await pagePost("/settings?tab=webdav", uploadConfig, cookie, true);
+    check("管理员保存本组织的「周报上传」目录成功（action 返回页面）", savedUpload.includes("周报上传目录已保存"));
+    check("保存后「周报上传」回填所选目录", (await pageHtml("/settings?tab=webdav", cookie)).includes('value="/周报"'));
+    const resetUpload = await pagePost("/settings?tab=webdav", { intent: "reset-report-upload", orgId: IDS.orgAlpha }, cookie, true);
+    check("管理员恢复默认上传目录成功", resetUpload.includes("已恢复默认"));
+    const resetUploadHtml = await pageHtml("/settings?tab=webdav", cookie);
+    check(
+      "恢复默认后目录清空、卡片仍为已启用（默认即用连接的浏览根目录）",
+      resetUploadHtml.includes("已启用") &&
+        resetUploadHtml.includes("留空则使用连接的浏览根目录") &&
+        !resetUploadHtml.includes('value="/周报"'),
     );
 
-    // 「周报上传」的保存 / 清除链路（页面 action，D-46）——这是管理员上线后点的第一步，必须验到
-    const uploadConfig = { intent: "save-report-upload", username: "", password: "", root: "/周报", timeoutMs: "15000" };
-    const savedUpload = await pagePost("/settings?tab=webdav", uploadConfig, cookie, true);
-    check("管理员保存「周报上传」配置成功（action 返回页面）", savedUpload !== "");
-    check("保存后「周报上传」显示已启用", (await pageHtml("/settings?tab=webdav", cookie)).includes("已启用"));
-    const clearedUpload = await pagePost("/settings?tab=webdav", { intent: "clear-report-upload" }, cookie, true);
-    check("管理员清除「周报上传」配置成功", clearedUpload !== "");
-    check("清除后提示周报上传尚未配置", (await pageHtml("/settings?tab=webdav", cookie)).includes("周报上传还没配置"));
-    // 还原配置，避免影响后面的断言（周报页的存储状态）
-    await pagePost("/settings?tab=webdav", uploadConfig, cookie, true);
+    // 目录按组织分开（D-53）：管理员给贝塔组配一个，阿尔法组的页面**不该**跟着变
+    const betaConfig = { intent: "save-report-upload", orgId: IDS.orgBeta, root: "/贝塔周报" };
+    check("管理员可以给指定组织保存目录", (await pagePost(`/settings?tab=webdav&org=${IDS.orgBeta}`, betaConfig, cookie, true)) !== "");
+    const betaHtml = await pageHtml(`/settings?tab=webdav&org=${IDS.orgBeta}`, cookie);
+    const alphaHtml = await pageHtml(`/settings?tab=webdav&org=${IDS.orgAlpha}`, cookie);
+    check("贝塔组的页面上能看到刚保存的目录", betaHtml.includes('value="/贝塔周报"'));
+    check("阿尔法组的页面看不到贝塔组的目录（各组织各一份）", !alphaHtml.includes('value="/贝塔周报"'));
 
     // 「重要文件」的 WebDAV 通道（D-41 / D-48）：按账号保存凭据后才亮起；
     // 新建/编辑抽屉里的「选择文件」与页头的「浏览 WebDAV」都依赖它（SSR 只验证入口与说明文案，
-    // 抽屉里的浏览 / 选择是客户端交互，运行时验证仍缺——见 DEBT-16 / TODO-12）
+    // 抽屉里的浏览 / 选择是客户端交互，运行时验证仍缺——见 DEBT-16 / TODO-12）。
+    // 夹具给管理员预置了连接（周报上传要用它），所以先清掉验证「未保存」那一侧的降级，
+    // 保存回来再验证「已保存」那一侧——顺带把 clear / save 两条 action 都走一遍。
+    const clearedWebdav = await pagePost("/settings?tab=webdav", { intent: "clear-webdav" }, cookie, true);
+    check("管理员清除本账号 WebDAV 凭据成功", clearedWebdav !== "");
     const filesBeforeWebdav = await pageHtml("/files", cookie);
     check(
       "本账号未保存 WebDAV 凭据时 /files 只有「配置 WebDAV」，没有远端入口",
       !filesBeforeWebdav.includes("浏览 WebDAV") && filesBeforeWebdav.includes("配置 WebDAV"),
     );
+    check("清掉连接后「周报上传」提示先保存连接", (await pageHtml("/settings?tab=webdav", cookie)).includes("未配置 WebDAV 连接"));
     const savedWebdav = await pagePost(
       "/settings?tab=webdav",
       { intent: "save-webdav", username: "", password: "", root: "/", timeoutMs: "15000" },
@@ -391,9 +418,8 @@ async function main(): Promise<void> {
     const filesWithDownload = await pageHtml("/files", cookie);
     check("远端条目在列表里有「下载」入口（本机条目没有）", filesWithDownload.includes('aria-label="下载"'));
 
-    const clearedWebdav = await pagePost("/settings?tab=webdav", { intent: "clear-webdav" }, cookie, true);
-    check("管理员清除本账号 WebDAV 凭据成功", clearedWebdav !== "");
-    check("清除后 /files 回到「配置 WebDAV」", (await pageHtml("/files", cookie)).includes("配置 WebDAV"));
+    // 这里**不再**清掉管理员的连接：D-52 之后它就是「周报上传」共用的那份，
+    // 清掉会让后面所有涉及周报正文的检查整体 503。「清除 → 降级」那一侧已在上面验过。
 
     const manager = await loginAs(base, ACCOUNTS.managerA);
     const managerSettings = await fetch(`${base}/settings`, { headers: { cookie: manager.cookie }, redirect: "manual" });
@@ -415,10 +441,30 @@ async function main(): Promise<void> {
     );
     const managerWebdavHtml = await pageHtml("/settings?tab=webdav", manager.cookie);
     check(
-      "组织管理者也能打开 WebDAV 配置 Tab（配置按账号走）",
+      "组织管理者也能打开 WebDAV 配置 Tab（本账号连接按账号走）",
       managerWebdavHtml.includes("WebDAV 地址") && !managerWebdavHtml.includes("组织总览"),
     );
-    check("组织管理者看不到「周报上传」全局配置卡", !managerWebdavHtml.includes("统一上传账号"));
+    // 「周报上传」按组织配置（D-53）：组织管理者看得到、改得动**本组织**那一份
+    check(
+      "组织管理者能看到「周报上传」卡，且作用域是自己的组织（阿尔法组）",
+      managerWebdavHtml.includes("周报上传") && managerWebdavHtml.includes("阿尔法组"),
+    );
+    const managerUpload = await pagePost(
+      "/settings?tab=webdav",
+      { intent: "save-report-upload", root: "/阿尔法周报" },
+      manager.cookie,
+      true,
+    );
+    check("组织管理者保存本组织的「周报上传」目录成功", managerUpload !== "");
+    check("保存后本组织页面回填所选目录", (await pageHtml("/settings?tab=webdav", manager.cookie)).includes('value="/阿尔法周报"'));
+    // 组织管理者传别人的 orgId 不生效：action 只用会话里的组织（与其它设置动作同一口径）
+    await pagePost("/settings?tab=webdav", { intent: "save-report-upload", orgId: IDS.orgBeta, root: "/冒充贝塔" }, manager.cookie, true);
+    const betaAfterManager = await pageHtml(`/settings?tab=webdav&org=${IDS.orgBeta}`, cookie);
+    check("组织管理者改不动别的组织：贝塔组的目录没被写成 /冒充贝塔", !betaAfterManager.includes('value="/冒充贝塔"'));
+    check(
+      "那条请求落回了组织管理者自己的组织（orgId 被忽略）",
+      (await pageHtml("/settings?tab=webdav", manager.cookie)).includes('value="/冒充贝塔"'),
+    );
 
     const member = await loginAs(base, ACCOUNTS.memberA);
     const settingsByMember = await fetch(`${base}/settings`, { headers: { cookie: member.cookie }, redirect: "manual" });

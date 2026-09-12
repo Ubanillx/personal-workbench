@@ -4,15 +4,15 @@ import { appConfig } from "./context.server";
 import { db, now, one, run } from "./db.server";
 
 /**
- * WebDAV 连接配置的持久化与校验。这里管**两份**配置，用途不同、互不影响：
+ * WebDAV 配置的持久化与校验。这里管**一份连接 + 一个目录**：
  *
- * 1. **「重要文件」（按账号，地址部署级）**：地址来自环境变量 `WEBDAV_URL`（部署级、只读），
+ * 1. **连接（按账号，地址部署级）**：地址来自环境变量 `WEBDAV_URL`（部署级、只读），
  *    用户名 / 密码 / 浏览根目录 / 超时按账号存在 `webdav_settings` 里，在 `/settings?tab=webdav` 维护；
- * 2. **「周报上传」（全局单行，D-46）**：周报正文只写 NAS，用**一个统一账号**，
- *    存在单行表 `report_upload_settings` 里，同一个设置页的「周报上传」区块维护（仅管理员）。
+ * 2. **周报上传目录（全局单行，D-52）**：周报正文**共用管理员那份连接**（`sharedWebDavConnection`），
+ *    这里只额外记住「上传根目录」——默认空串 = 跟随连接自己的浏览根目录。
  *
  * 边界：
- * - `password` 两份都是明文入库（Basic 认证需要原文），且**只进 `Authorization` 头**；
+ * - `password` 明文入库（Basic 认证需要原文），且**只进 `Authorization` 头**；
  *   经 `webDavSettingsView` / `reportUploadSettingsView` 对外只暴露 `hasPassword`；
  * - 地址不允许内嵌账号密码（避免地址出现在日志/页面里时顺带泄露凭据）；
  * - 这里只负责「读写 + 校验」，不发任何网络请求；连通性探针在 `webdav.server.ts`。
@@ -267,47 +267,56 @@ export function resolveWebDavTestConfig(
   }
 }
 
-/* ------------------------------------------------------------------ 周报上传（全局单行，D-46） */
+/* ------------------------------------------------------------------ 周报上传目录（按组织，D-53） */
 
 /**
- * 周报正文的落点与配置（完整设计见 docs/harness/REPORTS_WEBDAV.md）。
+ * 周报/总结正文的落点与配置（完整设计见 docs/harness/REPORTS_WEBDAV.md）。
  *
- * 与上面那份**按账号**的配置有三点不同：
- * 1. **全局一行**（`report_upload_settings`，主键固定为 1）：谁交周报都写同一个远端目录；
- * 2. **统一账号**：普通成员不需要、也不该去配 NAS 凭据，凭据由管理员维护；
- * 3. **上传根目录**是这份配置的核心字段，落点为 `<根>/<用户名>/<起止日期>/<文件名>`。
+ * 这一段回答两个问题：**用哪份连接**、**写进哪个目录**。
  *
- * 地址依旧来自 `WEBDAV_URL`（D-44），两份配置共用同一个地址、不同的账号。
+ * 1. **连接共用管理员那份**（D-52）：`webdav_settings` 里 `role='admin'` 的账号（多个管理员取最近
+ *    保存的）——文件用同一个 NAS 账号写，所以同一台 NAS 只填一遍账号密码；
+ * 2. **目录按组织**（D-53）：`report_upload_settings` 一行一个组织，配置权归**该组织的管理者**
+ *    （管理员可配任意组织）。组织之间靠**目录**分开：这是这条链路唯一的组织差异；
+ * 3. **默认用连接的浏览根目录**：组织那一行不存在、或 `root` 是空串就等于「没另外挑过」，
+ *    于是「没配也能交周报」，不会因为少配一项就 503；
+ * 4. 落点自 D-46 起没变：`<上传根目录>/<登录用户名>/<起止日期>/<文件名>`。
  */
 
-/** 周报上传的默认根目录（表单留空时也用它） */
-export const DEFAULT_REPORT_ROOT = "/周报";
+/** 上传根目录的默认值：空串 = 用共用连接的浏览根目录 */
+export const DEFAULT_REPORT_ROOT = "";
 
 /**
- * 未配置时的视图：非管理员拿到的就是它——「周报上传」卡片只对管理员渲染，
+ * 没有「当前组织」时的视图：设置页里管理员的组织列表为空、或组织管理者的组织已解散时拿到它。
  * 交给页面一个形状完整的空视图，比在组件里到处判空干净。
  */
 export const UNCONFIGURED_REPORT_UPLOAD_VIEW: ReportUploadSettingsView = {
-  configured: false,
-  username: "",
-  root: DEFAULT_REPORT_ROOT,
-  timeoutMs: DEFAULT_TIMEOUT_MS,
-  hasPassword: false,
+  orgId: null,
+  orgName: null,
+  connectionReady: false,
+  followsConnection: true,
+  ownRoot: DEFAULT_REPORT_ROOT,
+  root: "",
   updatedByName: null,
   updatedAt: null,
 };
 
-/** 单行表的固定主键：`CHECK (id = 1)` 保证这张表最多一行 */
-const REPORT_UPLOAD_ROW_ID = 1;
+/** 库里存下来的某个组织的周报上传配置：只有「另外挑过的目录」（空串 = 用连接的浏览根） */
+export type ReportUploadSettings = { root: string };
 
-/** 库里存下来的周报上传配置（与按账号那份同形：都不含地址） */
-export type ReportUploadSettings = StoredWebDavSettings;
+/** 共用的 WebDAV 连接：管理员那份凭据，以及它是谁的 */
+export type SharedWebDavConnection = {
+  ownerId: string;
+  /** 保存这份连接的管理员名字（日志与排障用） */
+  ownerName: string;
+  config: WebDavSettings;
+};
 
-/** 生效的周报上传配置（部署级地址 + 单行凭据） */
+/** 生效的周报上传配置（共用连接 + 生效的上传根目录） */
 export type ResolvedReportUploadConfig = WebDavSettings & { enabled: boolean };
 
-/** 未配置时的空值（页面回填与默认值用） */
-const UNCONFIGURED_REPORT_UPLOAD: ReportUploadSettings = {
+/** 未配置时的空值（解析失败时兜底用）：没有生效目录，所以 `root` 是空串 */
+const UNCONFIGURED_REPORT_UPLOAD: StoredWebDavSettings = {
   username: "",
   password: "",
   root: DEFAULT_REPORT_ROOT,
@@ -316,139 +325,142 @@ const UNCONFIGURED_REPORT_UPLOAD: ReportUploadSettings = {
 
 type ReportUploadRow = ReportUploadSettings & { updatedByName: string | null; updatedAt: string | null };
 
-/** 读单行配置；没有这一行返回 null（= 周报存储未配置） */
-function readReportUploadRow(): ReportUploadRow | null {
+/**
+ * 共用的 WebDAV 连接 = `webdav_settings` 里**管理员账号**保存的那一份。
+ *
+ * 为什么是「最近保存的那份」而不是某个固定账号：管理员可能有多个人，谁最近动过配置就以谁为准；
+ * 排序里带上 `user_id` 只是为了让结果稳定可测（同一时间戳也不会来回跳）。
+ *
+ * 地址没配好、或还没有任何管理员保存过连接 → 返回 null（= 周报上传/下载 503）。
+ */
+export function sharedWebDavConnection(): SharedWebDavConnection | null {
+  const { url } = webDavAddress();
+  if (!url) return null;
   const row = one<Record<string, unknown>>(
     db(),
-    `SELECT s.username AS username,s.password AS password,s.root AS root,s.timeout_ms AS timeoutMs,
-            s.updated_at AS updatedAt,u.name AS updatedByName
-       FROM report_upload_settings s LEFT JOIN users u ON u.id = s.updated_by
-      WHERE s.id=?`,
-    REPORT_UPLOAD_ROW_ID,
+    `SELECT s.user_id AS ownerId,s.username AS username,s.password AS password,s.root AS root,
+            s.timeout_ms AS timeoutMs,u.name AS ownerName
+       FROM webdav_settings s JOIN users u ON u.id = s.user_id
+      WHERE u.role='admin'
+      ORDER BY s.updated_at DESC, s.user_id ASC
+      LIMIT 1`,
   );
   if (!row) return null;
   return {
-    username: String(row.username ?? ""),
-    password: String(row.password ?? ""),
+    ownerId: String(row.ownerId),
+    ownerName: String(row.ownerName ?? ""),
+    config: {
+      url,
+      username: String(row.username ?? ""),
+      password: String(row.password ?? ""),
+      root: String(row.root ?? DEFAULT_ROOT),
+      timeoutMs: Number(row.timeoutMs ?? DEFAULT_TIMEOUT_MS),
+    },
+  };
+}
+
+/** 读某个组织的目录配置；没有这一行返回 null（= 没另外挑过，按「用连接的浏览根」处理） */
+function readReportUploadRow(orgId: string): ReportUploadRow | null {
+  const row = one<Record<string, unknown>>(
+    db(),
+    `SELECT s.root AS root,s.updated_at AS updatedAt,u.name AS updatedByName
+       FROM report_upload_settings s LEFT JOIN users u ON u.id = s.updated_by
+      WHERE s.org_id=?`,
+    orgId,
+  );
+  if (!row) return null;
+  return {
     root: String(row.root ?? DEFAULT_REPORT_ROOT),
-    timeoutMs: Number(row.timeoutMs ?? DEFAULT_TIMEOUT_MS),
     updatedByName: row.updatedByName == null ? null : String(row.updatedByName),
     updatedAt: row.updatedAt == null ? null : String(row.updatedAt),
   };
 }
 
-/** 周报上传是否已接入：**地址配好** 且 **单行配置存在**（两个条件缺一不可，与按账号那份同一口径） */
-export function resolveReportUploadConfig(): ResolvedReportUploadConfig {
-  const { url } = webDavAddress();
-  const stored = readReportUploadRow();
-  if (!url || !stored) return { url: "", ...UNCONFIGURED_REPORT_UPLOAD, enabled: false };
-  const { username, password, root, timeoutMs } = stored;
-  return { url, username, password, root, timeoutMs, enabled: true };
+/**
+ * 某个组织**生效**的上传根目录：组织自己挑过就用它，否则用**共用连接的浏览根目录**。
+ *
+ * `orgId` 为空（未入组的账号）时同样回落到连接的浏览根：那种账号本来就提交不了周报
+ * （`reports.server.ts` 先给 403），这里只是防御性兜底，不额外造一种失败态。
+ */
+export function reportUploadRootFor(orgId: string | null | undefined): string {
+  const connection = sharedWebDavConnection();
+  if (!connection) return "";
+  const own = orgId ? String(readReportUploadRow(orgId)?.root ?? "").trim() : "";
+  return own || connection.config.root || DEFAULT_ROOT;
 }
 
-/** 设置页「周报上传」区块的视图（不含密码，只给 `hasPassword`） */
-export function reportUploadSettingsView(): ReportUploadSettingsView {
-  const address = webDavAddress();
-  const stored = readReportUploadRow();
+/**
+ * 周报存储是否可用：**地址配好** 且 **有管理员保存过连接**——与组织无关。
+ * 成员能不能交周报只看这一条；「本组织还没挑目录」不是失败态，只是用连接的浏览根。
+ */
+export function reportUploadAvailable(): boolean {
+  return sharedWebDavConnection() !== null;
+}
+
+/** 上传用的完整配置：共用连接 + **该组织**生效的上传根目录（下载只用连接，不需要组织） */
+export function resolveReportUploadConfig(orgId: string | null | undefined): ResolvedReportUploadConfig {
+  const connection = sharedWebDavConnection();
+  if (!connection) return { url: "", ...UNCONFIGURED_REPORT_UPLOAD, enabled: false };
+  return { ...connection.config, root: reportUploadRootFor(orgId), enabled: true };
+}
+
+/**
+ * 设置页「周报上传」区块的视图：作用域是**一个组织**（管理员可换组织，组织管理者固定为本组织）。
+ * 组织为 null 时给出形状完整的空视图，页面据此提示「先选一个组织」。
+ */
+export function reportUploadSettingsView(org: { id: string; name: string } | null): ReportUploadSettingsView {
+  const row = org ? readReportUploadRow(org.id) : null;
+  const ownRoot = String(row?.root ?? "");
   return {
-    configured: Boolean(address.url) && stored !== null,
-    username: stored?.username ?? "",
-    root: stored?.root ?? DEFAULT_REPORT_ROOT,
-    timeoutMs: stored?.timeoutMs ?? DEFAULT_TIMEOUT_MS,
-    hasPassword: Boolean(stored?.password),
-    updatedByName: stored?.updatedByName ?? null,
-    updatedAt: stored?.updatedAt ?? null,
+    orgId: org?.id ?? null,
+    orgName: org?.name ?? null,
+    connectionReady: reportUploadAvailable(),
+    followsConnection: ownRoot.trim() === "",
+    ownRoot,
+    root: org ? reportUploadRootFor(org.id) : "",
+    updatedByName: row?.updatedByName ?? null,
+    updatedAt: row?.updatedAt ?? null,
   };
 }
 
 /**
- * 保存周报上传配置（存在则更新，不存在则插入那一行）。
+ * 保存某个组织的上传目录（存在则更新，不存在则插入那一行）。
  *
- * 三条与按账号那份一致的规矩：
- * - **密码留空 = 保持原密码**（页面不回填密码，留空是常态，不能因此把密码清掉）；
- * - 地址没配好直接拒绝，避免存下一行永远不会生效的配置；
- * - 根目录留空按默认 `/周报` 处理（`normalizeWebDavRoot("")` 会给出服务根 `/`，
- *   那会把周报直接铺在 NAS 根目录下，不是这里想要的语义）。
+ * **留空 = 用共用连接的浏览根目录**：不能用 `normalizeWebDavRoot("")` 表达这件事——
+ * 它给的是服务根 `/`（「永远落在 NAS 根」），而这里要的是「连接的目录」。
+ * 权限（谁能改哪个组织）由调用方用 `assertOrgManage` 判定，这里只管数据。
  */
-export function saveReportUploadSettings(userId: string, input: WebDavSettingsInput): WebDavSettingsSaveResult {
+export function saveReportUploadSettings(userId: string, orgId: string, input: { root?: unknown }): WebDavSettingsSaveResult {
   const address = webDavAddress();
   if (address.error) return { ok: false, message: `${address.error}（改 .env 里的 WEBDAV_URL 后重启服务）` };
   if (!address.url) return { ok: false, message: "还没配置 WebDAV 地址：请在 .env 里设置 WEBDAV_URL 后重启服务" };
+  const org = one<{ status: string }>(db(), "SELECT status FROM organizations WHERE id=?", orgId);
+  if (!org) return { ok: false, message: "组织不存在" };
+  if (String(org.status) !== "active") return { ok: false, message: "组织已解散：不需要再配置周报上传目录" };
 
   let root: string;
-  let timeoutMs: number;
   try {
     const rawRoot = String(input.root ?? "").trim();
     root = rawRoot ? normalizeWebDavRoot(rawRoot) : DEFAULT_REPORT_ROOT;
-    timeoutMs = normalizeWebDavTimeout(input.timeoutMs);
   } catch (error) {
-    return { ok: false, message: error instanceof Error ? error.message : "周报上传配置不合法" };
+    return { ok: false, message: error instanceof Error ? error.message : "周报上传目录不合法" };
   }
-  const existing = readReportUploadRow();
-  const username = String(input.username ?? "").trim();
-  const password = typeof input.password === "string" && input.password !== "" ? input.password : (existing?.password ?? "");
   const stamp = now();
+  const existing = readReportUploadRow(orgId);
   if (existing) {
-    run(
-      db(),
-      "UPDATE report_upload_settings SET username=?,password=?,root=?,timeout_ms=?,updated_by=?,updated_at=? WHERE id=?",
-      username,
-      password,
-      root,
-      timeoutMs,
-      userId,
-      stamp,
-      REPORT_UPLOAD_ROW_ID,
-    );
+    run(db(), "UPDATE report_upload_settings SET root=?,updated_by=?,updated_at=? WHERE org_id=?", root, userId, stamp, orgId);
   } else {
-    run(
-      db(),
-      "INSERT INTO report_upload_settings(id,username,password,root,timeout_ms,updated_by,updated_at) VALUES(?,?,?,?,?,?,?)",
-      REPORT_UPLOAD_ROW_ID,
-      username,
-      password,
-      root,
-      timeoutMs,
-      userId,
-      stamp,
-    );
+    run(db(), "INSERT INTO report_upload_settings(org_id,root,updated_by,updated_at) VALUES(?,?,?,?)", orgId, root, userId, stamp);
   }
   return { ok: true };
 }
 
 /**
- * 清除周报上传配置：整行删掉，回到「周报存储未配置」。
- * 影响面比按账号那份大得多——此后**所有人的**周报上传与新式记录的下载都会 503，
- * 所以设置页把它做成二次确认，并在文案里写清楚。
+ * 恢复默认：删掉这个组织那一行，上传根目录回到「用共用连接的浏览根目录」。
+ *
+ * 与 D-46 的「清除配置」不同，这一步**不会**让周报上传失效——连接是共用的那份，
+ * 删掉的只是「本组织另外挑过的目录」，所以设置页不需要二次确认式的恐吓文案。
  */
-export function clearReportUploadSettings(): void {
-  run(db(), "DELETE FROM report_upload_settings WHERE id=?", REPORT_UPLOAD_ROW_ID);
-}
-
-/**
- * 「测试连接」用：地址取环境变量 + 表单当前值（密码留空则用已存的那份），**不落库**。
- * 与按账号那份的唯一区别是「已存密码」的来源是单行表而不是本账号。
- */
-export function resolveReportUploadTestConfig(
-  input: WebDavSettingsInput,
-): { ok: true; config: WebDavSettings } | { ok: false; message: string } {
-  const address = webDavAddress();
-  if (address.error) return { ok: false, message: address.error };
-  if (!address.url) return { ok: false, message: "还没配置 WebDAV 地址：请在 .env 里设置 WEBDAV_URL 后重启服务" };
-  try {
-    const existing = readReportUploadRow();
-    const rawRoot = String(input.root ?? "").trim();
-    return {
-      ok: true,
-      config: {
-        url: address.url,
-        username: String(input.username ?? "").trim(),
-        password: typeof input.password === "string" && input.password !== "" ? input.password : (existing?.password ?? ""),
-        root: rawRoot ? normalizeWebDavRoot(rawRoot) : DEFAULT_REPORT_ROOT,
-        timeoutMs: normalizeWebDavTimeout(input.timeoutMs),
-      },
-    };
-  } catch (error) {
-    return { ok: false, message: error instanceof Error ? error.message : "周报上传配置不合法" };
-  }
+export function resetReportUploadSettings(orgId: string): void {
+  run(db(), "DELETE FROM report_upload_settings WHERE org_id=?", orgId);
 }

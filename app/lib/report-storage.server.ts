@@ -1,27 +1,31 @@
 import { WEBDAV_PATH_PREFIX } from "../../shared/types/domain";
 import { WebDavError, type WebDavClient } from "../../server/src/webdav/client";
-import { reportUploadClient, webDavErrorMessage } from "./webdav.server";
-import { resolveReportUploadConfig } from "./webdav-settings.server";
+import { reportStorageClient, webDavErrorMessage } from "./webdav.server";
+import { reportUploadRootFor } from "./webdav-settings.server";
 
 /**
- * 周报正文的**远端存储层**（D-46，完整设计见 docs/harness/REPORTS_WEBDAV.md）。
+ * 周报正文的**远端存储层**（D-46 立项 / D-52 共用连接 / D-53 目录按组织，设计见 docs/harness/REPORTS_WEBDAV.md）。
  *
  * 一句话规则：正文只写 NAS，落点为
  *
- *   <上传根目录>/<登录用户名>/<period_start>_<period_end>/<原文件名>
+ *   <本组织的上传根目录>/<登录用户名>/<period_start>_<period_end>/<原文件名>
+ *
+ * **连接**是管理员那份（`webdav.server.ts` 的 `reportStorageClient`），
+ * **目录**由周报所属组织的管理者配置（没配就用连接的浏览根目录）——
+ * 所以上传要带 `orgId`，下载不用：`stored_name` 里已经是含目录的完整路径。
  *
  * 本模块只做三件事，别的都不管（组织隔离、审批状态机留在 `reports.server.ts`）：
  * 1. **命名**：把「用户名 + 周期 + 原文件名」拼成远端路径，并做路径段清洗；
  * 2. **写入**：撞名时按后缀递增（`_2` / `_v2`），**绝不覆盖**远端已有文件；
  * 3. **读出**：给下载路由开一个流，不把整份文件读进内存。
  *
- * 为什么路径里存的是**含上传根目录的完整路径**（`webdav:/周报/…`）而不是「相对上传根」：
- * 管理员日后改了「上传根目录」，老周报仍然指向它当年所在的目录、照样能下载；
+ * 为什么路径里存的是**含上传根目录的完整路径**（`webdav:/阿尔法/zhangsan/…`）而不是「相对上传根」：
+ * 组织日后改了目录，老周报仍然指向它当年所在的目录、照样能下载；
  * 代价是新旧文件会分处两个目录（见设计文档 §11.3）。
  */
 
 /** 未配置时统一给出的提示：读者是普通成员，不能把他们指去一个进不去的设置页 */
-export const REPORT_STORAGE_DISABLED_MESSAGE = "周报存储未配置：请联系管理员在「设置 → WebDAV」里配置周报上传";
+export const REPORT_STORAGE_DISABLED_MESSAGE = "周报存储未配置：请联系管理员在「设置 → WebDAV」保存一次连接";
 
 /** 撞名时最多试探多少个后缀（`_2` … `_21`），超出就报错而不是无限试下去 */
 const MAX_NAME_ATTEMPTS = 20;
@@ -134,6 +138,8 @@ export function remotePathOf(storedName: string): string {
 /* ------------------------------------------------------------------ 写入 */
 
 export type ReportUploadInput = ReportPeriod & {
+  /** 周报所属组织：决定写进哪个上传根目录（D-53） */
+  orgId: string;
   /** 用户上传时的原始文件名（只取最后一段，并做清洗） */
   originalName: string;
   /** 该文件在 `report_files` 里的版本号（决定 `_v{n}` 后缀） */
@@ -151,13 +157,13 @@ export type ReportUploadResult = {
 };
 
 function storageClient(): WebDavClient {
-  const client = reportUploadClient();
+  const client = reportStorageClient();
   if (!client) throw new ReportStorageError(REPORT_STORAGE_DISABLED_MESSAGE, "WEBDAV_DISABLED", 503);
   return client;
 }
 
 /**
- * 上传一份周报正文。
+ * 上传一份周报正文（写进**它所属组织**配置的目录）。
  *
  * 撞名策略（**绝不覆盖远端已有文件**）：先 `stat` 探一次，再用带 `If-None-Match: *` 的 PUT 写；
  * 目标名已存在就换下一个后缀（`_2` / `_v2_2` …）重试，20 次仍撞名则报 409。
@@ -165,7 +171,7 @@ function storageClient(): WebDavClient {
  */
 export async function uploadReportFile(input: ReportUploadInput): Promise<ReportUploadResult> {
   const client = storageClient();
-  const root = resolveReportUploadConfig().root;
+  const root = reportUploadRootFor(input.orgId);
   const directory = remoteDirectoryFor(root, input);
   const contentType = input.contentType ?? undefined;
   const blob = new Blob([new Uint8Array(input.buffer)]);
@@ -191,6 +197,8 @@ export type ReportDownloadStream = {
 /**
  * 打开一份周报正文用于下载。返回 `null` 表示**远端确实没有这个文件**（404），
  * 调用方据此给「文件已丢失」；NAS 连不上等异常照旧抛出。
+ *
+ * 不需要组织：`stored_name` 存的就是当年的完整路径，用哪份目录配置都不影响它。
  */
 export async function openReportDownload(storedName: string): Promise<ReportDownloadStream | null> {
   const client = storageClient();
@@ -210,7 +218,7 @@ export function reportStorageMessage(error: unknown): string {
   if (error instanceof WebDavError) {
     if (error.unreachable) return `${webDavErrorMessage(error)}（周报上传/下载暂时不可用，请稍后重试）`;
     if (error.status === 401 || error.status === 403) {
-      return "周报上传账号认证失败或权限不足（请联系管理员检查「设置 → WebDAV」里的周报上传账号）";
+      return "周报上传用的连接认证失败或权限不足（请联系管理员检查「设置 → WebDAV」里共用的那份连接）";
     }
     if (error.status === 404) return "远端文件已不存在（可能被人移动或删除）";
     return webDavErrorMessage(error);

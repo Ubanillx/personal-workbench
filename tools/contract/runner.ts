@@ -242,7 +242,10 @@ export async function runCases(options: {
       role: testCase.role,
       request: {
         method: testCase.method,
-        path,
+        // 路径里的 `{{变量}}` 会代入真实 id，而其中一部分（任务 / 申请单）每次建夹具都是新 uuid：
+        // 与响应体用同一套归一化，golden 才不会被「这次建夹具恰好抽到什么 uuid」污染。
+        // （比对本身不看 `request.path`，它只是给人读的请求说明。）
+        path: String(normalizeValue(path, options.port)),
         ...(testCase.body === undefined ? {} : { body: normalizeValue(testCase.body, options.port) }),
         ...(testCase.upload === undefined ? {} : { upload: testCase.upload.filename }),
       },

@@ -1,80 +1,72 @@
 import type React from "react";
 import { useEffect, useState } from "react";
-import { Alert, App as AntdApp, Button, Card, Flex, Form, Input, InputNumber, Space, Tag, Typography } from "antd";
-import { DeleteOutlined, ExperimentOutlined, FolderOpenOutlined, SaveOutlined } from "@ant-design/icons";
+import { Alert, App as AntdApp, Button, Card, Flex, Form, Input, Select, Space, Tag, Typography } from "antd";
+import { ExperimentOutlined, FolderOpenOutlined, SaveOutlined, UndoOutlined } from "@ant-design/icons";
+import dayjs from "dayjs";
 import type { ReportUploadSettingsView } from "../../../shared/types/domain";
-import { confirmDanger } from "../crud-actions";
+import { confirmAction } from "../crud-actions";
 import { WebDavDirPicker } from "./webdav-dir-picker";
 import type { PostPayload } from "./types";
 
 /**
- * 「周报上传」配置卡片（仅管理员可见，D-46，见 docs/harness/REPORTS_WEBDAV.md）。
+ * 「周报上传」配置卡片（组织管理者 / 管理员可见，D-53，见 docs/harness/REPORTS_WEBDAV.md）。
  *
- * 和上面那份**按账号**的 WebDAV 配置刻意分开，因为两者回答的是不同问题：
- * - 按账号那份 =「我这个人怎么访问 NAS」（「重要文件」页用它浏览/上传）；
- * - 这张卡 =「**所有人的**周报正文往哪写」，全局一份、统一账号，
- *   落点固定为 `<上传根目录>/<登录用户名>/<起止日期>/<原文件名>`。
+ * 这张卡只有一件事：**本组织的周报写进哪个目录**。
+ * - 作用域是**一个组织**（D-53）：组织管理者改本组织那份；管理员在卡里切换组织；
+ * - **连接不回显**：周报用的是管理员在正上方「WebDAV 连接」里保存的那份 NAS 账号，
+ *   它已经显示在那张卡里了，这里再画一遍只会打乱信息层级（没有连接时用一条 Alert 说明）；
+ * - 默认（留空）= **用连接的浏览根目录**；挑过之后落点固定为那个目录；「恢复默认」＝删掉该组织那一行。
  *
- * 三条与旁边那张卡一致的约定：
- * - 地址仍是部署级的（`.env` 的 `WEBDAV_URL`），这里只读展示；
- * - 密码不回显：只拿到 `hasPassword`，留空提交 = 保持已保存的密码；
- * - 「测试连接」用表单当前值直接连（不落库），能否连通与保存是否成功分开反馈。
- *
- * 「清除配置」在这里比旁边危险得多：清掉之后**所有人**都交不了周报、也下不了新式记录，
- * 所以文案里明确写出来，并走二次确认。
+ * 落点自 D-46 起没变：`<本组织的上传根目录>/<登录用户名>/<起止日期>/<原文件名>`；
+ * 退回重传加 `_v2`，撞名自动加 `_2`，远端已有文件绝不覆盖。
  */
 type Props = {
   settings: ReportUploadSettingsView;
   addressConfigured: boolean;
   addressError: string | null;
-  url: string;
+  /** 可切换的组织（管理员才有；空数组 = 固定为本组织，用只读文本展示） */
+  orgOptions: { value: string; label: string }[];
+  onSelectOrg: (orgId: string) => void;
   post: PostPayload;
   busy: boolean;
-  /** 写操作成功时递增，用来清空密码输入框（密码不回显） */
+  /** 写操作成功时递增，用来把本地目录状态同步成服务端口径 */
   successTick: number;
 };
 
-type FormValues = { username?: string; password?: string; root?: string; timeoutMs?: number };
-
-/** `"/周报"` → `"周报"`：目录选择器里的路径一律相对服务根，不带首尾斜杠 */
-function toRelative(path: string): string {
-  return path.replace(/^\/+/u, "").replace(/\/+$/u, "");
-}
-
-export function ReportUploadCard({ settings, addressConfigured, addressError, url, post, busy, successTick }: Props): React.ReactElement {
+export function ReportUploadCard({
+  settings,
+  addressConfigured,
+  addressError,
+  orgOptions,
+  onSelectOrg,
+  post,
+  busy,
+  successTick,
+}: Props): React.ReactElement {
   const { modal } = AntdApp.useApp();
-  const [form] = Form.useForm<FormValues>();
+  // 目录只在「点选择器」时改：它是个只读字段，用本地状态比拉一个 Form 实例更直接
+  const [ownRoot, setOwnRoot] = useState(settings.ownRoot);
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [pickerPath, setPickerPath] = useState("");
-  const [pickerValues, setPickerValues] = useState<Record<string, unknown>>({});
   const addressReady = addressConfigured && !addressError;
+  // 组织 + 连接都就绪才算「能用」：缺哪一个，保存目录都没有意义
+  const ready = addressReady && settings.connectionReady && settings.orgId !== null;
 
-  // 保存/清除成功后把表单同步成服务端口径，并清空密码框
+  // 切换组织 / 保存 / 恢复默认之后，把本地值同步成服务端口径。
+  // 依赖的是具体值，所以「刚挑完还没保存」的本地选择不会被覆盖。
   useEffect(() => {
-    if (successTick > 0) form.setFieldsValue({ ...settings, password: "" });
-    // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [successTick]);
+    setOwnRoot(settings.ownRoot);
+  }, [settings.orgId, settings.ownRoot, successTick]);
 
-  const test = async (): Promise<void> => {
-    const values = await form.validateFields().catch(() => null);
-    if (!values) return;
-    post({ intent: "test-report-upload", ...values });
-  };
-
-  const openPicker = (): void => {
-    const values = form.getFieldsValue();
-    setPickerValues(values as Record<string, unknown>);
-    setPickerPath(toRelative(String(values.root ?? "")));
-    setPickerOpen(true);
-  };
+  /** 实际生效的目录：本组织单独挑过就是它，否则就是连接的浏览根目录 */
+  const effectiveRoot = ownRoot.trim() || settings.root;
 
   return (
     <Card
       variant="outlined"
       title="周报上传"
       extra={
-        <Tag color={settings.configured ? "green" : "default"} variant="filled">
-          {settings.configured ? "已启用" : addressReady ? "未配置" : "未配置地址"}
+        <Tag color={ready ? "green" : "default"} variant="filled">
+          {ready ? "已启用" : addressReady ? "未配置连接" : "未配置地址"}
         </Tag>
       }
     >
@@ -83,8 +75,8 @@ export function ReportUploadCard({ settings, addressConfigured, addressError, ur
           type="error"
           showIcon
           style={{ marginBottom: 16 }}
-          title="环境变量里的 WEBDAV_URL 不合法"
-          description={`${addressError}。请改仓库根 .env 里的 WEBDAV_URL，然后重启服务。`}
+          title="WebDAV 地址无效"
+          description={`${addressError}。请修改 .env 中的 WEBDAV_URL 后重启服务。`}
         />
       ) : null}
       {!addressConfigured && !addressError ? (
@@ -92,112 +84,94 @@ export function ReportUploadCard({ settings, addressConfigured, addressError, ur
           type="warning"
           showIcon
           style={{ marginBottom: 16 }}
-          title="还没配置 WebDAV 地址"
-          description="地址是部署级的：请在仓库根的 .env 里设置 WEBDAV_URL，保存后重启服务。"
+          title="未配置 WebDAV 地址"
+          description="请在 .env 中设置 WEBDAV_URL 后重启服务。"
         />
       ) : null}
-      {!settings.configured && addressReady ? (
-        <Alert
-          type="warning"
-          showIcon
-          style={{ marginBottom: 16 }}
-          title="周报上传还没配置"
-          description="配好之后成员才能提交周报：正文只写 NAS，不再落在本机磁盘上。"
-        />
+      {addressReady && !settings.connectionReady ? (
+        <Alert type="warning" showIcon style={{ marginBottom: 16 }} title="未配置 WebDAV 连接" description="请先在上方保存连接。" />
+      ) : null}
+      {addressReady && settings.orgId === null ? (
+        <Alert type="warning" showIcon style={{ marginBottom: 16 }} title="没有可用组织" description="请先在「组织总览」新建组织。" />
       ) : null}
 
-      <Form
-        form={form}
-        layout="vertical"
-        initialValues={{
-          username: settings.username,
-          password: "",
-          root: settings.root,
-          timeoutMs: settings.timeoutMs,
-        }}
-        onFinish={(values) => post({ intent: "save-report-upload", ...values })}
-      >
-        <Form.Item label="WebDAV 地址" tooltip="与上面同一份部署级配置（环境变量 WEBDAV_URL），这里只读">
-          <Input value={url} placeholder="（未配置：请在 .env 里设置 WEBDAV_URL）" readOnly />
+      <Form layout="vertical" onFinish={() => post({ intent: "save-report-upload", orgId: settings.orgId, root: ownRoot })}>
+        <Form.Item label="组织" tooltip="按组织分别设置" style={{ maxWidth: 420 }}>
+          {orgOptions.length > 0 ? (
+            <Select value={settings.orgId ?? ""} options={orgOptions} onChange={onSelectOrg} placeholder="选择要配置的组织" />
+          ) : (
+            <Input readOnly value={settings.orgName ?? ""} placeholder="（没有可配置的组织）" />
+          )}
         </Form.Item>
 
-        <Flex gap="middle" wrap>
-          <Form.Item
-            name="username"
-            label="统一上传账号"
-            style={{ flex: 1, minWidth: 220 }}
-            tooltip="所有成员提交周报都用这个 NAS 账号；普通成员不需要自己配 WebDAV"
-          >
-            <Input autoComplete="off" placeholder="Basic 认证用户名（匿名写入可留空）" allowClear />
-          </Form.Item>
-          <Form.Item name="password" label="密码" style={{ flex: 1, minWidth: 220 }} tooltip="密码只在服务端读取；留空表示保持已保存的密码">
-            <Input.Password autoComplete="new-password" placeholder={settings.hasPassword ? "留空则保持已保存的密码" : "Basic 认证密码"} />
-          </Form.Item>
-        </Flex>
-
-        <Flex gap="middle" wrap>
-          <Form.Item label="上传根目录" style={{ flex: 2, minWidth: 320 }} tooltip="周报正文写到这里；点「选择目录」直接挑，默认 /周报">
-            <Space.Compact style={{ width: "100%" }}>
-              <Form.Item name="root" noStyle>
-                <Input readOnly placeholder="点右侧「选择目录」挑一个" />
-              </Form.Item>
-              <Button icon={<FolderOpenOutlined />} onClick={openPicker} disabled={!addressReady}>
-                选择目录
-              </Button>
-            </Space.Compact>
-          </Form.Item>
-          <Form.Item name="timeoutMs" label="请求超时（毫秒）" style={{ flex: 1, minWidth: 180 }}>
-            <InputNumber min={1000} max={120000} step={1000} style={{ width: "100%" }} />
-          </Form.Item>
-        </Flex>
+        <Form.Item label="上传根目录" tooltip="留空则使用连接的浏览根目录">
+          <Space.Compact style={{ width: "100%" }}>
+            <Input
+              readOnly
+              value={ownRoot}
+              placeholder={settings.connectionReady ? "留空则使用连接的浏览根目录" : "点右侧「选择目录」挑选"}
+            />
+            <Button icon={<FolderOpenOutlined />} onClick={() => setPickerOpen(true)} disabled={!ready}>
+              选择目录
+            </Button>
+          </Space.Compact>
+        </Form.Item>
 
         <Flex justify="space-between" wrap gap="small">
           <Space wrap>
-            <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={busy} disabled={!addressReady}>
+            <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={busy} disabled={!ready}>
               保存
             </Button>
-            <Button icon={<ExperimentOutlined />} onClick={() => void test()} loading={busy} disabled={!addressReady}>
+            <Button icon={<ExperimentOutlined />} onClick={() => post({ intent: "test-report-upload" })} loading={busy} disabled={!ready}>
               测试连接
             </Button>
+            {!settings.followsConnection || ownRoot ? (
+              <Button
+                icon={<UndoOutlined />}
+                onClick={() =>
+                  confirmAction(modal, {
+                    title: "恢复默认目录？",
+                    content: "将改回使用连接的浏览根目录。",
+                    okText: "恢复默认",
+                    onOk: () => {
+                      setOwnRoot("");
+                      post({ intent: "reset-report-upload", orgId: settings.orgId });
+                    },
+                  })
+                }
+              >
+                恢复默认
+              </Button>
+            ) : null}
           </Space>
-          {settings.configured ? (
-            <Button
-              color="danger"
-              variant="outlined"
-              icon={<DeleteOutlined />}
-              onClick={() =>
-                confirmDanger(modal, {
-                  title: "清除周报上传配置？",
-                  content: "清除后所有人都无法提交周报，新式记录的下载也会失败（NAS 上的文件不受影响）。",
-                  okText: "清除",
-                  onOk: () => post({ intent: "clear-report-upload" }),
-                })
-              }
-            >
-              清除配置
-            </Button>
-          ) : null}
         </Flex>
       </Form>
 
       <Typography.Text type="secondary" style={{ display: "block", marginTop: 12 }}>
-        落点：<Typography.Text code>{settings.root}</Typography.Text> / 登录用户名 / 起止日期 / 原文件名；退回重传会加{" "}
-        <Typography.Text code>_v2</Typography.Text> 后缀，撞名自动加 <Typography.Text code>_2</Typography.Text>，远端已有文件不会被覆盖。
-        {settings.updatedAt ? `最后修改：${settings.updatedByName ?? "（已删除的账号）"} · ${settings.updatedAt}` : ""}
+        保存位置：<Typography.Text code>{effectiveRoot || "（连接的浏览根目录）"}</Typography.Text>/用户名/周期/文件名，同名文件不会被覆盖。
+        {settings.updatedAt
+          ? `最后修改：${settings.updatedByName ?? "（已删除的账号）"} · ${dayjs(settings.updatedAt).format("YYYY-MM-DD HH:mm")}`
+          : ""}
       </Typography.Text>
 
       <WebDavDirPicker
         open={pickerOpen}
         title="选择周报上传根目录"
         intent="browse-report-upload"
-        initialPath={pickerPath}
-        values={pickerValues}
+        initialPath={toRelativePickerPath(effectiveRoot)}
+        values={{}}
         onClose={() => setPickerOpen(false)}
         onPick={(picked) => {
-          form.setFieldsValue({ root: picked ? `/${picked}` : "/周报" });
+          // 选到根目录 = 用连接的浏览根目录（空串就是「不另外指定」的表达方式）
+          setOwnRoot(picked ? `/${picked}` : "");
           setPickerOpen(false);
         }}
       />
     </Card>
   );
+}
+
+/** `"/阿尔法"` → `"阿尔法"`：选择器里的路径一律相对服务根，不带首尾斜杠 */
+function toRelativePickerPath(path: string): string {
+  return path.replace(/^\/+/u, "").replace(/\/+$/u, "");
 }

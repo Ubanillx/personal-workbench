@@ -1,6 +1,6 @@
 import { WEBDAV_PATH_PREFIX, type WebDavBrowseEntry, type WebDavBrowseListing, type WebDavFileStatus } from "../../shared/types/domain";
 import { createWebDavClient, WebDavError, type WebDavClient, type WebDavEntry as RemoteEntry } from "../../server/src/webdav/client";
-import { resolveReportUploadConfig, resolveWebDavConfig, type WebDavSettings } from "./webdav-settings.server";
+import { resolveWebDavConfig, sharedWebDavConnection, type WebDavSettings } from "./webdav-settings.server";
 
 /**
  * 「重要文件」的 WebDAV 接入层（页面 loader / 资源路由共用）。
@@ -98,23 +98,37 @@ function webDavProbeClient(userId: string): WebDavClient | null {
   return clientFor(config, Math.min(config.timeoutMs, PROBE_TIMEOUT_MS));
 }
 
-/* ------------------------------------------------------------------ 周报上传（统一账号，D-46） */
+/* ------------------------------------------------------------------ 周报存储（共用管理员连接，D-52） */
 
 /**
- * 周报存储专用的 WebDAV 客户端（**统一账号**，见 docs/harness/REPORTS_WEBDAV.md）。
+ * 周报存储专用的 WebDAV 客户端（**共用管理员那份连接**，见 docs/harness/REPORTS_WEBDAV.md）。
  *
- * 与上面「重要文件」那份客户端的两点区别：
- * 1. 配置来自**全局单行** `report_upload_settings`，不是按账号——谁交周报都写同一个远端目录；
+ * 与其他客户端的两点区别：
+ * 1. 凭据来自 `sharedWebDavConnection()`——管理员在「WebDAV 连接」里保存的那份；
+ *    谁交周报、谁下载都用它，成员不需要自己配 NAS 账号；
  * 2. `basePath` 固定成服务根 `/`：库里存的是**含上传根目录的完整路径**
  *    （`webdav:/周报/zhangsan/2026-09-01_2026-09-07/第八周周报.docx`），
- *    这样管理员日后改了「上传根目录」，老周报照样能下载（代价是新旧文件分处两个目录）。
+ *    这样各部门改了「上传根目录」（D-53 起按组织配），老周报照样能下载。
  *
- * 未配置（地址没配好 **或** 单行配置不存在）返回 null，调用方据此给 503。
+ * 它与**组织**无关：组织只决定「新文件写进哪个目录」（见 `reportUploadRootFor`），
+ * 下载靠 `stored_name` 里的完整路径，不再需要组织。
+ *
+ * 未配置（地址没配好 **或** 还没有管理员保存过连接）返回 null，调用方据此给 503。
  */
-export function reportUploadClient(): WebDavClient | null {
-  const config = resolveReportUploadConfig();
-  if (!config.enabled) return null;
-  return clientFor({ ...config, root: "/" }, config.timeoutMs);
+export function reportStorageClient(): WebDavClient | null {
+  const connection = sharedWebDavConnection();
+  if (!connection) return null;
+  // `basePath` 必须固定成服务根 `/`：库里存的是**含上传根目录的完整路径**，
+  // 若把 basePath 设成连接的浏览根，同一个路径会被拼成 `浏览根/浏览根/…`。
+  return clientFor({ ...connection.config, root: "/" }, connection.config.timeoutMs);
+}
+
+/**
+ * 连接探针用的配置：管理员那份共用连接（未配置时返回 null）。
+ * 设置页的「测试连接」与「选择目录」都直接用它——周报上传不再有自己的表单凭据。
+ */
+export function sharedConnectionConfig(): WebDavSettings | null {
+  return sharedWebDavConnection()?.config ?? null;
 }
 
 /**

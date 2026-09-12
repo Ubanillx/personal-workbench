@@ -196,23 +196,28 @@ export interface WebDavSettingsView {
 }
 
 /**
- * 设置页「WebDAV → 周报上传」区块的视图（D-46，见 docs/harness/REPORTS_WEBDAV.md §4）。
+ * 设置页「WebDAV → 周报上传」区块的视图（D-53，见 docs/harness/REPORTS_WEBDAV.md §4）。
  *
- * 周报正文只写 NAS，用的是**一个统一账号**（全局单行 `report_upload_settings`），
- * 地址仍是部署级的 `.env` 的 `WEBDAV_URL`，所以这里只有凭据视图与上传根目录。
+ * 周报正文只写 NAS：**连接共用管理员保存的那份**（D-52），
+ * **上传根目录按组织分开配**（D-53）——所以这个视图的作用域是**一个组织**，
+ * 组织管理者改自己那份，管理员可以换组织。
  *
- * 同样**刻意不含 password**：只给「有没有存过」（`hasPassword`），表单留空 = 保持原密码。
+ * **刻意不含任何凭据字段**，也不回显连接：连接就显示在正上方那张「WebDAV 连接」卡里。
  */
 export interface ReportUploadSettingsView {
-  /** 地址配好 **且** 单行配置存在才算接入；false = 周报上传/下载不可用（503） */
-  configured: boolean;
-  /** 统一上传账号（未配置时为空串） */
-  username: string;
-  /** 上传根目录（相对 WebDAV 服务根），默认 `/周报` */
+  /** 作用域：组织 id；null = 当前没有可配置的组织（组织列表为空 / 本组织已解散） */
+  orgId: string | null;
+  /** 组织名（页面用来告诉用户「改的是哪个组织的目录」） */
+  orgName: string | null;
+  /** 有没有可用的 WebDAV 连接（管理员保存的那份）；false = 这张卡整体不可用 */
+  connectionReady: boolean;
+  /** 本组织**另外挑过**的上传根目录（相对 WebDAV 服务根）；用连接的浏览根时为空串 */
+  ownRoot: string;
+  /** 是否用连接的浏览根目录（= 没另外挑过，也就是默认行为） */
+  followsConnection: boolean;
+  /** 本组织实际生效的上传根目录；没有可用连接或没有组织时为空串 */
   root: string;
-  timeoutMs: number;
-  hasPassword: boolean;
-  /** 最后修改这个配置的账号名；从未配置过时为 null */
+  /** 最后修改这个目录的账号名；从未改过时为 null */
   updatedByName: string | null;
   updatedAt: string | null;
 }

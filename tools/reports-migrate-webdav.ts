@@ -10,8 +10,8 @@ import {
   uploadReportFile,
 } from "../app/lib/report-storage.server";
 import { reportStorageMessage } from "../app/lib/report-storage.server";
-import { reportUploadClient } from "../app/lib/webdav.server";
-import { resolveReportUploadConfig } from "../app/lib/webdav-settings.server";
+import { reportStorageClient } from "../app/lib/webdav.server";
+import { reportUploadRootFor, resolveReportUploadConfig } from "../app/lib/webdav-settings.server";
 
 /**
  * 存量周报正文搬迁：把本地 `data/uploads/reports/<reportId>/v<N>.<ext>` 按 **D-46** 的新命名
@@ -43,6 +43,9 @@ type MigrationRow = {
   sizeBytes: number;
   periodStart: string;
   periodEnd: string;
+  /** 周报所属组织：决定写进哪个上传根目录（D-53） */
+  orgId: string;
+  orgName: string | null;
   username: string | null;
 };
 
@@ -51,7 +54,7 @@ type PurgeCandidate = { reportId: string; legacyLocalName: string; remotePath: s
 
 type Failure = { fileId: string; reportId: string; reason: string };
 
-const HELP = `周报正文迁移到 WebDAV（D-46）
+const HELP = `周报正文迁移到 WebDAV（D-46，连接口径见 D-52）
 
 用法：npm run reports:migrate-webdav [-- --dry-run] [-- --purge]
 
@@ -64,16 +67,18 @@ function hasFlag(flag: string): boolean {
   return process.argv.includes(flag);
 }
 
-/** 待迁移的记录：还需要归属人用户名与周期来拼远端路径 */
+/** 待迁移的记录：还需要归属人用户名、周期与**所属组织**来拼远端路径（D-53：目录按组织） */
 function listRows(): MigrationRow[] {
   return rows<MigrationRow>(
     db(),
     `SELECT f.id AS fileId,f.report_id AS reportId,f.version,f.original_name AS originalName,
             f.stored_name AS storedName,f.ext AS ext,f.size_bytes AS sizeBytes,
-            r.period_start AS periodStart,r.period_end AS periodEnd,u.username AS username
+            r.period_start AS periodStart,r.period_end AS periodEnd,r.org_id AS orgId,
+            u.username AS username,o.name AS orgName
        FROM report_files f
        JOIN weekly_reports r ON r.id = f.report_id
        LEFT JOIN users u ON u.id = r.owner_id
+       LEFT JOIN organizations o ON o.id = r.org_id
       ORDER BY f.report_id, f.version`,
   );
 }
@@ -113,16 +118,16 @@ async function main(): Promise<void> {
   const config = appConfig();
   const uploadsDir = config.uploadsDir;
 
-  const resolved = resolveReportUploadConfig();
+  const resolved = resolveReportUploadConfig(null);
   if (!resolved.enabled) {
-    console.error("× 周报上传还没配置：请管理员先到「设置 → WebDAV → 周报上传」保存统一账号与上传根目录");
-    console.error("  （地址来自 .env 的 WEBDAV_URL；两者都就绪后本命令才能工作）");
+    console.error("× 周报上传还不能用：请管理员先到「设置 → WebDAV」保存一次连接（用户名 / 密码 / 浏览根目录）");
+    console.error("  （地址来自 .env 的 WEBDAV_URL；各组织的上传目录默认用那份连接的浏览根目录）");
     process.exitCode = 2;
     return;
   }
-  const client = reportUploadClient();
+  const client = reportStorageClient();
   if (!client) {
-    console.error("× 无法创建 WebDAV 客户端：请检查 WEBDAV_URL 与周报上传配置");
+    console.error("× 无法创建 WebDAV 客户端：请检查 WEBDAV_URL 与共用连接配置");
     process.exitCode = 2;
     return;
   }
@@ -130,7 +135,7 @@ async function main(): Promise<void> {
   const all = listRows();
   const pending = all.filter((row) => !isRemoteStoredName(row.storedName));
   console.log(`本地正文目录：${uploadsDir}`);
-  console.log(`远端落点    ：${resolved.url}${resolved.root}/<用户名>/<起止日期>/<文件名>`);
+  console.log(`远端落点    ：${resolved.url}<各组织的上传根目录>/<用户名>/<起止日期>/<文件名>`);
   console.log(`共 ${all.length} 个版本，其中已有 ${all.length - pending.length} 个在 NAS 上，待迁移 ${pending.length} 个。`);
   if (dryRun) console.log("（--dry-run：只打印计划，不写 NAS、不改数据库）");
 
@@ -150,7 +155,7 @@ async function main(): Promise<void> {
       failures.push({ fileId: row.fileId, reportId: row.reportId, reason: `本地文件不存在：${localPath}` });
       continue;
     }
-    const target = intendedRemotePath(resolved.root, row);
+    const target = intendedRemotePath(reportUploadRootFor(row.orgId), row);
 
     if (dryRun) {
       console.log(`  [计划] v${row.version} ${row.originalName} → ${target}（${buffer.byteLength} 字节）`);
@@ -168,6 +173,7 @@ async function main(): Promise<void> {
         continue;
       }
       const uploaded = await uploadReportFile({
+        orgId: row.orgId,
         username: row.username ?? "unnamed",
         periodStart: row.periodStart,
         periodEnd: row.periodEnd,
