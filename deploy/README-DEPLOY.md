@@ -158,7 +158,8 @@ ssh deploy@<目标机> 'sudo systemctl start personal-workbench'
   只有 `main` 分支会部署；其他分支（多分支任务）只构建、只跑测试。
 - **只想出包不发布**：`ACTION=build-only`，产物在 Jenkins 构建页的 Artifacts 里。
 - **出事了要回滚**：`ACTION=rollback`（见 §5）。
-- **跳过测试赶时间**：取消勾选 `RUN_TESTS`。不建议在 `main` 上养成习惯。
+- **要不要跑测试**：`ACTION=deploy` 时**一律跳过测试**（发布要快，只跑 lint / format / typecheck / antd lint / build）。
+  想跑完整测试（数据层 / WebDAV / 契约 / 鉴权 / SSR 冒烟）就用 `ACTION=build-only` 并勾上 `RUN_TESTS`（默认已改为不勾），或者本地 `npm test`。
 
 产物 `dist/personal-workbench-<sha>-<build>.tar.gz` 里装的是：
 

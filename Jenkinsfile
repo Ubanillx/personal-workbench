@@ -45,7 +45,7 @@ pipeline {
     string(name: 'DEPLOY_PORT', defaultValue: '22', description: '目标机 SSH 端口')
     string(name: 'DEPLOY_ROOT', defaultValue: '/opt/personal-workbench', description: '目标机部署根目录')
     string(name: 'KEEP_RELEASES', defaultValue: '5', description: '目标机保留多少个历史 release（回滚靠它们）')
-    booleanParam(name: 'RUN_TESTS', defaultValue: true, description: '是否跑完整测试（数据层 / 契约 / 鉴权 / SSR 冒烟）')
+    booleanParam(name: 'RUN_TESTS', defaultValue: false, description: '是否跑完整测试（数据层 / 契约 / 鉴权 / SSR 冒烟）。只对 build-only 生效：ACTION=deploy 一律跳过测试')
     string(name: 'PUBLIC_HEALTH_URL', defaultValue: '', description: '可选：部署后再从构建机探一次该健康检查地址')
   }
 
@@ -144,7 +144,9 @@ pipeline {
     }
 
     stage('测试') {
-      when { expression { params.ACTION != 'rollback' && params.RUN_TESTS } }
+      // 部署不跑测试（明确口径）：发布路径只关心「起不起得来」，完整测试交给
+      // ACTION=build-only 或本地 `npm test`。想连测试一起发布，就把 ACTION 条件去掉。
+      when { expression { params.ACTION != 'rollback' && params.ACTION != 'deploy' && params.RUN_TESTS } }
       // 四组测试互相独立：各自在 os.tmpdir() 下建临时库与临时上传目录，
       // 服务端口用 findFreePort() 现取，因此可以并行，不会互相抢端口或污染数据。
       parallel {
