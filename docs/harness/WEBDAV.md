@@ -1,10 +1,12 @@
 # WebDAV 接入（重要文件）
 
-状态：**已实现（2026-09-11，D-41；配置拆成「地址部署级 + 凭据按账号」，D-44；文件路径改成选，D-48；远端下载，D-49）**。本文是这条链路的唯一权威口径。
+状态：**已实现（2026-09-11，D-41；配置拆成「地址部署级 + 凭据按账号」，D-44；文件路径改成选，D-48；远端下载，D-49；管理员那份连接被周报上传共用，D-52）**。本文是这条链路的唯一权威口径。
 
 > 客户端自 **D-46** 起多了两个能力——条件上传（`uploadIfAbsent`：PUT + `If-None-Match: *`）与
 > 流式下载（`open`：GET）——周报正文与「重要文件」的下载（D-49）都在用
-> （周报见 [`REPORTS_WEBDAV.md`](REPORTS_WEBDAV.md)）。两者共用同一个客户端与同一个 `WEBDAV_URL`，但配置与用途互不影响。
+> （周报见 [`REPORTS_WEBDAV.md`](REPORTS_WEBDAV.md)）。两者共用同一个客户端与同一个 `WEBDAV_URL`；
+> **D-52 起周报上传也共用「管理员那份」连接**：周报那边只剩一个「上传根目录」要选，
+> 不再单独填账号密码。
 
 ## 1. 做了什么
 
@@ -32,6 +34,10 @@
 | ----------------------------------------- | ------------------------------------------ | -------------------------------- |
 | **地址**（`http(s)://host:port/path`）    | `.env` 的 `WEBDAV_URL`（部署级、全员共用） | 改 `.env` 后**重启服务**         |
 | **用户名 / 密码 / 浏览根目录 / 请求超时** | 数据库 `webdav_settings`（一账号一行）     | `/settings?tab=webdav`，即时生效 |
+
+> **管理员的这一份是「共用连接」**（D-52）：周报正文的读写直接用它；上传根目录**按组织**分开配
+> （D-53，组织管理者维护本组织，默认用这份连接的浏览根目录）。普通成员既不用配、也进不了设置页。
+> 「周报上传」卡里**不重复显示**连接信息——同一个 Tab 里同一样东西只出现一次。
 
 设成 `WEBDAV_URL` 的那一行（`.env.example` 里有模板）：
 
@@ -106,28 +112,31 @@ WEBDAV_URL=http://192.168.0.242:5005
 
 ## 3. 实现结构
 
-| 位置                                            | 职责                                                                                                                                                                                                                                                  |
-| ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `server/src/webdav/client.ts`                   | 框架无关的 WebDAV 客户端：`list`（PROPFIND Depth:1）、`stat`/`ping`（Depth:0）、`upload`（PUT，父目录 MKCOL 自动补建）、`uploadIfAbsent`（PUT + `If-None-Match: *`，已存在回 412）、`open`（GET 流式读）、手写 XML 解析、路径越界防护、超时与错误分类 |
-| `server/src/config/env.ts`                      | `loadDotEnv()`（`.env` 加载）+ `WEBDAV_URL` → `AppConfig.webdavUrl`                                                                                                                                                                                   |
-| `app/lib/webdav-settings.server.ts`             | 地址解析与校验（`webDavAddress`）、`webdav_settings` 表 CRUD、根目录 / 超时规范化、生效配置解析、设置页视图（不含密码）；**另含 D-46 的全局「周报上传」单行配置**（`report_upload_settings`）                                                         |
-| `app/lib/webdav.server.ts`                      | 接入层：按账号解析配置、客户端缓存（键 = 生效配置）、`webdav:` 前缀约定、路径工具、远端状态批量探测、目录浏览（`browseRemote` / `browseWithConfig`）、`pingWebDav`（测试连接）、`reportUploadClient`（统一账号，D-46）                                |
-| `app/lib/report-storage.server.ts`              | 周报正文的远端存储层（D-46）：命名 / 清洗 / 撞名递增 / 上传 / 下载 / 错误翻译                                                                                                                                                                         |
-| `app/routes/api.webdav.ts`                      | `GET /api/webdav?path=` 列目录；`POST /api/webdav`（multipart）上传（可选同时登记索引）——都用会话账号的凭据                                                                                                                                           |
-| `app/routes/api.files.$id.download.ts`          | `GET /api/files/:id/download`（D-49）：按索引 id 下载远端文件，**流式代理**（`client.open`）+ `content-disposition`；本机路径 400、未配置 503、跨组织/不存在 404                                                                                      |
-| `app/routes/files.tsx`                          | 页面：loader 里按当前账号做状态探测；新建 / 编辑抽屉带「选择文件」（`WebDavFilePicker`），页头「浏览 WebDAV」（`WebDavUploadPicker`），远端条目带「下载」（远端已不存在时置灰）                                                                       |
-| `app/components/webdav-browser.tsx`             | 两个选择器共用的远端浏览器：`useWebDavBrowse`（状态机）+ `WebDavBrowserBody`（工具栏 / 面包屑 / 目录表格 / 本目录筛选）+ 客户端显示工具（D-48）                                                                                                       |
-| `app/components/webdav-file-picker.tsx`         | 「选择文件」抽屉（D-48）：选中的文件填进表单（名称空着时自动填、当前指向标「当前」），保存才落库                                                                                                                                                      |
-| `app/components/webdav-upload-picker.tsx`       | 「浏览 WebDAV」抽屉：选中即登记 + 上传到当前目录（原 `files.tsx` 里的 `WebDavPicker` 拆出来，改挂共用浏览器）                                                                                                                                         |
-| `app/routes/settings.tsx`                       | 设置页 action 的 `save-webdav` / `clear-webdav` / `test-webdav` / `browse-webdav`（都不收地址），loader 带上 `webDavSettingsView`                                                                                                                     |
-| `app/components/settings/webdav-tab.tsx`        | 「WebDAV」Tab 的界面：地址只读展示 + 保存 / 测试连接 / 清除；根目录只读，由下面的选择器挑                                                                                                                                                             |
-| `app/components/settings/webdav-dir-picker.tsx` | 「浏览根目录」的目录选择器（Drawer）：面包屑 + 上一级 + 只列子目录；走 `useFetcher` 提交 `browse-webdav`，不进页面导航（`intent` / `title` 可换，D-46 的「周报上传根目录」复用了它）                                                                  |
-| `shared/types/domain.ts`                        | `WEBDAV_PATH_PREFIX`、`WebDavBrowseEntry / WebDavBrowseResult / WebDavBrowseListing / WebDavFileStatus / WebDavSettingsView / ReportUploadSettingsView`（页面与服务端共用的形状）                                                                     |
-| `server/src/db/migrations/012_*.sql`            | 删掉不再使用的 `webdav_settings.url`                                                                                                                                                                                                                  |
-| `server/src/db/migrations/014_*.sql`            | 建 `report_upload_settings`（D-46 的全局单行配置）                                                                                                                                                                                                    |
-| `test/webdav/client.test.ts`                    | 用本地假 WebDAV 服务器测协议层（13 项：含条件上传与流式下载）                                                                                                                                                                                         |
-| `tools/webdav/fake-server.ts`                   | 公用的假 WebDAV（内存目录树）：测试、契约与 SSR 冒烟共用                                                                                                                                                                                              |
-| `tools/contract/cases.ts`                       | `webdav.*` 6 条 + `files.download.*` 6 条：权限门槛、本机路径 400、未配置 503（夹具账号都没有 `webdav_settings` 行，用例不依赖外部环境）；下载的成功闭环由 smoke:ui 用假 WebDAV 覆盖                                                                  |
+| 位置                                             | 职责                                                                                                                                                                                                                                                      |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `server/src/webdav/client.ts`                    | 框架无关的 WebDAV 客户端：`list`（PROPFIND Depth:1）、`stat`/`ping`（Depth:0）、`upload`（PUT，父目录 MKCOL 自动补建）、`uploadIfAbsent`（PUT + `If-None-Match: *`，已存在回 412）、`open`（GET 流式读）、手写 XML 解析、路径越界防护、超时与错误分类     |
+| `server/src/config/env.ts`                       | `loadDotEnv()`（`.env` 加载）+ `WEBDAV_URL` → `AppConfig.webdavUrl`                                                                                                                                                                                       |
+| `app/lib/webdav-settings.server.ts`              | 地址解析与校验（`webDavAddress`）、`webdav_settings` 表 CRUD、根目录 / 超时规范化、生效配置解析、设置页视图（不含密码）；**另含周报上传目录（按组织）与共用连接解析**（`sharedWebDavConnection` / `reportUploadRootFor`，D-52 + D-53）                    |
+| `app/lib/webdav.server.ts`                       | 接入层：按账号解析配置、客户端缓存（键 = 生效配置）、`webdav:` 前缀约定、路径工具、远端状态批量探测、目录浏览（`browseRemote` / `browseWithConfig`）、`pingWebDav`（测试连接）、`reportStorageClient` / `sharedConnectionConfig`（共用管理员连接，D-52）  |
+| `app/lib/report-storage.server.ts`               | 周报正文的远端存储层（D-46，连接口径见 D-52）：命名 / 清洗 / 撞名递增 / 上传 / 下载 / 错误翻译                                                                                                                                                            |
+| `app/routes/api.webdav.ts`                       | `GET /api/webdav?path=` 列目录；`POST /api/webdav`（multipart）上传（可选同时登记索引）——都用会话账号的凭据                                                                                                                                               |
+| `app/routes/api.files.$id.download.ts`           | `GET /api/files/:id/download`（D-49）：按索引 id 下载远端文件，**流式代理**（`client.open`）+ `content-disposition`；本机路径 400、未配置 503、跨组织/不存在 404                                                                                          |
+| `app/routes/files.tsx`                           | 页面：loader 里按当前账号做状态探测；新建 / 编辑抽屉带「选择文件」（`WebDavFilePicker`），页头「浏览 WebDAV」（`WebDavUploadPicker`），远端条目带「下载」（远端已不存在时置灰）                                                                           |
+| `app/components/webdav-browser.tsx`              | 两个选择器共用的远端浏览器：`useWebDavBrowse`（状态机）+ `WebDavBrowserBody`（工具栏 / 面包屑 / 目录表格 / 本目录筛选）+ 客户端显示工具（D-48）                                                                                                           |
+| `app/components/webdav-file-picker.tsx`          | 「选择文件」抽屉（D-48）：选中的文件填进表单（名称空着时自动填、当前指向标「当前」），保存才落库                                                                                                                                                          |
+| `app/components/webdav-upload-picker.tsx`        | 「浏览 WebDAV」抽屉：选中即登记 + 上传到当前目录（原 `files.tsx` 里的 `WebDavPicker` 拆出来，改挂共用浏览器）                                                                                                                                             |
+| `app/routes/settings.tsx`                        | 设置页 action 的 `save-webdav` / `clear-webdav` / `test-webdav` / `browse-webdav`（都不收地址），以及 D-52 的 `save-report-upload` / `reset-report-upload` / `test-report-upload` / `browse-report-upload`（后两个用服务端共用连接）；loader 带上两个视图 |
+| `app/components/settings/webdav-tab.tsx`         | 「WebDAV」Tab 的界面：地址只读展示 + 保存 / 测试连接 / 清除；根目录只读，由下面的选择器挑；管理员另见「周报上传」卡（D-52）                                                                                                                               |
+| `app/components/settings/report-upload-card.tsx` | 「周报上传」卡（组织管理者 + 管理员，D-53）：组织（管理员可切换）+ **上传根目录选择器** + 保存 / 测试连接 / 恢复默认；连接不回显（上面那张卡已经有了）                                                                                                    |
+| `app/components/settings/webdav-dir-picker.tsx`  | 「浏览根目录」的目录选择器（Drawer）：面包屑 + 上一级 + 只列子目录；走 `useFetcher` 提交 `browse-webdav`，不进页面导航（`intent` / `title` 可换，周报上传根目录复用了它）                                                                                 |
+| `shared/types/domain.ts`                         | `WEBDAV_PATH_PREFIX`、`WebDavBrowseEntry / WebDavBrowseResult / WebDavBrowseListing / WebDavFileStatus / WebDavSettingsView / ReportUploadSettingsView`（页面与服务端共用的形状）                                                                         |
+| `server/src/db/migrations/012_*.sql`             | 删掉不再使用的 `webdav_settings.url`                                                                                                                                                                                                                      |
+| `server/src/db/migrations/014_*.sql`             | 建 `report_upload_settings`（D-46 的全局单行配置）                                                                                                                                                                                                        |
+| `server/src/db/migrations/015_*.sql`             | 重建 `report_upload_settings`：去掉凭据列，只剩「上传根目录」（周报改用管理员那份连接，D-52）                                                                                                                                                             |
+| `server/src/db/migrations/016_*.sql`             | 再重建一次：主键 `id=1` → `org_id`，上传目录**按组织**（D-53）                                                                                                                                                                                            |
+| `test/webdav/client.test.ts`                     | 用本地假 WebDAV 服务器测协议层（13 项：含条件上传与流式下载）                                                                                                                                                                                             |
+| `tools/webdav/fake-server.ts`                    | 公用的假 WebDAV（内存目录树）：测试、契约与 SSR 冒烟共用                                                                                                                                                                                                  |
+| `tools/contract/cases.ts`                        | `webdav.*` 6 条 + `files.download.*` 6 条：权限门槛、本机路径 400、未配置 503（夹具里只有管理员有 `webdav_settings` 行——D-52 起周报上传共用它；管理者 / 成员的 503 照旧）；下载的成功闭环由 smoke:ui 用假 WebDAV 覆盖                                     |
 
 请求链路：页面 →（`useFetcher`）`/api/webdav` → `app/lib/webdav.server.ts` → `server/src/webdav/client.ts` → 你的 NAS。
 选择 / 上传后的索引写入走的是**原来的** `files.server.createFileRecord`，没有第二套写库逻辑。

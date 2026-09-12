@@ -231,8 +231,9 @@ React Router 8（单进程，react-router-serve 监听 17500）
 | POST | `/api/webdav` | multipart 上传到远端（可选 `register=1` 同时登记索引）                         |
 
 权限与文件库一致（`requireManager`：管理员 / 组织管理者）；细节见 [`WEBDAV.md`](WEBDAV.md)。
-周报正文用的**统一上传账号**是另一份全局配置（`report_upload_settings`，D-46），不在这两个端点里，
-由 `/settings?tab=webdav` 的「周报上传」区块维护，见 [`REPORTS_WEBDAV.md`](REPORTS_WEBDAV.md)。
+周报正文用的连接就是**管理员那份 WebDAV 连接**（`webdav_settings` 里 `role='admin'` 的那一行，D-52），
+不在这两个端点里；周报的「上传根目录」**按组织**配置（D-53），由 `/settings?tab=webdav` 的「周报上传」区块维护
+（组织管理者改本组织，管理员可切换组织；默认用那份连接的浏览根目录），见 [`REPORTS_WEBDAV.md`](REPORTS_WEBDAV.md)。
 
 ### 周报（7）
 
@@ -246,8 +247,9 @@ React Router 8（单进程，react-router-serve 监听 17500）
 | POST | `/api/reports/:id/return`        | 退回（管理者）                                                                                     |
 | GET  | `/api/reports/:id/file/:version` | 下载指定版本：**服务端流式代理到 NAS**（`filename*=UTF-8''` 编码中文名；老记录回落到本地目录读取） |
 
-周报正文的存储规则（D-46）见 [`REPORTS_WEBDAV.md`](REPORTS_WEBDAV.md)：落点
-`<上传根目录>/<登录用户名>/<起止日期>/<原文件名>`，配置在 `/settings → WebDAV → 周报上传`（仅管理员）。
+周报正文的存储规则（D-46，连接口径见 D-52、目录口径见 D-53）见 [`REPORTS_WEBDAV.md`](REPORTS_WEBDAV.md)：落点
+`<本组织的上传根目录>/<登录用户名>/<起止日期>/<原文件名>`，上传根目录在 `/settings → WebDAV → 周报上传` 里选
+（组织管理者配本组织、管理员可换组织；默认用共用连接的浏览根目录）。
 
 ## 前端结构
 
@@ -264,7 +266,7 @@ UI 层统一使用 **antd v6**（`antd@6.6.3` + `@ant-design/icons@6.3.4`）：`
 | `app/routes/reports.tsx`                   | 周报提交、上传新版本、审批/退回、下载（管理员无上传入口，D-46）                                                              |
 | `app/routes/{todos,notes}.tsx`             | 待办与随手记（列表 + 行内编辑 + 删除）                                                                                       |
 | `app/routes/files.tsx`                     | 重要文件库（含可选 WebDAV 通道：「选择文件」进表单 +「浏览 WebDAV」选中即登记 / 上传，见 `WEBDAV.md`）                       |
-| `app/routes/{settings,join,review}.tsx`    | 设置页（组织/成员/账号 + 每账号一份的 WebDAV 配置 + 全局「周报上传」配置，按角色显示 Tab）；验收视图                         |
+| `app/routes/{settings,join,review}.tsx`    | 设置页（组织/成员/账号 + 每账号一份的 WebDAV 连接 + **按组织**的周报上传目录，按角色显示 Tab）；验收视图                     |
 | `app/lib/*.server.ts`                      | 共用的 UI 辅助与页面级数据整形（`ui.server.ts`）                                                                             |
 | `app/components/placeholder-page.tsx`      | 迁移期占位页组件；8/8 页面迁移完成后已无页面使用                                                                             |
 | `app/styles/layout.css`                    | 结构性辅助类（antd 之外的少量样式）                                                                                          |

@@ -67,8 +67,9 @@
 | `report_files`   | `report_id`, `version`, `original_name`, `stored_name`, `size_bytes`, `ext`, `mime_type`         | 文件版本，`UNIQUE(report_id, version)` |
 
 > `report_files.stored_name` 自 **D-46** 起换了值域（**表结构没动**，只换值的含义）：
-> 新记录存 `webdav:<相对 WebDAV 服务根的路径>`（含上传根目录，例如
-> `webdav:/周报/zhangsan/2026-09-01_2026-09-07/第八周周报.docx`）；
+> 新记录存 `webdav:<相对 WebDAV 服务根的路径>`（含**本组织**的上传根目录，例如
+> `webdav:/阿尔法/zhangsan/2026-09-01_2026-09-07/第八周周报.docx`；组织没配目录时就是
+> `webdav:/zhangsan/2026-09-01_2026-09-07/第八周周报.docx`，即连接的浏览根，D-53）；
 > **没有前缀的值是迁移脚本还没搬到的老记录**，仍指向本机 `data/uploads/reports/<reportId>/v<N>.<ext>`。
 > 下载路由按前缀分派（远端流式代理 / 本地文件），见 [`REPORTS_WEBDAV.md`](REPORTS_WEBDAV.md) §3.4 与 §6.3。
 
@@ -81,10 +82,10 @@
 
 ### WebDAV（2）
 
-| 表                       | 关键字段                                                                                                       | 说明                                                                                                                                                                  |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `webdav_settings`        | `user_id` PK（→ `users` CASCADE）, `username`, `password`, `root`, `timeout_ms`                                | 每个账号一份远端连接凭据（「重要文件」用；D-43；地址已按 D-44 上收到环境变量 `WEBDAV_URL`，`011` 建表、`012` 删掉 `url` 列）；`password` 明文，页面只读 `hasPassword` |
-| `report_upload_settings` | `id` PK 固定为 1（`CHECK (id = 1)`）, `username`, `password`, `root`, `timeout_ms`, `updated_by`, `updated_at` | **单行**表：周报正文的统一上传账号与上传根目录（D-46，`014` 建表）。没有这一行 = 周报存储未配置（上传/下载 503）；`password` 同样明文、页面只读 `hasPassword`         |
+| 表                       | 关键字段                                                                        | 说明                                                                                                                                                                                                                                                                        |
+| ------------------------ | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `webdav_settings`        | `user_id` PK（→ `users` CASCADE）, `username`, `password`, `root`, `timeout_ms` | 每个账号一份远端连接凭据（「重要文件」用；D-43；地址已按 D-44 上收到环境变量 `WEBDAV_URL`，`011` 建表、`012` 删掉 `url` 列）；`password` 明文，页面只读 `hasPassword`                                                                                                       |
+| `report_upload_settings` | `org_id` PK（→ `organizations` CASCADE）, `root`, `updated_by`, `updated_at`    | 每个组织一行：周报正文的**上传根目录**（D-46 建表、D-52 缩表、D-53 改成按组织）。连接不存在这里——它取 `webdav_settings` 里**管理员**那一行；`root` 空串 = 用那份连接的浏览根目录。**没有这一行 = 用默认目录**，照样能交周报；周报上传/下载 503 的唯一条件是「没有可用连接」 |
 
 ### 组织隔离落在哪张表
 
@@ -131,7 +132,7 @@
 
 **硬规则**：迁移一旦被应用就**不允许修改文件内容**；只能新增迁移（见 `DEBT-09`：当前没有内容校验和）。
 
-已有迁移：`001_initial_schema`、`002_indexes`、`003_sessions`、`004_collaboration_workflow`、`005_file_metadata`、`006_task_events`、`007_weekly_reports`、`008_report_notifications`、`009_accounts_and_organizations`（账号密码 + 多组织）、`010_drop_access_tokens`（令牌表退役）、`011_webdav_settings`（WebDAV 配置落库）、`012_webdav_url_from_env`（WebDAV 地址改由 `WEBDAV_URL` 提供，删掉 `webdav_settings.url`）、`013_task_moved_event`（重建 `task_events` 放开 `task_moved`，D-47）、`014_report_upload_settings`（周报正文改存 NAS 的全局单行配置，D-46）。
+已有迁移：`001_initial_schema`、`002_indexes`、`003_sessions`、`004_collaboration_workflow`、`005_file_metadata`、`006_task_events`、`007_weekly_reports`、`008_report_notifications`、`009_accounts_and_organizations`（账号密码 + 多组织）、`010_drop_access_tokens`（令牌表退役）、`011_webdav_settings`（WebDAV 配置落库）、`012_webdav_url_from_env`（WebDAV 地址改由 `WEBDAV_URL` 提供，删掉 `webdav_settings.url`）、`013_task_moved_event`（重建 `task_events` 放开 `task_moved`，D-47）、`014_report_upload_settings`（周报正文改存 NAS 的全局单行配置，D-46）、`015_report_upload_shared_connection`（周报上传改为共用管理员那份连接，这张表只剩 `root`，D-52）、`016_report_upload_settings_per_org`（上传目录改为按组织，主键 `org_id`，D-53）。
 
 > `009` 里有一个必须记住的坑：初始组织只在「已存在主人账号」的库上创建（`WHERE u.role='owner' ... LIMIT 1`）。
 > 早期写法用子查询取 owner id，在**全新空库**上会得到 NULL 而违反 `created_by NOT NULL`，导致每一次全新初始化都失败。
