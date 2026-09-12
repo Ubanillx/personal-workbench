@@ -1,6 +1,9 @@
 # 依赖与构建产物
 node_modules/
-build/
+# 只忽略**根目录**的构建产物：无斜杠的 `build/` 会连源码目录 `tools/build/` 一起忽略，
+# 而 `npm run build` 的第一步（tools/build/prebuild.ts）就在那里 —— 那会导致新克隆
+# 与 CI 构建直接失败
+/build/
 .react-router/
 *.tsbuildinfo
 coverage/
