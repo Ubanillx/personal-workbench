@@ -1,0 +1,68 @@
+/**
+ * 表格排版基线（配套 `table-layout.ts` 的 `dataTable()`）。
+ *
+ * 这里**只放 antd 表达不了的结构性约束**，视觉细节仍交给 Design Token（见 CODE_STYLE §10.5）：
+ *
+ * 1. 单元格内容不许溢出：`Table` 的定宽布局已经按列宽裁切，但自定义 `render` 出来的
+ *    `Tag` / `Button` / `Space` 是 flex 项，默认 `min-width: auto`，会被内容顶破单元格。
+ *    长路径、长任务说明正是这样把「状态」「操作」列挤歪的。
+ * 2. 溢出要看得见：被裁掉的文字一律让用户能悬停看到全文（antd 的 `ellipsis` 只覆盖纯文本列，
+ *    自定义 render 的列靠列定义里的 `Tooltip` / `title`，见各页面列定义）。
+ */
+
+/* 单元格内容兜底裁剪：任何直接子节点都不许超出单元格宽度 */
+.data-table .ant-table-cell > * {
+  max-width: 100%;
+}
+
+/**
+ * 单元格自身建立裁剪上下文。
+ *
+ * antd 的单元格是 `display: flex`，其中的 Rich 内容（`Space` / `Flex` / 自定义 `div`）是 flex 项、
+ * 默认 `min-width: auto`——它们会被内部文字的最小内容宽度顶破列宽，这就是长任务说明把右边的
+ * 「状态 / 操作」列挤歪的直接原因。`overflow: clip` 把「自动最小尺寸」变成 0（可收缩），
+ * 同时不像 `hidden` 那样生成滚动容器，避免影响筛选项浮层与吸顶表头。
+ */
+.data-table .ant-table-tbody > tr > .ant-table-cell {
+  overflow: clip;
+}
+
+/* 表格自己也要能收缩：外层 Flex / Card 不给出 `min-width: 0` 时，宽表会把父级一起撑破 */
+.data-table.ant-table-wrapper,
+.data-table .ant-table {
+  min-width: 0;
+}
+
+/* 行内 flex 容器（Space / Flex / 自定义 div）撑满单元格并允许收缩，文字才能在内部出省略号 */
+.data-table .ant-table-cell :where(.ant-space, .ant-flex, .row-actions) {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.data-table .ant-table-cell .ant-space {
+  width: 100%;
+}
+
+/* Space 的子项默认 `flex: none`：长文本项要能被压缩，否则省略号没有生存空间 */
+.data-table .ant-table-cell .ant-space-item {
+  min-width: 0;
+}
+
+/* 文本类子节点参与收缩：不加这条，`min-width: auto` 会让它按内容宽度把单元格顶宽 */
+.data-table .ant-table-cell :where(.ant-typography, .link-button, a, span, code) {
+  min-width: 0;
+}
+
+/* 链接式主内容（任务标题 / 目录名 / 文件名的「文字按钮」）：单行省略，不换行撑高行高 */
+.data-table .ant-table-cell .link-button {
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 表格自己也要能收缩：外层 Flex / Card 不给出 `min-width: 0` 时，宽表会把父级一起撑破 */
+.data-table.ant-table-wrapper,
+.data-table .ant-table {
+  min-width: 0;
+}

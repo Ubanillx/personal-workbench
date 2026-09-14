@@ -35,6 +35,8 @@ import { NotificationBell } from "./components/notification-bell";
 import { db, rows } from "./lib/db.server";
 import { currentUser } from "./lib/ui.server";
 import "./styles/layout.css";
+// 表格排版基线的兜底层（裁剪 / 收缩）：`dataTable()` 的配套样式，全站所有表格共用
+import "./styles/table-layout.css";
 
 dayjs.locale("zh-cn");
 

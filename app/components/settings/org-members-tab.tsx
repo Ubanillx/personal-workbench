@@ -32,6 +32,7 @@ import dayjs from "dayjs";
 import type { JoinRequest, Organization } from "../../../shared/types/domain";
 import { confirmAction, confirmDanger, RowActions, type RowAction } from "../crud-actions";
 import { FormDrawer } from "../crud-drawer";
+import { dataTable } from "../table-layout";
 import { TableToolbar } from "../crud-toolbar";
 import {
   KIND_LABEL,
@@ -191,8 +192,10 @@ export function OrgMembersTab({
     {
       title: "操作",
       key: "actions",
-      width: 320,
+      // 图标动作按钮平铺（设为管理者 / 停用 / 移出组织），每个约 36px
+      width: 160,
       align: "right",
+      ellipsis: false,
       render: (_value, member) => {
         if (member.id === me.id) return <Typography.Text type="secondary">当前登录账号</Typography.Text>;
         const actions: RowAction[] = [
@@ -353,6 +356,11 @@ export function OrgMembersTab({
       ]
     : [];
 
+  // 三个表的排版方案（自动省略 + 定宽排版）：本页三张表都不带勾选列
+  const memberTable = useMemo(() => dataTable<MemberRow>({ columns: memberColumns }), [memberColumns]);
+  const requestTable = useMemo(() => dataTable<JoinRequest>({ columns: requestColumns }), [requestColumns]);
+  const historyTable = useMemo(() => dataTable<JoinRequest>({ columns: historyColumns }), [historyColumns]);
+
   return (
     <Flex vertical gap="large">
       {isAdmin ? (
@@ -463,12 +471,11 @@ export function OrgMembersTab({
                 ) : null}
               </TableToolbar>
               <Table<MemberRow>
+                {...memberTable}
                 rowKey="id"
                 size="middle"
-                columns={memberColumns}
                 dataSource={filtered}
                 loading={busy}
-                scroll={{ x: 880 }}
                 pagination={{
                   pageSize: 10,
                   showSizeChanger: true,
@@ -491,14 +498,7 @@ export function OrgMembersTab({
 
           <Card variant="outlined" title="待审批申请" extra={<Typography.Text type="secondary">{pending.length} 条</Typography.Text>}>
             {pending.length ? (
-              <Table<JoinRequest>
-                rowKey="id"
-                size="middle"
-                columns={requestColumns}
-                dataSource={pending}
-                pagination={false}
-                scroll={{ x: 760 }}
-              />
+              <Table<JoinRequest> {...requestTable} rowKey="id" size="middle" dataSource={pending} pagination={false} />
             ) : (
               <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无待审批的入组或退组申请" />
             )}
@@ -506,14 +506,7 @@ export function OrgMembersTab({
 
           <Card variant="outlined" title="最近处理记录">
             {history.length ? (
-              <Table<JoinRequest>
-                rowKey="id"
-                size="middle"
-                columns={historyColumns}
-                dataSource={history}
-                pagination={false}
-                scroll={{ x: 720 }}
-              />
+              <Table<JoinRequest> {...historyTable} rowKey="id" size="middle" dataSource={history} pagination={false} />
             ) : (
               <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有处理过入组或退组申请" />
             )}

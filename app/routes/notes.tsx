@@ -26,6 +26,7 @@ import { useCrudFeedback, useListParams } from "../components/crud-hooks";
 import { FormDrawer } from "../components/crud-drawer";
 import { SelectionAlert, TableToolbar } from "../components/crud-toolbar";
 import { PageHeader } from "../components/page-header";
+import { dataTable } from "../components/table-layout";
 import { readPayload } from "../lib/form.server";
 import { listOrganizations } from "../lib/organization.server";
 import { createNoteRecord, deleteNoteRecord, listNotes, updateNoteRecord } from "../lib/notes.server";
@@ -37,7 +38,11 @@ type NoteRow = {
   isPinned: number | boolean;
   createdAt: string;
   updatedAt: string;
-  /** 所属组织：服务端读模型里有（`records.server.ts` 的 `NOTE_SELECT`），API 载荷不带（契约冻结），页面用它渲染管理员列 */
+  /**
+   * 所属组织：服务端读模型里有（`records.server.ts` 的 `NOTE_SELECT`），API 载荷不带（契约冻结），
+   * 页面用它渲染管理员列。注意它**不是**可见性字段：随手记自 D-54 起是本人数据
+   * （`owner_id = 本人`），组织只决定「这条记录写在哪个组织下」。
+   */
   orgId: string | null;
 };
 type OrgOption = { id: string; name: string; status: string };
@@ -68,8 +73,9 @@ const PIN_FORM_OPTIONS = [
 ];
 
 /**
- * 随手记按组织隔离（§14.2）：登录即可用（不再有「主人专属」这一档角色），
- * 未加入组织的账号由 requireUserOrRedirect 送回 /join（D-34），跨组织数据在域里就已经过滤掉。
+ * 随手记是**本人数据**（D-54）：列表、新增、编辑、删除全部只作用于当前账号自己的随手记，
+ * 管理员也一样（他通过组织筛选器看的是「自己在那个组织下的记录」，而不是别人的）。
+ * 未加入组织的账号由 requireUserOrRedirect 送回 /join（D-34）。
  * `?org=` 是管理员（D-28）的筛选器接缝：既是列表过滤，也是管理员新增时的目标组织。
  */
 export async function loader({ request }: { request: Request }) {
@@ -191,14 +197,16 @@ export default function NotesRoute(): React.ReactElement {
       dataIndex: "content",
       key: "content",
       render: (_value, row) => (
-        <Space size={4} align="start">
-          {row.isPinned ? <PushpinFilled style={{ color: "#faad14", marginTop: 4 }} /> : null}
+        // 主内容列：图钉 + 两行省略的正文。`Flex` 而不是 `Space`——正文要吃掉剩余宽度，
+        // 定宽布局下才能在两行处出省略号（配 `table-layout.css` 里的收缩规则）
+        <Flex gap={4} align="flex-start" style={{ width: "100%" }}>
+          {row.isPinned ? <PushpinFilled style={{ color: "#faad14", marginTop: 2, flex: "none" }} /> : null}
           <Tooltip title={row.content.length > 80 ? row.content : ""} placement="topLeft">
             <Typography.Paragraph style={{ margin: 0 }} ellipsis={{ rows: 2, expandable: false }}>
               {row.content}
             </Typography.Paragraph>
           </Tooltip>
-        </Space>
+        </Flex>
       ),
     },
     {
@@ -247,8 +255,10 @@ export default function NotesRoute(): React.ReactElement {
     {
       title: "操作",
       key: "actions",
-      width: 200,
+      // 三个图标动作按钮（编辑 / 置顶 / 删除），每个约 36px
+      width: 140,
       align: "right",
+      ellipsis: false,
       render: (_value, row) => (
         <RowActions
           actions={[
@@ -282,6 +292,9 @@ export default function NotesRoute(): React.ReactElement {
       ),
     },
   ];
+
+  // 表格排版方案（自动省略 + 定宽排版）：本页始终带勾选列
+  const table = useMemo(() => dataTable<NoteRow>({ columns, selectable: true }), [columns]);
 
   return (
     <Flex vertical gap="large" className="page-stack">
@@ -367,12 +380,11 @@ export default function NotesRoute(): React.ReactElement {
           </SelectionAlert>
 
           <Table<NoteRow>
+            {...table}
             rowKey="id"
             size="middle"
-            columns={columns}
             dataSource={rows}
             loading={busy}
-            scroll={{ x: isAdmin ? 940 : 800 }}
             rowSelection={{
               selectedRowKeys: selectedKeys,
               preserveSelectedRowKeys: true,

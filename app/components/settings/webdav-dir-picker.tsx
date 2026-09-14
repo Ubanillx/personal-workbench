@@ -1,9 +1,10 @@
 import type React from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useFetcher } from "react-router";
 import { Alert, Breadcrumb, Button, Drawer, Empty, Flex, Space, Table, Typography, type TableProps } from "antd";
 import { ArrowUpOutlined, CheckOutlined, FolderOpenOutlined, ReloadOutlined } from "@ant-design/icons";
 import type { WebDavBrowseEntry, WebDavBrowseListing } from "../../../shared/types/domain";
+import { dataTable } from "../table-layout";
 
 /**
  * 「浏览根目录」的目录选择器（见 docs/harness/WEBDAV.md）。
@@ -126,8 +127,10 @@ export function WebDavDirPicker({
     {
       title: "操作",
       key: "actions",
-      width: 150,
+      // 文字按钮（进入 / 选它）：留够两个按钮一行，不给会被压成豆腐块
+      width: 160,
       align: "right",
+      ellipsis: false,
       render: (_value, entry) => (
         <Space size={4}>
           <Button size="small" type="text" onClick={() => go(entry.path)}>
@@ -140,6 +143,9 @@ export function WebDavDirPicker({
       ),
     },
   ];
+
+  // 表格排版方案（自动省略 + 定宽排版）
+  const table = useMemo(() => dataTable<WebDavBrowseEntry>({ columns }), [columns]);
 
   return (
     <Drawer
@@ -179,13 +185,14 @@ export function WebDavDirPicker({
         {error ? <Alert type="error" showIcon title={error} /> : null}
 
         <Table<WebDavBrowseEntry>
+          {...table}
           rowKey="path"
           size="small"
-          columns={columns}
           dataSource={directories}
           loading={loading}
           pagination={false}
-          scroll={{ y: 360 }}
+          // `table` 里的 scroll 只带「自动算出的 x」，纵向滚动在这里补上（合并而不是覆盖）
+          scroll={{ ...table.scroll, y: 360 }}
           locale={{
             emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={loading ? "读取中" : "没有子目录，可直接选择此目录"} />,
           }}

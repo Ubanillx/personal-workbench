@@ -1,11 +1,12 @@
 import type React from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useFetcher } from "react-router";
 import { Alert, Breadcrumb, Button, Empty, Flex, Input, Space, Table, Typography, type TableProps } from "antd";
 import { ArrowUpOutlined, FileOutlined, FolderOpenOutlined, ReloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { WEBDAV_PATH_PREFIX, type WebDavBrowseEntry, type WebDavBrowseResult } from "../../shared/types/domain";
 import { RowActions } from "./crud-actions";
+import { dataTable } from "./table-layout";
 
 /**
  * 「重要文件」的远端浏览器（见 docs/harness/WEBDAV.md §3）。
@@ -202,8 +203,10 @@ export function WebDavBrowserBody({
     {
       title: "操作",
       key: "actions",
-      width: 150,
+      // 图标动作按钮平铺（进入 / 选择 / 预览 / 下载…），每个约 36px
+      width: 140,
       align: "right",
+      ellipsis: false,
       render: (_value, entry) =>
         entry.isDirectory ? (
           <RowActions actions={[{ key: "open", label: "进入", icon: <FolderOpenOutlined />, onClick: () => browse.go(entry.path) }]} />
@@ -212,6 +215,9 @@ export function WebDavBrowserBody({
         ),
     },
   ];
+
+  // 表格排版方案（自动省略 + 定宽排版）
+  const table = useMemo(() => dataTable<WebDavBrowseEntry>({ columns }), [columns]);
 
   return (
     <Flex vertical gap="middle">
@@ -238,13 +244,14 @@ export function WebDavBrowserBody({
       {browse.error ? <Alert type="error" showIcon title={browse.error} /> : null}
 
       <Table<WebDavBrowseEntry>
+        {...table}
         rowKey="path"
         size="small"
-        columns={columns}
         dataSource={entries}
         loading={browse.loading}
         pagination={false}
-        scroll={{ y: 320 }}
+        // `table` 里的 scroll 只带「自动算出的 x」，纵向滚动在这里补上（合并而不是覆盖）
+        scroll={{ ...table.scroll, y: 320 }}
         locale={{
           emptyText: (
             <Empty

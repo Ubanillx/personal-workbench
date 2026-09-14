@@ -21,6 +21,7 @@ import { ClearOutlined, ImportOutlined, RollbackOutlined, ThunderboltOutlined } 
 import dayjs from "dayjs";
 import type { UserRole } from "../../shared/types/domain";
 import { TableToolbar } from "./crud-toolbar";
+import { dataTable } from "./table-layout";
 
 /**
  * 「从企微导入任务」抽屉：把**粘贴聊天记录 → 解析 → 逐条校对 → 批量导入**整条录入链路
@@ -264,6 +265,9 @@ export function WecomImportDrawer({
     },
   ];
 
+  // 表格排版方案（自动省略 + 定宽排版）：抽屉里横向空间有限，总宽由列宽算出（不再手写 700）
+  const table = useMemo(() => dataTable<Draft>({ columns }), [columns]);
+
   return (
     <Drawer
       open={open}
@@ -375,13 +379,12 @@ export function WecomImportDrawer({
               </Typography.Text>
             </TableToolbar>
             <Table<Draft>
+              {...table}
               rowKey="id"
               // 抽屉里纵向空间有限，校对表用紧凑行距（任务列表本身仍是 size="middle"）
               size="small"
-              columns={columns}
               dataSource={drafts}
               loading={busy}
-              scroll={{ x: 700 }}
               pagination={{
                 pageSize: 10,
                 showSizeChanger: false,

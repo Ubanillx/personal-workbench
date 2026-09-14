@@ -1,11 +1,12 @@
 import type React from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { App as AntdApp, Button, Card, Empty, Flex, Form as AntdForm, Input, Table, Tag, Typography, type TableProps } from "antd";
 import { DeleteOutlined, EditOutlined, PlusOutlined, TeamOutlined, UndoOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import type { Organization } from "../../../shared/types/domain";
 import { confirmDanger, RowActions, type RowAction } from "../crud-actions";
 import { FormDrawer } from "../crud-drawer";
+import { dataTable } from "../table-layout";
 import { ORG_STATUS_COLOR, ORG_STATUS_LABEL } from "./constants";
 import type { PostPayload } from "./types";
 
@@ -83,8 +84,10 @@ export function OrgOverviewTab({ organizations, post, busy, error, successTick, 
     {
       title: "操作",
       key: "actions",
-      width: 300,
+      // 图标动作按钮平铺（管理成员 / 编辑 / 解散 或 恢复），每个约 36px
+      width: 160,
       align: "right",
+      ellipsis: false,
       render: (_value, org) => {
         const actions: RowAction[] =
           org.status === "archived"
@@ -128,6 +131,9 @@ export function OrgOverviewTab({ organizations, post, busy, error, successTick, 
     },
   ];
 
+  // 表格排版方案（自动省略 + 定宽排版）
+  const table = useMemo(() => dataTable<Organization>({ columns }), [columns]);
+
   return (
     <Flex vertical gap="large">
       <Card
@@ -143,12 +149,11 @@ export function OrgOverviewTab({ organizations, post, busy, error, successTick, 
         }
       >
         <Table<Organization>
+          {...table}
           rowKey="id"
           size="middle"
-          columns={columns}
           dataSource={organizations}
           loading={busy}
-          scroll={{ x: 960 }}
           pagination={{
             pageSize: 10,
             showSizeChanger: true,

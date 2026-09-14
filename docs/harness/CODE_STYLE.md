@@ -212,6 +212,18 @@ npx antd lint app         # 必须 No issues found（当前 96 文件全过）
 6. **反馈**：成功用 `useCrudFeedback` 弹全局提示并关闭抽屉；失败**必须**渲染成常驻 `Alert`（页面顶部与抽屉顶部各一处），不要只弹 toast——SSR 冒烟测试也正是靠 HTML 里的错误文案做断言。
 7. **确认**：破坏性操作（删除 / 归档 / 解散 / 停用）用 `confirmDanger`，文案要写清影响范围；普通操作（通过、启用、恢复）用 `confirmAction`，不用原生 `window.confirm`。
 8. **表格**：稳定 `rowKey`、`size="middle"`、受控 `loading`、分页带 `showTotal`、`locale.emptyText` 用带引导动作的 `Empty`、需要时给 `sorter` 与列 `filters`。
+   - **排版一律走 `dataTable()`**（`app/components/table-layout.ts` + `app/styles/table-layout.css`），不要自己写 `scroll={{ x: 数字 }}`：
+
+     ```tsx
+     const columns: TableProps<TaskRow>["columns"] = [/* … */];
+     const table = useMemo(() => dataTable<TaskRow>({ columns, selectable: canManage }), [columns, canManage]);
+     <Table<TaskRow> {...table} rowKey="id" dataSource={rows} loading={busy} />;
+     ```
+
+   - **自动排版**：`dataTable` 会设 `tableLayout="fixed"` 并把 `scroll.x` 按「列宽之和（+ 勾选列）」算出来——手写数字列一多一少就对不上，而定宽布局下长内容再也不会撑宽整张表；窄屏超出时自动出现横向滚动条。要纵向滚动时合并而不是覆盖：`scroll={{ ...table.scroll, y: 320 }}`。
+   - **自动省略**：除行内动作列外，每列自动带 `ellipsis: true`——纯文本列出省略号并把全文写进 `title`，自定义 `render` 的列（按钮 / 标签 / 进度条 / 多行结构）被裁在自己列宽里，不再把右边的列挤歪。**行内动作列必须给 `ellipsis: false`**（一排图标按钮要能换行）。
+   - **列宽**：主内容列不写 `width`（吃掉剩余空间），短文本列 100~~140，日期 / 人名 140~~180，进度 / 多标签 180~240，操作列按「每个图标按钮约 36px」给。同一张表在不同容器宽度下都用（如全屏入组页 + 工作台卡片）时用百分比列宽并传 `layout: "auto"`。
+   - **线索**：单元格溢出把列挤歪是这套基线要根治的问题，回归时看渲染出的 `<table>` 是否有 `table-layout:fixed`、包装元素是否有 `data-table`、文本单元格是否有 `ant-table-cell-ellipsis`。
 9. **契约不变**：页面 `action` 只做 `intent → 服务函数` 映射与文案包装，业务规则全部留在 `app/lib/*.server.ts`；改写 UI 不得绕过域校验，也不得改变既有表单字段名（`content` / `todoDate` / `name` / `filePath` / `category` / `orgId` 等）。
 10. **字段对齐（D-47）**：**列表显示的每一列，都必须在新建/编辑抽屉里有对应字段或明确入口**；表单里的每个字段也必须在列表里有对应列（管理员专属字段就配管理员专属列）。同一个字段在**列头 / 筛选器 / 表单标签 / Tag 文案**里只用一个说法（例：`todos.is_completed` 一律叫「未完成 / 已完成」，不许列表里改叫「待处理」）。
     - 动作驱动的字段（任务的状态与进度）不做成可自由填写的输入项，而是在抽屉里**只读展示当前值 + 平铺当前允许的流转按钮**（见 `TaskProgressPanel`）；理由见 [`ACCOUNTS_AND_ORGS.md`](ACCOUNTS_AND_ORGS.md) §22.1。

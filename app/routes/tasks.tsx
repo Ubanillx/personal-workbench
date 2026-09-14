@@ -49,6 +49,7 @@ import { useCrudFeedback, useListParams } from "../components/crud-hooks";
 import { FormDrawer } from "../components/crud-drawer";
 import { SelectionAlert, TableToolbar } from "../components/crud-toolbar";
 import { PageHeader } from "../components/page-header";
+import { dataTable } from "../components/table-layout";
 import { WecomImportDrawer } from "../components/wecom-import-drawer";
 import { db, type User } from "../lib/db.server";
 import { readPayload } from "../lib/form.server";
@@ -446,11 +447,15 @@ export default function TasksRoute(): React.ReactElement {
       key: "title",
       sorter: (a, b) => a.title.localeCompare(b.title, "zh-Hans-CN"),
       render: (_value, task) => (
+        // 这一列是表格里的「主内容列」：不写 width，吃掉剩余宽度（定宽布局会按比例分给它）。
+        // 标题单行省略、说明两行省略，两者都带悬停全文——否则一条长说明会把整行撑高、把右边的列挤歪。
         <Space orientation="vertical" size={2} style={{ width: "100%" }}>
-          <Space size={4} wrap>
-            <Button color="primary" variant="link" className="link-button" onClick={() => openDetail(task)}>
-              {task.title}
-            </Button>
+          <Flex align="center" gap={4} wrap style={{ width: "100%" }}>
+            <Tooltip title={task.title.length > 20 ? task.title : ""}>
+              <Button color="primary" variant="link" className="link-button" onClick={() => openDetail(task)}>
+                {task.title}
+              </Button>
+            </Tooltip>
             <Tag color={PRIORITY_COLOR[task.priority] ?? "default"} variant="filled">
               {task.priority}
             </Tag>
@@ -465,9 +470,14 @@ export default function TasksRoute(): React.ReactElement {
               </Tag>
             ) : null}
             {task.archivedAt ? <Tag variant="filled">已归档</Tag> : null}
-          </Space>
+          </Flex>
           {task.description ? (
-            <Typography.Text type="secondary" ellipsis>
+            // 说明是「副行」：单行省略 + 悬停全文（antd v6 的 `Text` 不再支持 rows，多行省略要用 Paragraph）
+            <Typography.Text
+              type="secondary"
+              ellipsis={{ tooltip: task.description.length > 40 ? task.description : "" }}
+              style={{ display: "block", maxWidth: "100%" }}
+            >
               {task.description}
             </Typography.Text>
           ) : null}
@@ -532,8 +542,11 @@ export default function TasksRoute(): React.ReactElement {
     {
       title: "操作",
       key: "actions",
-      width: 400,
+      // 图标动作按钮每个约 36px（`size="small"` + `variant="text"`），最满的一行是
+      // 详情 / 编辑 / 改派 / 提交验收 / 通过验收 / 退回修改 / 归档 = 7 个，留一点余量给换行
+      width: canManage ? 300 : 120,
       align: "right",
+      ellipsis: false,
       render: (_value, task) => {
         const isOwner = task.ownerId === me.id;
         const canReport = isOwner && !task.archivedAt && task.status !== "completed" && task.status !== "pending_review";
@@ -544,22 +557,26 @@ export default function TasksRoute(): React.ReactElement {
             icon: canReport ? <RiseOutlined /> : <EyeOutlined />,
             onClick: () => openDetail(task),
           },
-          {
+        ];
+        // 编辑 / 改派是**管理动作**：普通成员看不到（D-54 起成员能看到本组织全部非私密任务，
+        // 这一列必须跟着收，否则一屏都是点不动的灰按钮）
+        if (canManage) {
+          actions.push({
             key: "edit",
             label: "编辑",
             icon: <EditOutlined />,
-            disabled: !canManage || Boolean(task.archivedAt),
+            disabled: Boolean(task.archivedAt),
             // 只开表单抽屉，不顺手把详情挂到 URL：编辑/改派是独立动作，不该顺带弹一次任务详情
             onClick: () => openEdit(task),
-          },
-          {
+          });
+          actions.push({
             key: "reassign",
             label: "改派",
             icon: <UserSwitchOutlined />,
-            disabled: !canManage || Boolean(task.archivedAt),
+            disabled: Boolean(task.archivedAt),
             onClick: () => openReassign(task),
-          },
-        ];
+          });
+        }
         if (isOwner) {
           actions.push({
             key: "submit",
@@ -652,12 +669,18 @@ export default function TasksRoute(): React.ReactElement {
     },
   ];
 
+  /**
+   * 表格排版方案（自动省略 + 定宽排版）：`dataTable` 会补 `ellipsis` 并按列宽算出 `scroll.x`。
+   * 用 `useMemo` 固定引用——`Table` 会因为每次都是新数组而重算列宽。
+   */
+  const table = useMemo(() => dataTable<TaskRow>({ columns, selectable: canManage }), [columns, canManage]);
+
   return (
     <Flex vertical gap="large" className="page-stack">
       <PageHeader
         title="任务进展"
         eyebrow="TASKS"
-        help="负责人只能汇报本人任务的进度；私密任务仅创建者与管理员可见。时间范围按最近更新时间筛选，统计与当前列表一致。企微导入的目标组织默认跟随下面的组织筛选器。"
+        help="本组织全部非私密任务对所有人可见；私密任务仅发布人、负责人与全局管理员可见。负责人只能汇报本人任务的进度。时间范围按最近更新时间筛选，统计与当前列表一致。企微导入的目标组织默认跟随下面的组织筛选器。"
         extra={
           <>
             <Button icon={<ImportOutlined />} onClick={openImport}>
@@ -818,12 +841,11 @@ export default function TasksRoute(): React.ReactElement {
         ) : null}
 
         <Table<TaskRow>
+          {...table}
           rowKey="id"
           size="middle"
-          columns={columns}
           dataSource={rows}
           loading={busy}
-          scroll={{ x: isAdmin ? 1340 : 1200 }}
           {...(canManage
             ? {
                 rowSelection: {
@@ -939,8 +961,8 @@ export default function TasksRoute(): React.ReactElement {
                 ]}
               />
             </Form.Item>
-            <Form.Item name="isPrivate" label="私密任务" valuePropName="checked" tooltip="私密任务只有创建者本人与管理员可见">
-              <Checkbox>仅创建者与管理员可见</Checkbox>
+            <Form.Item name="isPrivate" label="私密任务" valuePropName="checked" tooltip="私密任务仅发布人、负责人与全局管理员可见">
+              <Checkbox>仅发布人、负责人与全局管理员可见</Checkbox>
             </Form.Item>
           </Flex>
         ) : null}
@@ -1025,8 +1047,13 @@ export default function TasksRoute(): React.ReactElement {
             />
           </Form.Item>
         ) : null}
-        <Form.Item name="isPrivate" label="私密任务" valuePropName="checked" tooltip="私密任务只有创建者本人与管理员可见">
-          <Checkbox>仅创建者与管理员可见</Checkbox>
+        <Form.Item
+          name="isPrivate"
+          label="私密任务"
+          valuePropName="checked"
+          tooltip="私密任务仅发布人、负责人与全局管理员可见；改这两项只限发布人或管理员"
+        >
+          <Checkbox>仅发布人、负责人与全局管理员可见</Checkbox>
         </Form.Item>
         {editingTask ? (
           <Descriptions

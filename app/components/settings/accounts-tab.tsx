@@ -4,6 +4,7 @@ import { Button, Card, Empty, Flex, Input, Select, Space, Table, Tag, Typography
 import { UserAddOutlined } from "@ant-design/icons";
 import type { Organization } from "../../../shared/types/domain";
 import { TableToolbar } from "../crud-toolbar";
+import { dataTable } from "../table-layout";
 import { RowActions } from "../crud-actions";
 import { ACCOUNT_ROLE_FILTER_OPTIONS, FILTER_ALL, FILTER_NONE, ROLE_COLOR, ROLE_LABEL, STATE_FILTER_OPTIONS } from "./constants";
 import type { Me, MemberRow } from "./types";
@@ -112,8 +113,10 @@ export function AccountsTab({
     {
       title: "操作",
       key: "actions",
-      width: 180,
+      // 「去加入组织」一个图标动作按钮，撑满一列的最小宽度
+      width: 120,
       align: "right",
+      ellipsis: false,
       render: (_value, account) =>
         account.orgId === null && account.role !== "admin" ? (
           <RowActions
@@ -134,6 +137,9 @@ export function AccountsTab({
         ),
     },
   ];
+
+  // 表格排版方案（自动省略 + 定宽排版）
+  const table = useMemo(() => dataTable<MemberRow>({ columns }), [columns]);
 
   return (
     <Card
@@ -181,12 +187,11 @@ export function AccountsTab({
         </TableToolbar>
 
         <Table<MemberRow>
+          {...table}
           rowKey="id"
           size="middle"
-          columns={columns}
           dataSource={filtered}
           loading={busy}
-          scroll={{ x: 1040 }}
           pagination={{
             pageSize: 10,
             showSizeChanger: true,

@@ -26,6 +26,7 @@ import { useCrudFeedback, useListParams } from "../components/crud-hooks";
 import { FormDrawer } from "../components/crud-drawer";
 import { SelectionAlert, TableToolbar } from "../components/crud-toolbar";
 import { PageHeader } from "../components/page-header";
+import { dataTable } from "../components/table-layout";
 import { readPayload } from "../lib/form.server";
 import { listOrganizations } from "../lib/organization.server";
 import { createTodoRecord, deleteTodoRecord, listTodos, updateTodoRecord } from "../lib/todos.server";
@@ -42,6 +43,8 @@ type TodoRow = {
   /**
    * 所属组织：服务端读模型里有这一列（`records.server.ts` 的 `TODO_SELECT`），API 载荷里不带
    * （契约冻结），页面用它渲染管理员的「所属组织」列——表单里的「所属组织」字段必须在列表里看得见。
+   * 注意它**不是**可见性字段：待办自 D-54 起是本人数据（`owner_id = 本人`），
+   * 组织只决定「这条待办写在哪个组织下」。
    */
   orgId: string | null;
 };
@@ -70,8 +73,9 @@ const DATE_OPTIONS = [
 ];
 
 /**
- * 待办按组织隔离（§14.2）：登录即可用（不再有「主人专属」这一档角色），
- * 未加入组织的账号由 requireUserOrRedirect 送回 /join（D-34），跨组织数据在域里就已经过滤掉。
+ * 待办是**本人数据**（D-54）：列表、新增、编辑、删除全部只作用于当前账号自己的待办，
+ * 管理员也一样（他通过组织筛选器看的是「自己在那个组织下的待办」，而不是别人的）。
+ * 未加入组织的账号由 requireUserOrRedirect 送回 /join（D-34）。
  * `?org=` 是管理员（D-28）的筛选器接缝：既是列表过滤，也是管理员新增时的目标组织。
  */
 export async function loader({ request }: { request: Request }) {
@@ -276,8 +280,10 @@ export default function TodosRoute(): React.ReactElement {
     {
       title: "操作",
       key: "actions",
-      width: 240,
+      // 三个图标动作按钮（编辑 / 标记完成 / 删除），每个约 36px
+      width: 140,
       align: "right",
+      ellipsis: false,
       render: (_value, row) => (
         <RowActions
           actions={[
@@ -311,6 +317,9 @@ export default function TodosRoute(): React.ReactElement {
       ),
     },
   ];
+
+  // 表格排版方案（自动省略 + 定宽排版）：本页始终带勾选列，总宽要把勾选列算进去
+  const table = useMemo(() => dataTable<TodoRow>({ columns, selectable: true }), [columns]);
 
   return (
     <Flex vertical gap="large" className="page-stack">
@@ -403,12 +412,11 @@ export default function TodosRoute(): React.ReactElement {
           </SelectionAlert>
 
           <Table<TodoRow>
+            {...table}
             rowKey="id"
             size="middle"
-            columns={columns}
             dataSource={rows}
             loading={busy}
-            scroll={{ x: isAdmin ? 960 : 820 }}
             rowSelection={{
               selectedRowKeys: selectedKeys,
               preserveSelectedRowKeys: true,

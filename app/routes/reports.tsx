@@ -28,6 +28,7 @@ import { useListParams } from "../components/crud-hooks";
 import { FormDrawer } from "../components/crud-drawer";
 import { TableToolbar } from "../components/crud-toolbar";
 import { PageHeader } from "../components/page-header";
+import { dataTable } from "../components/table-layout";
 import { listReportOwnersFor, listReportsFor } from "../lib/reports.server";
 import { requireUserOrRedirect } from "../lib/ui.server";
 
@@ -245,6 +246,8 @@ export default function ReportsRoute(): React.ReactElement {
       title: "文档",
       key: "files",
       width: 220,
+      // 每份文档一行链接：可能有多行，裁掉一行就等于丢信息，因此这一列不套省略号
+      ellipsis: false,
       render: (_value, report) =>
         report.files.length ? (
           <Space orientation="vertical" size={2}>
@@ -272,8 +275,10 @@ export default function ReportsRoute(): React.ReactElement {
     {
       title: "操作",
       key: "actions",
-      width: 320,
+      // 图标动作按钮平铺（通过 / 退回 / 重新上传 / 下载 / 预览…），每个约 36px
+      width: 220,
       align: "right",
+      ellipsis: false,
       render: (_value, report) => {
         const latest = report.files.at(-1);
         const isOwnerOfReport = report.ownerId === user.id;
@@ -336,6 +341,9 @@ export default function ReportsRoute(): React.ReactElement {
       },
     },
   ];
+
+  // 表格排版方案（自动省略 + 定宽排版）
+  const table = useMemo(() => dataTable<ReportLike>({ columns }), [columns]);
 
   return (
     <Flex vertical gap="large" className="page-stack">
@@ -416,12 +424,11 @@ export default function ReportsRoute(): React.ReactElement {
           </TableToolbar>
 
           <Table<ReportLike>
+            {...table}
             rowKey="id"
             size="middle"
-            columns={columns}
             dataSource={rows}
             loading={busy && !uploading}
-            scroll={{ x: 1120 }}
             pagination={{
               pageSize: 10,
               showSizeChanger: true,

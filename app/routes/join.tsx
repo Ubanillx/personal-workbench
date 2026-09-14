@@ -1,5 +1,5 @@
 import type React from "react";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { redirect, useActionData, useLoaderData, useNavigation, useSubmit } from "react-router";
 import {
   Alert,
@@ -23,6 +23,7 @@ import type { JoinRequestKind, JoinRequestStatus, OrganizationStatus, UserRole }
 import { BrandLogo } from "../components/brand-logo";
 import { IconActionButton, RowActions } from "../components/crud-actions";
 import { PageHeader } from "../components/page-header";
+import { dataTable } from "../components/table-layout";
 import { appConfig } from "../lib/context.server";
 import { readPayload } from "../lib/form.server";
 import {
@@ -191,13 +192,27 @@ export default function JoinRoute(): React.ReactElement {
   const selectableOrgs = data.organizations.filter((org) => org.status === "active");
 
   const orgColumns: TableProps<OrgRow>["columns"] = [
-    { title: "组织", dataIndex: "name", key: "name", render: (_value, org) => <Typography.Text strong>{org.name}</Typography.Text> },
-    { title: "简介", dataIndex: "description", key: "description", render: (_value, org) => org.description || "—" },
-    { title: "成员", dataIndex: "memberCount", key: "memberCount", render: (_value, org) => `${org.memberCount} 人` },
+    // 百分比列宽：这张表在全屏入组页与工作台卡片里宽度差一倍，定宽会有一边不适合
+    {
+      title: "组织",
+      dataIndex: "name",
+      key: "name",
+      width: "20%",
+      render: (_value, org) => <Typography.Text strong>{org.name}</Typography.Text>,
+    },
+    {
+      title: "简介",
+      dataIndex: "description",
+      key: "description",
+      width: "44%",
+      render: (_value, org) => org.description || "—",
+    },
+    { title: "成员", dataIndex: "memberCount", key: "memberCount", width: "16%", render: (_value, org) => `${org.memberCount} 人` },
     {
       title: "状态",
       dataIndex: "status",
       key: "status",
+      width: "20%",
       render: (_value, org) => (
         <Tag color={org.status === "active" ? "green" : "default"} variant="filled">
           {org.status === "active" ? "正常" : "已解散"}
@@ -207,12 +222,13 @@ export default function JoinRoute(): React.ReactElement {
   ];
 
   const requestColumns: TableProps<RequestRow>["columns"] = [
-    { title: "组织", dataIndex: "orgName", key: "orgName" },
-    { title: "类型", dataIndex: "kind", key: "kind", render: (_value, row) => KIND_LABEL[row.kind] },
+    { title: "组织", dataIndex: "orgName", key: "orgName", width: "18%" },
+    { title: "类型", dataIndex: "kind", key: "kind", width: "10%", render: (_value, row) => KIND_LABEL[row.kind] },
     {
       title: "状态",
       dataIndex: "status",
       key: "status",
+      width: "12%",
       render: (_value, row) => (
         <Tag color={STATUS_COLOR[row.status]} variant="filled">
           {STATUS_LABEL[row.status]}
@@ -223,11 +239,14 @@ export default function JoinRoute(): React.ReactElement {
       title: "提交时间",
       dataIndex: "createdAt",
       key: "createdAt",
+      width: "20%",
       render: (_value, row) => dayjs(row.createdAt).format("YYYY-MM-DD HH:mm"),
     },
     {
+      // 处理结果可能带上审批批注：省略号（由 `dataTable` 统一补）裁在列宽里，全文进 `title`
       title: "处理结果",
       key: "decision",
+      width: "28%",
       render: (_value, row) =>
         row.decidedAt
           ? `${row.decidedByName ?? "管理者"} · ${dayjs(row.decidedAt).format("MM-DD HH:mm")}${row.decisionNote ? ` · ${row.decisionNote}` : ""}`
@@ -236,8 +255,9 @@ export default function JoinRoute(): React.ReactElement {
     {
       title: "操作",
       key: "actions",
-      width: 120,
+      width: "12%",
       align: "right",
+      ellipsis: false,
       render: (_value, row) =>
         row.status === "pending" ? (
           <RowActions
@@ -263,18 +283,20 @@ export default function JoinRoute(): React.ReactElement {
   ];
 
   const memberColumns: TableProps<MemberRow>["columns"] = [
-    { title: "姓名", dataIndex: "name", key: "name" },
+    { title: "姓名", dataIndex: "name", key: "name", width: "28%" },
     {
       title: "用户名",
       dataIndex: "username",
       key: "username",
+      width: "28%",
       render: (_value, row) => <Typography.Text code>{row.username}</Typography.Text>,
     },
-    { title: "角色", dataIndex: "role", key: "role", render: (_value, row) => ROLE_LABEL[row.role] },
+    { title: "角色", dataIndex: "role", key: "role", width: "22%", render: (_value, row) => ROLE_LABEL[row.role] },
     {
       title: "状态",
       dataIndex: "isActive",
       key: "isActive",
+      width: "22%",
       render: (_value, row) => (
         <Tag color={row.isActive ? "green" : "default"} variant="filled">
           {row.isActive ? "启用中" : "已停用"}
@@ -283,9 +305,20 @@ export default function JoinRoute(): React.ReactElement {
     },
   ];
 
-  const orgTable = <Table<OrgRow> rowKey="id" columns={orgColumns} dataSource={data.organizations} pagination={false} />;
+  /**
+   * 表格排版方案（自动省略 + 自动排版）。
+   *
+   * 「组织列表」「我的申请」两张表同时出现在全屏入组页（`max-width: 720`）与工作台卡片（更宽）里，
+   * 所以列宽用**百分比**、排版交给 `auto`：同一份列定义在两种容器宽度下都自适应，
+   * 超长简介由 `ellipsis` 裁掉并用悬停提示补全，不再撑破表格。
+   */
+  const orgTableProps = useMemo(() => dataTable<OrgRow>({ columns: orgColumns, layout: "auto" }), [orgColumns]);
+  const requestTableProps = useMemo(() => dataTable<RequestRow>({ columns: requestColumns, layout: "auto" }), [requestColumns]);
+  const memberTableProps = useMemo(() => dataTable<MemberRow>({ columns: memberColumns, layout: "auto" }), [memberColumns]);
+
+  const orgTable = <Table<OrgRow> {...orgTableProps} rowKey="id" dataSource={data.organizations} pagination={false} />;
   const requestTable = data.requests.length ? (
-    <Table<RequestRow> rowKey="id" columns={requestColumns} dataSource={data.requests} pagination={false} />
+    <Table<RequestRow> {...requestTableProps} rowKey="id" dataSource={data.requests} pagination={false} />
   ) : (
     <Typography.Text type="secondary">还没有申请记录。</Typography.Text>
   );
@@ -339,23 +372,11 @@ export default function JoinRoute(): React.ReactElement {
           {pendingAlert}
           {joinForm}
           <Card variant="outlined" title="组织列表">
-            <Table<OrgRow>
-              rowKey="id"
-              columns={orgColumns}
-              dataSource={data.organizations}
-              pagination={false}
-              scroll={{ x: "max-content" }}
-            />
+            <Table<OrgRow> {...orgTableProps} rowKey="id" dataSource={data.organizations} pagination={false} />
           </Card>
           <Card variant="outlined" title="我的申请">
             {data.requests.length ? (
-              <Table<RequestRow>
-                rowKey="id"
-                columns={requestColumns}
-                dataSource={data.requests}
-                pagination={false}
-                scroll={{ x: "max-content" }}
-              />
+              <Table<RequestRow> {...requestTableProps} rowKey="id" dataSource={data.requests} pagination={false} />
             ) : (
               <Typography.Text type="secondary">还没有申请记录。</Typography.Text>
             )}
@@ -394,7 +415,7 @@ export default function JoinRoute(): React.ReactElement {
               ]}
             />
             {data.members.length > 0 ? (
-              <Table<MemberRow> rowKey="id" columns={memberColumns} dataSource={data.members} pagination={false} />
+              <Table<MemberRow> {...memberTableProps} rowKey="id" dataSource={data.members} pagination={false} />
             ) : null}
           </Space>
         </Card>
