@@ -426,8 +426,8 @@ export const CASES: ContractCase[] = [
     capture: { taskOfBNew: "data.id" },
   },
   { name: "tasks.create.admin.no-org", role: "admin", method: "POST", path: "/api/tasks", body: { title: "契约-管理员没指定组织" } },
-  // 管理员发布、**组织管理者负责**的任务：用来钉「执行者不能验收自己负责的任务」（D-57）。
-  // 发布人 ≠ 负责人是这条用例的前提——负责人自己发布的活不会进验收流程（见 tasks.progress.memberA.own-task）。
+  // 管理员发布、**组织管理者负责**的任务：用来钉「执行者不能验收自己负责的任务」（D-58）。
+  // 发布人 ≠ 负责人是这条用例的前提；正常任务由组织管理者发布并验收。
   {
     name: "tasks.create.admin.for-manager",
     role: "admin",
@@ -635,8 +635,7 @@ export const CASES: ContractCase[] = [
   { name: "tasks.submit-review.memberA", role: "memberA", method: "POST", path: "/api/tasks/{{taskCreated}}/submit-review", body: {} },
   { name: "tasks.approve.memberA", role: "memberA", method: "POST", path: "/api/tasks/{{taskCreated}}/approve", body: {} },
   { name: "tasks.approve.managerB.cross-org", role: "managerB", method: "POST", path: "/api/tasks/{{taskCreated}}/approve", body: {} },
-  // 验收权归发布人（D-57）：`taskCreated` 由**管理员**发布，组织管理者 managerA 不是发布人 → 403。
-  // 这一条曾经是 200（只判角色），也是本次修复的那个漏洞：同组织的管理者、包括任务的负责人自己，都能点「通过验收」。
+  // 任务的正常发布人是组织管理者；同组织但不是发布人的管理者不能验收（D-58）。
   {
     name: "tasks.approve.managerA.not-publisher",
     role: "managerA",
@@ -644,7 +643,7 @@ export const CASES: ContractCase[] = [
     path: "/api/tasks/{{taskCreated}}/approve",
     body: { note: "越权验收" },
   },
-  // 发布人（此处是管理员）验收同一条任务 → 200；终态与改动前一致（completed），下游用例不受影响
+  // 全局管理员不参与日常发布，但保留对异常任务的应急兜底。
   {
     name: "tasks.approve.admin.publisher",
     role: "admin",
@@ -681,7 +680,7 @@ export const CASES: ContractCase[] = [
     path: "/api/tasks/{{taskByManager}}/return",
     body: { note: "请补充截图" },
   },
-  // 夹具里那条「待验收任务」由 managerA 发布、成员甲负责：发布人验收 → 200（正向锚点）
+  // 夹具里那条「待验收任务」由 managerA 发布、成员甲负责：管理者验收 → 200（正向锚点）
   {
     name: "tasks.approve.managerA",
     role: "managerA",
@@ -690,7 +689,7 @@ export const CASES: ContractCase[] = [
     body: { note: "验收通过" },
   },
 
-  // ---------- 验收权：执行者不能验收自己负责的任务（D-57） ----------
+  // ---------- 验收权：执行者不能验收自己负责的任务（D-58） ----------
   // 负责人（组织管理者）把进度推到 100%：发布人是别人 → 待验收。
   // 旧口径按角色判定（管理者自己负责的任务直接完成），于是管理者**永远见不到验收环节**，
   // 也就掩盖了「他自己能验收自己」这件事。
@@ -732,7 +731,7 @@ export const CASES: ContractCase[] = [
     path: "/api/tasks/{{taskManagerExec}}/submit-review",
     body: {},
   },
-  // 自己发布给自己做的任务（成员只能建给自己的）没有第二个验收人 → 100% 直接完成，不进待验收
+  // 组织管理者是正常任务的发布人；成员自建自负责任务没有第二个验收人，100% 直接完成。
   {
     name: "tasks.progress.memberA.own-task",
     role: "memberA",

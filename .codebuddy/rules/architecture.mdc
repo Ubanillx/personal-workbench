@@ -22,6 +22,6 @@ description: 当需要理解或修改请求链路、路由、API 端点、认证
 - **跨组织按 id 访问一律 404**；同组织但无可见权（别人的私密任务、别人的待办）才 403。
 - **能看见才改得动**：读写共用同一个可见性判据。
 - 任务状态**不能**通过 `PATCH /api/tasks/:id` 修改（返回 `FIELD_FORBIDDEN`），必须走 `progress` / `submit-review` / `approve` / `return`。
-- **任务验收（`approve` / `return`）只允许任务的发布人**（`created_by`，全局管理员兜底）：执行者（负责人）永远不能验收自己负责的任务。判据是 [app/lib/task-permissions.ts](mdc:app/lib/task-permissions.ts) 的 `canReviewTask()`，服务端与页面共用，不要两边各写一份（D-57）。
+- **任务验收（`approve` / `return`）由发布任务的组织管理者执行**：全局管理员只作应急兜底，执行者（负责人）永远不能验收自己负责的任务。判据是 [app/lib/task-permissions.ts](mdc:app/lib/task-permissions.ts) 的 `canReviewTask()`，服务端与页面共用，不要两边各写一份（D-58）。
 
 修改认证/权限前先读 [docs/harness/ACCOUNTS_AND_ORGS.md](mdc:docs/harness/ACCOUNTS_AND_ORGS.md) §4 / §23；端点清单见 [docs/harness/ARCHITECTURE.md](mdc:docs/harness/ARCHITECTURE.md)。

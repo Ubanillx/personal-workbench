@@ -4,9 +4,9 @@ import { requireManager } from "../lib/session.server";
 import { approveTask } from "../lib/task-service.server";
 
 /**
- * POST /api/tasks/:id/approve —— 任务**发布人**验收（全局管理员兜底）。
- * 这里只判角色（`requireManager`），「是不是这条任务的发布人、是不是负责人」由服务层的
- * `canReviewTask()` 判定；逻辑在 app/lib/task-service.server.ts
+ * POST /api/tasks/:id/approve —— 发布任务的组织管理者验收，管理员只作应急兜底。
+ * 这里只判角色（`requireManager`），发布人与负责人关系由服务层的 `canReviewTask()` 判定；
+ * 逻辑在 app/lib/task-service.server.ts
  */
 export async function action({ request, params }: { request: Request; params: { id?: string } }): Promise<Response> {
   const auth = requireManager(request, appConfig().sessionCookieName);

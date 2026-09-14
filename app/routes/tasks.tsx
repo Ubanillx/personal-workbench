@@ -583,14 +583,14 @@ export default function TasksRoute(): React.ReactElement {
     {
       title: "操作",
       key: "actions",
-      // 图标动作按钮每个约 36px（`size="small"` + `variant="text"`）。验收权收敛到发布人后，
-      // 一行最多是 详情 / 编辑 / 改派 / 提交验收 / 归档 = 5 个（负责人不会同时是验收人），宽度留足余量
+      // 图标动作按钮每个约 36px（`size="small"` + `variant="text"`）。
+      // 一行最多是 详情 / 编辑 / 改派 / 通过验收 / 退回修改 / 归档 = 6 个，宽度留足余量
       width: canManage ? 300 : 120,
       align: "right",
       ellipsis: false,
       render: (_value, task) => {
         const isOwner = task.ownerId === me.id;
-        // 验收权 = 发布人（D-57）：判据与服务端 approve/return 共用 `canReviewTask`，
+        // 验收权 = 发布任务的组织管理者，管理员只作应急兜底，且负责人不能自验收（D-58）：判据与服务端共用 `canReviewTask`，
         // 不满足就**整块不渲染**——执行者不该看到一屏点不动的按钮，更不该有「自己验收自己」的入口
         const canReview = canReviewTask(me, task);
         const canReport = isOwner && !task.archivedAt && task.status !== "completed" && task.status !== "pending_review";
@@ -619,22 +619,6 @@ export default function TasksRoute(): React.ReactElement {
             icon: <UserSwitchOutlined />,
             disabled: Boolean(task.archivedAt),
             onClick: () => openReassign(task),
-          });
-        }
-        if (isOwner) {
-          actions.push({
-            key: "submit",
-            label: "提交验收",
-            icon: <SendOutlined />,
-            // 已完成是终态（服务端 `submitReview` 同样拒绝），不能在列表里把一个已通过验收的任务拉回待验收
-            disabled: Boolean(task.archivedAt) || task.status === "pending_review" || task.status === "completed" || task.progress < 100,
-            onClick: () =>
-              confirmAction(modal, {
-                title: "提交验收？",
-                content: "提交后由任务发布人验收，期间不能再更新进度。",
-                okText: "提交验收",
-                onOk: () => post({ intent: "submit-review", taskId: task.id, note: "提交验收" }),
-              }),
           });
         }
         if (canReview && task.status === "pending_review") {
@@ -725,7 +709,7 @@ export default function TasksRoute(): React.ReactElement {
       <PageHeader
         title="任务进展"
         eyebrow="TASKS"
-        help="本组织全部非私密任务对所有人可见；私密任务仅发布人、负责人与全局管理员可见。负责人只能汇报本人任务的进度，验收（通过 / 退回）由任务发布人处理。时间范围按最近更新时间筛选，统计与当前列表一致。企微导入的目标组织默认跟随下面的组织筛选器。"
+        help="本组织全部非私密任务对所有人可见；私密任务仅发布人、负责人与全局管理员可见。负责人只能汇报本人任务的进度，进度到 100% 后由发布任务的组织管理者通过 / 退回验收，管理员只作应急兜底。时间范围按最近更新时间筛选，统计与当前列表一致。企微导入的目标组织默认跟随下面的组织筛选器。"
         extra={
           <>
             <Button icon={<ImportOutlined />} onClick={openImport}>
@@ -1348,8 +1332,9 @@ function TaskDetailDrawer({
  * `tasks.patch.managerA.reject-progress`）。因此这里把「当前值」只读展示，把**当前允许的流转**平铺成按钮：
  * 列表上能看到的「状态」「进度」两列，在 CRUD 抽屉里都能看到、并且都有合法的修改入口。
  *
- * 「通过 / 退回」只在 `canReviewTask` 成立时渲染（D-57）：验收权归发布人，
- * 负责人即便是管理者也不会看到这两个按钮——执行者不能验收自己的活。
+ * 「通过 / 退回」只在 `canReviewTask` 成立时渲染（D-58）：发布任务的组织管理者可以验收，
+ * 管理员只作应急兜底，负责人不能验收自己的活。负责人到 100% 后由进度汇报动作自动进入待验收，不再渲染
+ * 一个置灰的「提交验收」按钮。
  */
 function TaskProgressPanel({
   task,
@@ -1366,7 +1351,7 @@ function TaskProgressPanel({
   const isOwner = task.ownerId === me.id;
   const canReport = isOwner && !task.archivedAt && task.status !== "completed" && task.status !== "pending_review";
   const pending = task.status === "pending_review";
-  // 验收权 = 发布人（D-57）：与服务端 approve/return 共用同一判据，负责人不会看到这两个按钮
+  // 验收权 = 发布任务的组织管理者，管理员只作应急兜底，且不是负责人（D-58）：与服务端共用同一判据
   const canReview = canReviewTask(me, task);
   return (
     <>
@@ -1390,21 +1375,16 @@ function TaskProgressPanel({
           />
           <Progress percent={task.progress} status={task.status === "completed" ? "success" : "active"} />
           <Typography.Text type="secondary">
-            状态由进度与验收驱动：负责人把进度汇报到 100% 后提交验收，由任务发布人验收通过即完成。
+            状态由进度与验收驱动：负责人把进度汇报到 100% 后自动进入待验收，由任务发布的组织管理者验收通过即完成。
           </Typography.Text>
           {pending ? (
             <Typography.Text type="secondary">
-              {/*
-                提示分三种，判据与服务端一致：① 该我验收；② 发布人 = 负责人（没有第二个验收人，
-                只可能来自 D-57 之前的存量数据），只能找管理员；③ 其余人只是在等发布人。
-              */}
+              {/* 提示分三种，判据与服务端一致：① 该我验收；② 我是负责人不能自验收；③ 其余人等待发布人。 */}
               {canReview
                 ? "这条任务等待你验收。"
-                : task.createdBy === task.ownerId
-                  ? "这条任务没有第二个验收人，请联系管理员处理。"
-                  : isOwner
-                    ? "你已提交验收，等待任务发布人处理。如需继续完善，可联系发布人退回。"
-                    : "已提交验收，等待任务发布人处理。"}
+                : isOwner
+                  ? "你是任务负责人，已提交验收，等待任务发布人处理。"
+                  : "已提交验收，等待任务发布人处理。"}
             </Typography.Text>
           ) : null}
           {pending && canReview ? (
@@ -1449,22 +1429,6 @@ function TaskProgressPanel({
                 退回修改
               </Button>
             </Space>
-          ) : null}
-          {isOwner && !pending && task.status !== "completed" && !task.archivedAt ? (
-            <Button
-              icon={<SendOutlined />}
-              disabled={busy || task.progress < 100}
-              onClick={() =>
-                confirmAction(modal, {
-                  title: "提交验收？",
-                  content: "提交后由任务发布人验收，期间不能再更新进度。",
-                  okText: "提交验收",
-                  onOk: () => onPost({ intent: "submit-review", taskId: task.id, note: "提交验收" }),
-                })
-              }
-            >
-              提交验收{task.progress < 100 ? "（需先到 100%）" : ""}
-            </Button>
           ) : null}
         </Flex>
       </Card>

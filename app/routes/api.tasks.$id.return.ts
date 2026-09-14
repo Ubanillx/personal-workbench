@@ -4,8 +4,8 @@ import { requireManager } from "../lib/session.server";
 import { returnTask } from "../lib/task-service.server";
 
 /**
- * POST /api/tasks/:id/return —— 任务**发布人**退回（全局管理员兜底），与 `approve` 同一道门。
- * 逻辑在 app/lib/task-service.server.ts
+ * POST /api/tasks/:id/return —— 发布任务的组织管理者退回，管理员只作应急兜底，
+ * 与 `approve` 同一道门。逻辑在 app/lib/task-service.server.ts
  */
 export async function action({ request, params }: { request: Request; params: { id?: string } }): Promise<Response> {
   const auth = requireManager(request, appConfig().sessionCookieName);

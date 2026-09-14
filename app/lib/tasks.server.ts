@@ -63,7 +63,7 @@ export function toTaskView(row: Record<string, unknown>): any {
 /**
  * 任务管理权：改元信息 / 归档 / 恢复 / 删除（§4）。具体某个组织是否管得着由 `assertOrgAccess` 判定。
  *
- * ⚠️ **验收（`approve` / `return`）不在这条线上**：它还要求「是这条任务的发布人」，
+ * ⚠️ **验收（`approve` / `return`）不在这条线上**：它还要求「是发布人且不是负责人」（管理员可兜底），
  * 判据在 `task-permissions.ts` 的 `canReviewTask()`（前后端共用一份），别在这里放行。
  */
 export function canManageTasks(user: User): boolean {
@@ -305,9 +305,9 @@ export function orgManagerIds(database: Db, taskId: string): string[] {
  * 私密任务只通知**可见的参与方**——负责人与发布人；其他组织管理者看不到这条任务，
  * 把标题发过去就是泄露（D-54 起负责人与发布人可以是两个人，因此这里要带上双方）。
  *
- * 发布人也必须在收件人里（D-57）：**验收权归发布人**，而「待验收」通知发出去的时候，
- * 收件人多半就是唯一能动这条任务的人。管理员发布的组织任务是唯一的缺口——它不是该组织的
- * 管理者，只靠 `orgManagerIds` 会收到「看得见但动不了」的人，而真正该验收的人一条都没收到。
+ * 发布人也保留在收件人里（D-57）：任务动态需要通知发布人；「待验收」通知同时发给本组织
+ * 管理者作为组织内提醒（D-58），真正的验收权限仍由 `canReviewTask()` 判定。管理员发布的异常任务
+ * 也要通知组织管理者，避免待验收任务没人发现。
  */
 export function notifyParticipants(database: Db, t: TaskView | null, actor: string, type: string, title: string, message: string): void {
   if (!t) return;
@@ -376,7 +376,7 @@ export function notifyOverdueTasks(database: Db): void {
   ).map(toTaskView) as TaskView[];
   for (const item of overdue) {
     // 与 notifyParticipants 同一收件人口径：私密任务只发负责人与发布人（其他人看不到它）；
-    // 非私密任务 = 负责人 + 发布人 + 本组织管理者（发布人可能是不属于该组织的管理员，D-57）
+    // 非私密任务 = 负责人 + 发布人 + 本组织管理者（发布人可能是不属于该组织的管理员，D-58）
     const recipients = item.isPrivate
       ? [item.ownerId, item.createdBy]
       : [item.ownerId, item.createdBy, ...orgManagerIds(database, item.id)];

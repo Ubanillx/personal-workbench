@@ -470,6 +470,18 @@ async function main(): Promise<void> {
     );
 
     const member = await loginAs(base, ACCOUNTS.memberA);
+    const managerPendingTasksHtml = await pageHtml("/tasks?status=pending_review", manager.cookie);
+    const memberPendingTasksHtml = await pageHtml("/tasks?status=pending_review", member.cookie);
+    check(
+      "组织管理者在待验收任务上看到「通过验收」入口",
+      managerPendingTasksHtml.includes("通过验收"),
+      managerPendingTasksHtml.includes("通过验收") ? undefined : "待验收列表没有渲染管理者验收按钮",
+    );
+    check(
+      "普通成员在待验收任务上不看到「提交验收」入口",
+      !memberPendingTasksHtml.includes("提交验收"),
+      memberPendingTasksHtml.includes("提交验收") ? "成员页面仍渲染了提交验收按钮" : undefined,
+    );
     const settingsByMember = await fetch(`${base}/settings`, { headers: { cookie: member.cookie }, redirect: "manual" });
     check(
       "普通成员访问 /settings 被送回首页",
