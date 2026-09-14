@@ -40,8 +40,8 @@ export function WebDavUploadPicker({
   /** 打开时定位到的目录（默认浏览根） */
   initialPath?: string;
   onClose: () => void;
-  /** 选中一个文件：按当前填的分类 / 组织直接登记进索引 */
-  onRegister: (entry: WebDavBrowseEntry, values: { category: string; orgId: string }) => void;
+  /** 选中一个文件：按当前填的分类 / 组织 / 可见范围直接登记进索引 */
+  onRegister: (entry: WebDavBrowseEntry, values: { category: string; orgId: string; visibility: "org" | "private" }) => void;
   /** 上传成功后让页面刷新列表 */
   onUploaded: () => void;
 }): React.ReactElement {
@@ -50,6 +50,8 @@ export function WebDavUploadPicker({
   const { message } = AntdApp.useApp();
   const [category, setCategory] = useState(defaultCategory);
   const [orgId, setOrgId] = useState(defaultOrgId);
+  // 可见范围（D-55）：默认「给组织看」，与新建抽屉的默认值保持一致——三处入口同一口径
+  const [visibility, setVisibility] = useState<"org" | "private">("org");
   const [register, setRegister] = useState(true);
 
   // 上传结果：成功提示并刷新列表，失败原样显示服务端文案
@@ -72,6 +74,7 @@ export function WebDavUploadPicker({
     form.append("dir", browse.path);
     form.append("register", register ? "1" : "0");
     form.append("category", category);
+    form.append("visibility", visibility);
     if (orgId) form.append("orgId", orgId);
     form.append("file", file, file.name);
     uploader.submit(form, { method: "post", action: "/api/webdav" });
@@ -104,7 +107,7 @@ export function WebDavUploadPicker({
                 label: "选择",
                 icon: <CheckOutlined />,
                 tone: "primary",
-                onClick: () => onRegister(entry, { category, orgId }),
+                onClick: () => onRegister(entry, { category, orgId, visibility }),
               },
             ]}
           />
@@ -133,6 +136,18 @@ export function WebDavUploadPicker({
               onChange={(event) => setCategory(event.target.value)}
               maxLength={40}
               style={{ width: 150 }}
+            />
+            {/* 可见范围（D-55）：与新建 / 编辑抽屉同一套说法，选中即登记时一起生效 */}
+            <Select
+              size="small"
+              aria-label="可见范围"
+              value={visibility}
+              onChange={(value: "org" | "private") => setVisibility(value)}
+              style={{ width: 130 }}
+              options={[
+                { value: "org", label: "给组织看" },
+                { value: "private", label: "给自己看" },
+              ]}
             />
             {organizations.length ? (
               <Select

@@ -1,5 +1,5 @@
 import type React from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useActionData, useLoaderData, useNavigation, useRevalidator, useSubmit } from "react-router";
 import {
   Alert,
@@ -10,6 +10,7 @@ import {
   Flex,
   Form,
   Input,
+  Radio,
   Select,
   Space,
   Table,
@@ -37,13 +38,22 @@ import { useCrudFeedback, useListParams } from "../components/crud-hooks";
 import { FormDrawer } from "../components/crud-drawer";
 import { SelectionAlert, TableToolbar } from "../components/crud-toolbar";
 import { PageHeader } from "../components/page-header";
+import { dataTable } from "../components/table-layout";
 import { displayPath, formatBytes, remoteParentPath } from "../components/webdav-browser";
 import { WebDavFilePicker } from "../components/webdav-file-picker";
 import { WebDavUploadPicker } from "../components/webdav-upload-picker";
 import { readPayload } from "../lib/form.server";
-import { createFileRecord, deleteFileRecord, listFiles, markFileUsedRecord, updateFileRecord } from "../lib/files.server";
+import {
+  canDeleteFile,
+  createFileRecord,
+  deleteFileRecord,
+  listFiles,
+  listFilesWithAccess,
+  markFileUsedRecord,
+  updateFileRecord,
+} from "../lib/files.server";
 import { listOrganizations } from "../lib/organization.server";
-import { requireManagerOrRedirect } from "../lib/ui.server";
+import { requireUserOrRedirect } from "../lib/ui.server";
 import { isWebDavPath, remoteStatuses, toRemotePath, webDavStatus } from "../lib/webdav.server";
 
 type FileRow = {
@@ -54,18 +64,35 @@ type FileRow = {
   lastUsedAt: string | null;
   createdAt: string;
   updatedAt: string;
-  /** 所属组织：服务端读模型里有（`records.server.ts` 的 `FILE_SELECT`），API 载荷不带（契约冻结），页面用它渲染管理员列 */
+  /** 可见范围（D-55）：`private` = 仅自己与本组织管理员，`org` = 组织内公开 */
+  visibility: "org" | "private";
+  /** 这条索引是不是当前账号登记的（页面显示「我登记的」用；**不是**权限判据，服务端删除时会重判） */
+  owned: boolean;
+  /** 所属组织：服务端读模型里有（`records.server.ts` 的 `FILE_SELECT`），API 载荷不带，页面用它渲染管理员列 */
   orgId: string | null;
 };
-type FileFormValues = { name?: string; filePath?: string; category?: string; orgId?: string };
+type FileFormValues = { name?: string; filePath?: string; category?: string; orgId?: string; visibility?: "org" | "private" };
 type OrgOption = { id: string; name: string; status: string };
 type ActionResult = { ok: true; notice: string } | { error: string };
 /** 表单里的「选择文件」当前在为哪个抽屉挑文件（null = 没在挑） */
 type PickTarget = "create" | "edit";
 
+/** 「给谁看」的两个选项：列表标识、表单单选、WebDAV 登记共用同一份文案，避免三处说法漂移 */
+const VISIBILITY_LABEL: Record<"org" | "private", string> = { org: "组织可见", private: "仅自己" };
+const VISIBILITY_OPTIONS = [
+  { value: "org", label: "给组织看", description: "本组织所有人都能看到、编辑与下载" },
+  { value: "private", label: "给自己看", description: "只有你与本组织管理员能看到" },
+] as const;
+
 /**
  * 文件页：与 GET /api/files 共用 app/lib/files.server.ts。
- * 文件库只对管理员与组织管理者开放（§4），普通成员由 requireManagerOrRedirect 送回首页；
+ * 组织内所有人都能进（D-54）：普通成员可查看、新增、编辑。
+ *
+ * **可见范围由每条索引自己决定（D-55）**：`给组织看` = 本组织公开；`给自己看` = 只有创建人
+ * 与本组织的全局管理员能看到。**删除权限因此是逐条算的**：创建人可以删自己登记的（含个人文件），
+ * 组织管理者可以删本组织的公开文件，管理员全可删 —— `deletableIds` 由服务端用同一个
+ * `canDeleteFile()` 算好，页面只负责渲染入口（页面不自己判角色）。
+ *
  * 列表按组织过滤，`?org=` 是管理员（D-28）的筛选器接缝：既是列表过滤，也是管理员新增时的目标组织。
  *
  * WebDAV（可选接入，见 docs/harness/WEBDAV.md）：`file_path` 以 `webdav:` 开头的是远端条目，
@@ -77,7 +104,7 @@ type PickTarget = "create" | "edit";
  * 浏览器读不到本机磁盘、服务端也不该为此暴露文件系统，所以本机路径不再有新增入口（老数据照常展示）。
  */
 export async function loader({ request }: { request: Request }) {
-  const user = requireManagerOrRedirect(request);
+  const user = requireUserOrRedirect(request);
   const query = new URL(request.url).searchParams;
   // 组织筛选器只对管理员有意义（D-28），与 /tasks 页的写法一致
   const orgFilter = user.role === "admin" ? query.get("org") : null;
@@ -89,10 +116,17 @@ export async function loader({ request }: { request: Request }) {
   ) as unknown as FileRow[];
   // 分类候选取自未过滤的全量列表，避免选中某个分类后其余分类从下拉里消失
   const all = listFiles(user, "", "", orgFilter) as unknown as FileRow[];
-  const organizations =
-    user.role === "admin"
-      ? listOrganizations(user).map((org) => ({ id: org.id, name: org.name, status: String(org.status) }) as OrgOption)
-      : [];
+  const isAdmin = user.role === "admin";
+  const organizations = isAdmin
+    ? listOrganizations(user).map((org) => ({ id: org.id, name: org.name, status: String(org.status) }) as OrgOption)
+    : [];
+  /**
+   * 可以删的行（逐条判，D-55）。判据与 `deleteFileRecord` 完全一样（同一个 `canDeleteFile`、
+   * 同一份 `access`），只是这里提前算好给页面渲染入口用；真正删除时服务端还会再判一次。
+   */
+  const deletableIds = listFilesWithAccess(user, "", "", orgFilter)
+    .filter((row) => canDeleteFile(user, row.access))
+    .map((row) => String(row.view.id));
 
   const status = webDavStatus(user.id);
   const remotePaths = files.filter((file) => isWebDavPath(file.filePath)).map((file) => toRemotePath(file.filePath));
@@ -109,6 +143,8 @@ export async function loader({ request }: { request: Request }) {
     files,
     categories: [...new Set(all.map((file) => file.category).filter(Boolean))].toSorted((a, b) => a.localeCompare(b, "zh-Hans-CN")),
     organizations,
+    isAdmin,
+    deletableIds,
     webdav: {
       enabled: status.enabled,
       configured: status.configured,
@@ -126,9 +162,11 @@ export async function loader({ request }: { request: Request }) {
  * 文件索引写操作：与 `/api/files*` 共用 app/lib/files.server.ts 的同一份实现。
  * 表单是页面里的弹窗（JSON）与历史浏览器表单（form-urlencoded）两种提交方式，
  * 因此 `intent` 缺省时按「新增」处理——老入口不带 intent 也能照常工作。
+ * 删除类 intent 在这里不额外判角色：`deleteFileRecord` 会用 `canDeleteFile()` 把门，
+ * 页面只是不渲染入口，服务端才是判权的那个地方。
  */
 export async function action({ request }: { request: Request }): Promise<ActionResult> {
-  const user = requireManagerOrRedirect(request);
+  const user = requireUserOrRedirect(request);
   const payload = await readPayload(request);
   const intent = String(payload.intent ?? "create");
   const id = String(payload.id ?? "");
@@ -142,12 +180,20 @@ export async function action({ request }: { request: Request }): Promise<ActionR
       name: String(payload.name ?? ""),
       filePath: String(payload.filePath ?? ""),
       category: String(payload.category ?? ""),
+      // 可见范围（D-55）：`private` = 仅自己与本组织管理员；缺省 / 其他值按 `org`（组织可见）
+      visibility: payload.visibility,
       orgId: payload.orgId || orgFromUrl,
     });
     return created.ok ? { ok: true, notice: "文件索引已添加" } : { error: created.message };
   }
   if (intent === "update") {
-    const updated = updateFileRecord(user, id, { name: payload.name, filePath: payload.filePath, category: payload.category });
+    const updated = updateFileRecord(user, id, {
+      name: payload.name,
+      filePath: payload.filePath,
+      category: payload.category,
+      // 不带就保持原值（改名的请求不该顺手改掉可见范围）
+      visibility: payload.visibility,
+    });
     return updated.ok ? { ok: true, notice: "文件索引已保存" } : { error: updated.message };
   }
   if (intent === "delete") {
@@ -198,7 +244,13 @@ export default function FilesRoute(): React.ReactElement {
     setSelectedKeys([]);
   });
   const busy = navigation.state !== "idle" || revalidator.state !== "idle";
-  const isAdmin = data.organizations.length > 0;
+  // 「所属组织」列与组织筛选器只对管理员有意义；它与「能不能删」是两件事，不要合并成一个开关
+  const isAdmin = data.isAdmin;
+  /** 删除是**逐条**判的（D-55）：创建人能删自己的，组织管理者能删本组织的公开文件 */
+  const deletable = new Set(data.deletableIds);
+  /** 只要有任何一行可删，就保留勾选框与批量删除入口 */
+  const canDeleteAny = data.deletableIds.length > 0;
+  const selectedDeletable = selectedKeys.filter((key) => deletable.has(String(key)));
 
   const search = list.get("search");
   const category = list.get("category");
@@ -295,6 +347,26 @@ export default function FilesRoute(): React.ReactElement {
       ),
     },
     {
+      title: "可见范围",
+      dataIndex: "visibility",
+      key: "visibility",
+      width: 150,
+      // 两个取值都是用户自己选的可见范围（D-55），列头与表单字段用同一套说法
+      filters: [
+        { text: VISIBILITY_LABEL.org, value: "org" },
+        { text: VISIBILITY_LABEL.private, value: "private" },
+      ],
+      onFilter: (value, file) => file.visibility === value,
+      render: (_value, file) => (
+        <Space size={4} align="center">
+          <Tag color={file.visibility === "private" ? "purple" : "blue"} variant="filled">
+            {VISIBILITY_LABEL[file.visibility]}
+          </Tag>
+          {file.owned ? <Typography.Text type="secondary">我登记的</Typography.Text> : null}
+        </Space>
+      ),
+    },
+    {
       title: "分类",
       dataIndex: "category",
       key: "category",
@@ -370,8 +442,10 @@ export default function FilesRoute(): React.ReactElement {
     {
       title: "操作",
       key: "actions",
-      width: 320,
+      // 图标动作按钮平铺（复制路径 / 下载 / 编辑 / 记录使用 / 删除索引），每个约 36px
+      width: 220,
       align: "right",
+      ellipsis: false,
       render: (_value, file) => {
         const status = data.webdav.remote[file.id] ?? null;
         return (
@@ -403,13 +477,20 @@ export default function FilesRoute(): React.ReactElement {
                 icon: <HistoryOutlined />,
                 onClick: () => post({ intent: "touch", id: file.id }),
               },
-              { key: "delete", label: "删除索引", icon: <DeleteOutlined />, tone: "danger", onClick: () => remove(file) },
+              // 删除**逐条**判（D-55）：创建人能删自己登记的（含个人文件），
+              // 组织管理者能删本组织的公开文件；服务端删除时会用同一判据再判一次
+              ...(deletable.has(file.id)
+                ? [{ key: "delete", label: "删除索引", icon: <DeleteOutlined />, tone: "danger" as const, onClick: () => remove(file) }]
+                : []),
             ]}
           />
         );
       },
     },
   ];
+
+  // 表格排版方案（自动省略 + 定宽排版）：勾选列只在「有任意一条可删除」时出现
+  const table = useMemo(() => dataTable<FileRow>({ columns, selectable: canDeleteAny }), [columns, canDeleteAny]);
 
   return (
     <Flex vertical gap="large" className="page-stack">
@@ -488,32 +569,49 @@ export default function FilesRoute(): React.ReactElement {
             ) : null}
           </TableToolbar>
 
-          <SelectionAlert count={selectedKeys.length} noun="个文件" onClear={() => setSelectedKeys([])}>
-            <Button
-              size="small"
-              color="danger"
-              variant="outlined"
-              onClick={() =>
-                confirmDanger(modal, {
-                  title: `删除选中的 ${selectedKeys.length} 条索引？`,
-                  content: "只删除索引记录，不会删除磁盘上的文件。",
-                  okText: "批量删除",
-                  onOk: () => post({ intent: "bulk-delete", ids: selectedKeys }),
-                })
-              }
-            >
-              批量删除
-            </Button>
-          </SelectionAlert>
+          {/*
+            批量删除：只有在**选中的行里有自己删得动的**时才出现（D-55 起删除是逐条判的）。
+            默认把指令作用在可删的那部分上，并说清楚跳过了几条——不要给一个点了会静默失败的按钮。
+          */}
+          {canDeleteAny ? (
+            <SelectionAlert count={selectedKeys.length} noun="个文件" onClear={() => setSelectedKeys([])}>
+              <Button
+                size="small"
+                color="danger"
+                variant="outlined"
+                disabled={selectedDeletable.length === 0}
+                onClick={() =>
+                  confirmDanger(modal, {
+                    title: `删除选中的 ${selectedDeletable.length} 条索引？`,
+                    content: "只删除索引记录，不会删除磁盘上的文件。",
+                    okText: "批量删除",
+                    onOk: () => post({ intent: "bulk-delete", ids: selectedDeletable }),
+                  })
+                }
+              >
+                批量删除
+                {selectedKeys.length > selectedDeletable.length ? `（可删 ${selectedDeletable.length} 条）` : ""}
+              </Button>
+            </SelectionAlert>
+          ) : null}
 
           <Table<FileRow>
+            {...table}
             rowKey="id"
             size="middle"
-            columns={columns}
             dataSource={data.files}
             loading={busy}
-            scroll={{ x: isAdmin ? 1100 : 960 }}
-            rowSelection={{ selectedRowKeys: selectedKeys, preserveSelectedRowKeys: true, onChange: (keys) => setSelectedKeys(keys) }}
+            {...(canDeleteAny
+              ? {
+                  rowSelection: {
+                    selectedRowKeys: selectedKeys,
+                    preserveSelectedRowKeys: true,
+                    // 删不动的行不给勾：勾了也只能失败
+                    getCheckboxProps: (file: FileRow) => ({ disabled: !deletable.has(file.id) }),
+                    onChange: (keys: React.Key[]) => setSelectedKeys(keys),
+                  },
+                }
+              : {})}
             pagination={{
               pageSize: 10,
               showSizeChanger: true,
@@ -547,7 +645,7 @@ export default function FilesRoute(): React.ReactElement {
         form={createForm}
         submitting={busy}
         error={error}
-        initialValues={{ orgId: orgFilter || data.organizations.at(0)?.id || "" }}
+        initialValues={{ orgId: orgFilter || data.organizations.at(0)?.id || "", visibility: "org" }}
         onCancel={() => setCreateOpen(false)}
         // 选择器挂在本抽屉**里面**（afterForm）：antd 会给嵌套的浮层 +100 层级，
         // 保证它稳稳盖在表单抽屉之上，不依赖两个同层抽屉的 DOM 顺序（CODE_STYLE §10.7 第 2 条）
@@ -570,6 +668,7 @@ export default function FilesRoute(): React.ReactElement {
             name,
             filePath,
             category: values.category?.trim() ?? "",
+            visibility: values.visibility ?? "org",
             ...(isAdmin ? { orgId: values.orgId ?? "" } : {}),
           });
         }}
@@ -586,6 +685,7 @@ export default function FilesRoute(): React.ReactElement {
         <Form.Item name="category" label="分类" tooltip="用于列表筛选，例如：报价 / 客户资料 / 模板">
           <Input placeholder="可选" maxLength={40} />
         </Form.Item>
+        <VisibilityItem />
         {isAdmin ? (
           <Form.Item name="orgId" label="所属组织" rules={[{ required: true, message: "请选择文件所属组织" }]}>
             <Select
@@ -607,6 +707,7 @@ export default function FilesRoute(): React.ReactElement {
           name: editing?.name ?? "",
           filePath: editing?.filePath ?? "",
           category: editing?.category ?? "",
+          visibility: editing?.visibility ?? "org",
         }}
         onCancel={() => setEditing(null)}
         afterForm={
@@ -624,7 +725,15 @@ export default function FilesRoute(): React.ReactElement {
           const name = values.name?.trim();
           const filePath = values.filePath?.trim();
           if (!name || !filePath) return;
-          post({ intent: "update", id: editing.id, name, filePath, category: values.category?.trim() ?? "" });
+          post({
+            intent: "update",
+            id: editing.id,
+            name,
+            filePath,
+            category: values.category?.trim() ?? "",
+            // 改名不该顺手改可见范围，所以这里显式回填当前值（用户改过的以表单为准）
+            visibility: values.visibility ?? editing.visibility,
+          });
         }}
       >
         <Form.Item name="name" label="文件名称" rules={[{ required: true, message: "请输入文件名称" }]}>
@@ -634,6 +743,7 @@ export default function FilesRoute(): React.ReactElement {
         <Form.Item name="category" label="分类">
           <Input placeholder="可选" maxLength={40} />
         </Form.Item>
+        <VisibilityItem />
       </FormDrawer>
 
       <WebDavUploadPicker
@@ -650,12 +760,45 @@ export default function FilesRoute(): React.ReactElement {
             name: entry.name,
             filePath: entry.filePath,
             category: values.category,
+            visibility: values.visibility,
             ...(values.orgId ? { orgId: values.orgId } : {}),
           });
         }}
         onUploaded={() => void revalidator.revalidate()}
       />
     </Flex>
+  );
+}
+
+/**
+ * 「可见范围」字段（D-55）：新建时选「给组织看」还是「给自己看」，编辑时改它。
+ *
+ * 用 `Radio.Group` 而不是 `Select`：只有两个取值，而且**默认就是「给组织看」**——
+ * 单选项把「另一种选择是什么」直接摆在眼前，不用点开才知道。
+ * 两个抽屉共用这一个字段定义，列表的「可见范围」列也用同一份 `VISIBILITY_LABEL`。
+ */
+function VisibilityItem(): React.ReactElement {
+  return (
+    <Form.Item
+      name="visibility"
+      label="可见范围"
+      rules={[{ required: true, message: "请选择可见范围" }]}
+      tooltip="给自己看的文件只有你与本组织管理员能看到，也不会出现在同事的文件列表里"
+    >
+      <Radio.Group
+        options={VISIBILITY_OPTIONS.map((option) => ({
+          value: option.value,
+          label: (
+            <Space orientation="vertical" size={0}>
+              <Typography.Text>{option.label}</Typography.Text>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                {option.description}
+              </Typography.Text>
+            </Space>
+          ),
+        }))}
+      />
+    </Form.Item>
   );
 }
 

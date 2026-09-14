@@ -9,10 +9,13 @@ import { listTodos } from "./todos.server";
  * 概览页顶部的「数据范围」文案：管理员看的是合并视图，其他人看的是本组织
  * （`orgName` 为空时按 D-24/D-34 明确写出来，而不是含糊地显示为空）。
  * 「谁看得见什么」的角色判断只出现在 dashboard 域模块里，页面不再自己维护旧的角色映射。
+ *
+ * 措辞与 D-54 对齐：组织成员看到的是**本组织全部非私密任务**（私密任务只有发布人 / 负责人 / 管理员），
+ * 待办与随手记则是**只有自己**的 —— 三块数据的范围不同，文案不能笼统写成「本组织数据」。
  */
 export function dashboardScopeLabel(user: User): string {
   if (user.role === "admin") return "全部组织（合并视图）";
-  return `本组织：${user.orgName ?? "尚未加入组织"}`;
+  return `本组织：${user.orgName ?? "尚未加入组织"}（任务：全部非私密）`;
 }
 
 /**
@@ -95,7 +98,7 @@ export type DashboardBoard = {
   /** 未完成待办，按日期升序（逾期在前，无日期最后） */
   openTodos: BoardTodo[];
   recentNotes: BoardNote[];
-  /** 重要文件只对管理员与组织管理者开放（§4）；其他人是 null，页面据此不渲染该卡片 */
+  /** 重要文件是组织公共数据（D-54），组织内所有人都看得到；字段保留可空只是为了载荷形状不动 */
   recentFiles: BoardFile[] | null;
 };
 
@@ -212,8 +215,11 @@ export function dashboardBoard(user: User, base: { tasks: unknown[]; todos: unkn
   // 置顶优先，其次按更新时间（listNotes 已按 updated_at DESC 排序）
   const recentNotes = notes.toSorted((left, right) => right.isPinned - left.isPinned).slice(0, BOARD_LIST_SIZE);
 
-  const canReadFiles = user.role === "admin" || user.role === "manager";
-  const recentFiles = canReadFiles ? listFiles(user, "", "", null).slice(0, BOARD_LIST_SIZE).map(toBoardFile) : null;
+  /**
+   * 重要文件是**组织公共数据**（D-54）：组织内所有人（含普通成员）都看得到，
+   * 只有删除限组织管理者与管理员 —— 概览展板只读，因此这里不再按角色收窄。
+   */
+  const recentFiles = listFiles(user, "", "", null).slice(0, BOARD_LIST_SIZE).map(toBoardFile);
   const completed = tasks.filter((task) => task.status === "completed").length;
 
   return {

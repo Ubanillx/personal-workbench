@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { TaskStatus } from "../../shared/types/domain";
-import { clamp, date, db, now, one, ownerIdOf, priority, rows, run, type User } from "./db.server";
+import { clamp, date, db, flag, now, one, ownerIdOf, priority, rows, run, type User } from "./db.server";
 import { assertOrgAccess, orgIsActive } from "./session.server";
 import {
   canManageTasks,
@@ -32,12 +32,40 @@ const failed = (code: string, message: string, status: number): ServiceResult<ne
 /** 与 session.notFound() 同一信封：跨组织与「不存在」必须给出完全一样的响应 */
 const notFoundResult = (): ServiceResult<never> => failed("NOT_FOUND", "未找到该资源", 404);
 
-/** 存在性 + 组织边界：不存在或跨组织都返回 null，调用方一律回 404（§14.2） */
-function locate(user: User, id: string): { task: TaskView; orgId: string } | null {
+/**
+ * 定位结果。刻意做成**判别联合**，且判别键是显式的 `ok` 而**不是** `task` 是否为空：
+ * `TaskView` 的定义是 `ReturnType<typeof toTaskView>`（= `any`，"字段顺序与 undefined 行为都要保留"），
+ * 于是 `if (!located.task)` 里那个 `any` 会让 TypeScript 收不窄 `failure`。
+ * 用 `ok` 当判别键，`if (!located.ok) return located.failure;` 之后两件事同时成立：
+ * `failure` 必定非空、`task` 与 `orgId` 必定有值，调用点不必写非空断言。
+ */
+type Located =
+  { ok: true; task: TaskView; orgId: string; failure: null } | { ok: false; task: null; orgId: null; failure: ServiceResult<never> };
+
+/** 存在性 + 组织边界：不存在或跨组织都返回 404 结果，调用方一律回 404（§14.2） */
+function locate(user: User, id: string): Located {
   const found = findTaskWithOrg(db(), id);
-  if (!found) return null;
-  if (assertOrgAccess(user, found.orgId)) return null;
-  return found;
+  if (!found) return { ok: false, task: null, orgId: null, failure: notFoundResult() };
+  if (assertOrgAccess(user, found.orgId)) return { ok: false, task: null, orgId: null, failure: notFoundResult() };
+  return { ok: true, task: found.task, orgId: found.orgId, failure: null };
+}
+
+/**
+ * 在「存在 + 组织边界」之上加**可见性**，供写操作与间接表（评论 / 时间线）使用。
+ *
+ * ⚠️ 写操作不能只判 `canManageTasks`：组织管理者对**别人的私密任务**没有可见权（D-54），
+ * 若只判角色，他能直接 `PATCH /api/tasks/:id` 改一条自己看不见的任务——「列表看不见、接口改得动」
+ * 是权限模型里最危险的一种裂缝。这里的语义因此与 `canView` 完全一致：
+ * 本组织但看不见（私密任务的非发布人、非负责人、非管理员）→ 403，与读接口同一道门。
+ *
+ * `message` 默认「无权查看该任务」；「评论」这类动词有自己的说法，由调用方传入，
+ * 免得同一条规则在两处各写一遍判断、只差一句文案。
+ */
+function viewable(user: User, id: string, message = "无权查看该任务"): Located {
+  const located = locate(user, id);
+  if (!located.ok) return located;
+  if (!canView(located.task, user)) return { ok: false, task: null, orgId: null, failure: failed("FORBIDDEN", message, 403) };
+  return located;
 }
 
 export function createTask(user: User, body: Record<string, unknown>): ServiceResult<TaskView> {
@@ -56,9 +84,12 @@ export function createTask(user: User, body: Record<string, unknown>): ServiceRe
   const ownerId = user.role === "member" ? user.id : ownerIdOf(body.ownerId, user.id);
   const owner = validateOwner(database, ownerId, { orgId });
   if (!owner.valid) return failed("VALIDATION_ERROR", owner.message, 400);
-  // 私密任务只有 admin 与创建者可见，成员看不到 ⇒ 成员不能创建私密任务
-  const isPrivate = canManageTasks(user) && body.isPrivate ? 1 : 0;
-  if (isPrivate && ownerId !== user.id) return failed("VALIDATION_ERROR", "私密任务只能由创建者本人负责", 400);
+  /**
+   * 私密任务（D-54）：只有全局管理员与组织管理者能建（member 传 `isPrivate` 会降级为普通任务），
+   * 负责人可以是**发布人本人或本组织的其他人**——「发布人」与「负责人」是两个独立的可见方，
+   * D-36 那条「负责人必须是创建者本人」的限制随之取消（否则「负责人可见」永远等于「发布人可见」）。
+   */
+  const isPrivate = canManageTasks(user) && flag(body.isPrivate) ? 1 : 0;
   const id = randomUUID();
   const stamp = now();
   run(
@@ -92,8 +123,8 @@ export function createTask(user: User, body: Record<string, unknown>): ServiceRe
 export function updateTask(user: User, id: string, body: Record<string, unknown>): ServiceResult<TaskView> {
   if (!canManageTasks(user)) return failed("FORBIDDEN", "只有管理员或组织管理者可以执行此操作", 403);
   const database = db();
-  const located = locate(user, id);
-  if (!located) return notFoundResult();
+  const located = viewable(user, id);
+  if (!located.ok) return located.failure;
   const current = located.task;
   if (current.archivedAt) return failed("ARCHIVED", "请先恢复归档任务", 400);
   if (body.progress !== undefined || body.status !== undefined) return failed("FIELD_FORBIDDEN", "请使用进度和验收接口变更任务状态", 400);
@@ -115,8 +146,17 @@ export function updateTask(user: User, id: string, body: Record<string, unknown>
   const ownerId = Object.prototype.hasOwnProperty.call(body, "ownerId") ? ownerIdOf(body.ownerId, null) : current.ownerId;
   const owner = validateOwner(database, ownerId, { orgId });
   if (!owner.valid) return failed("VALIDATION_ERROR", owner.message, 400);
-  const isPrivate = body.isPrivate === undefined ? Number(current.isPrivate) : body.isPrivate ? 1 : 0;
-  if (isPrivate && ownerId !== current.createdBy) return failed("VALIDATION_ERROR", "私密任务只能由创建者本人负责", 400);
+  /**
+   * 私密开关与负责人是**同一条可见性规则的两个输入**（D-54）：谁能看到这条任务，由「发布人 + 负责人
+   * + 全局管理员」决定。因此本组织管理者虽然能管理全部任务，却只能改**自己发布**的私密任务的这两项
+   * ——否则他可以把别人的私密任务改成公开（泄露），或把负责人换成自己（凭空获得可见权）。
+   * 其余字段（标题 / 说明 / 优先级 / 截止日期）不受此限：能看见就能管。
+   */
+  const touchesPrivacy = body.isPrivate !== undefined || ownerId !== current.ownerId;
+  if (touchesPrivacy && current.isPrivate && user.role !== "admin" && current.createdBy !== user.id) {
+    return failed("FORBIDDEN", "只有发布人或管理员可以修改私密任务的私密状态与负责人", 403);
+  }
+  const isPrivate = body.isPrivate === undefined ? Number(current.isPrivate) : flag(body.isPrivate) ? 1 : 0;
   const stamp = now();
   run(
     database,
@@ -163,8 +203,8 @@ export function updateTask(user: User, id: string, body: Record<string, unknown>
 export function deleteTask(user: User, id: string): ServiceResult<null> {
   if (!canManageTasks(user)) return failed("FORBIDDEN", "只有管理员或组织管理者可以执行此操作", 403);
   const database = db();
-  const located = locate(user, id);
-  if (!located) return notFoundResult();
+  const located = viewable(user, id);
+  if (!located.ok) return located.failure;
   if (!located.task.archivedAt) return failed("ARCHIVE_REQUIRED", "请先归档任务，再彻底删除", 400);
   run(database, "DELETE FROM tasks WHERE id=?", id);
   return done(null);
@@ -172,8 +212,8 @@ export function deleteTask(user: User, id: string): ServiceResult<null> {
 
 export function reportProgress(user: User, id: string, body: Record<string, unknown>): ServiceResult<TaskView> {
   const database = db();
-  const located = locate(user, id);
-  if (!located) return notFoundResult();
+  const located = viewable(user, id);
+  if (!located.ok) return located.failure;
   const current = located.task;
   if (current.archivedAt) return failed("ARCHIVED", "请先恢复归档任务", 400);
   if (current.ownerId !== user.id) return failed("FORBIDDEN", "只能更新自己负责的任务", 403);
@@ -209,8 +249,8 @@ export function reportProgress(user: User, id: string, body: Record<string, unkn
 
 export function submitReview(user: User, id: string, note: string): ServiceResult<TaskView> {
   const database = db();
-  const located = locate(user, id);
-  if (!located) return notFoundResult();
+  const located = viewable(user, id);
+  if (!located.ok) return located.failure;
   const task = located.task;
   if (task.archivedAt) return failed("ARCHIVED", "请先恢复归档任务", 400);
   if (task.ownerId !== user.id) return failed("FORBIDDEN", "只有任务负责人可以提交验收", 403);
@@ -226,8 +266,8 @@ export function submitReview(user: User, id: string, note: string): ServiceResul
 export function approveTask(user: User, id: string, note: string): ServiceResult<TaskView> {
   if (!canManageTasks(user)) return failed("FORBIDDEN", "只有管理员或组织管理者可以执行此操作", 403);
   const database = db();
-  const located = locate(user, id);
-  if (!located) return notFoundResult();
+  const located = viewable(user, id);
+  if (!located.ok) return located.failure;
   const task = located.task;
   if (task.archivedAt) return failed("ARCHIVED", "请先恢复归档任务", 400);
   if (task.status !== "pending_review") return failed("INVALID_STATE", "只有待验收任务可以通过", 400);
@@ -242,8 +282,8 @@ export function approveTask(user: User, id: string, note: string): ServiceResult
 export function returnTask(user: User, id: string, body: Record<string, unknown>): ServiceResult<TaskView> {
   if (!canManageTasks(user)) return failed("FORBIDDEN", "只有管理员或组织管理者可以执行此操作", 403);
   const database = db();
-  const located = locate(user, id);
-  if (!located) return notFoundResult();
+  const located = viewable(user, id);
+  if (!located.ok) return located.failure;
   const task = located.task;
   if (task.archivedAt) return failed("ARCHIVED", "请先恢复归档任务", 400);
   if (task.status !== "pending_review") return failed("INVALID_STATE", "只有待验收任务可以退回", 400);
@@ -259,8 +299,8 @@ export function returnTask(user: User, id: string, body: Record<string, unknown>
 export function archiveTask(user: User, id: string): ServiceResult<null> {
   if (!canManageTasks(user)) return failed("FORBIDDEN", "只有管理员或组织管理者可以执行此操作", 403);
   const database = db();
-  const located = locate(user, id);
-  if (!located) return notFoundResult();
+  const located = viewable(user, id);
+  if (!located.ok) return located.failure;
   if (!located.task.archivedAt) {
     const stamp = now();
     run(database, "UPDATE tasks SET archived_at=?,updated_at=? WHERE id=?", stamp, stamp, id);
@@ -272,8 +312,8 @@ export function archiveTask(user: User, id: string): ServiceResult<null> {
 export function restoreTask(user: User, id: string): ServiceResult<TaskView> {
   if (!canManageTasks(user)) return failed("FORBIDDEN", "只有管理员或组织管理者可以执行此操作", 403);
   const database = db();
-  const located = locate(user, id);
-  if (!located) return notFoundResult();
+  const located = viewable(user, id);
+  if (!located.ok) return located.failure;
   if (located.task.archivedAt) {
     run(database, "UPDATE tasks SET archived_at=NULL,updated_at=? WHERE id=?", now(), id);
     event(database, id, user, "task_restored", "任务已恢复");
@@ -284,10 +324,9 @@ export function restoreTask(user: User, id: string): ServiceResult<TaskView> {
 /** 评论读取：`task_comments` 没有 org_id，先经 task_id 取任务并判定组织边界与可见性 */
 export function listComments(user: User, id: string): ServiceResult<unknown[]> {
   const database = db();
-  const located = locate(user, id);
-  if (!located) return notFoundResult();
+  const located = viewable(user, id);
+  if (!located.ok) return located.failure;
   const task = located.task;
-  if (!canView(task, user)) return failed("FORBIDDEN", "无权查看该任务", 403);
   return done(
     rows(
       database,
@@ -299,10 +338,10 @@ export function listComments(user: User, id: string): ServiceResult<unknown[]> {
 
 export function addComment(user: User, id: string, body: Record<string, unknown>): ServiceResult<Record<string, unknown>> {
   const database = db();
-  const located = locate(user, id);
-  if (!located) return notFoundResult();
+  // 评论有自己的说法，所以把文案交给门本身，而不是复制一遍判断
+  const located = viewable(user, id, "无权评论该任务");
+  if (!located.ok) return located.failure;
   const task = located.task;
-  if (!canView(task, user)) return failed("FORBIDDEN", "无权评论该任务", 403);
   const content = String(body.content ?? body.text ?? "").trim();
   if (!content) return failed("VALIDATION_ERROR", "评论内容不能为空", 400);
   const stamp = now();
@@ -333,10 +372,9 @@ export function addComment(user: User, id: string, body: Record<string, unknown>
 /** 时间线：三张间接表都经 task_id 关联，组织边界由上面那次 locate 兜住 */
 export function listActivity(user: User, id: string): ServiceResult<unknown[]> {
   const database = db();
-  const located = locate(user, id);
-  if (!located) return notFoundResult();
+  const located = viewable(user, id);
+  if (!located.ok) return located.failure;
   const task = located.task;
-  if (!canView(task, user)) return failed("FORBIDDEN", "无权查看该任务", 403);
   const logs = rows(
     database,
     "SELECT id,'progress' AS kind,author_id AS authorId,author_name AS authorName,content,progress_snapshot AS progress,created_at AS createdAt FROM task_progress_logs WHERE task_id=?",

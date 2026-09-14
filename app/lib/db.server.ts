@@ -103,6 +103,17 @@ export function ownerIdOf(value: unknown, fallback: string | null): string | nul
       ? value
       : fallback;
 }
+
+/**
+ * 复选框类字段的统一解释：`true` / `1` / `"1"` / `"true"` / `"on"` 为真，其余为假。
+ *
+ * 页面 action 的两种提交方式给出的类型并不一样（`readPayload`：JSON 给 boolean、
+ * 表单编码给 string），而 `Boolean("false")` 是 `true`——「取消私密」这类操作会被读反。
+ * 凡是「勾选 = 开关」的字段都必须过这一道，别直接写 `body.x ? 1 : 0`。
+ */
+export function flag(value: unknown): boolean {
+  return value === true || value === 1 || value === "1" || value === "true" || value === "on";
+}
 export function inboxFingerprint(item: Record<string, unknown>, title: string): string {
   const supplied = typeof item.fingerprint === "string" ? item.fingerprint.trim() : "";
   return (

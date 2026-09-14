@@ -265,6 +265,20 @@ export function assertOrgAccess(user: User, resourceOrgId: string | null | undef
   return null;
 }
 
+/**
+ * 同组织但资源不可见的统一响应（**403**，不是 404）与它的文案。
+ *
+ * 与 `assertOrgAccess` 的分工刻意分开（D-35 / D-54 / D-55）：
+ * - 跨组织 → 404：连「有没有这条资源」都不该知道；
+ * - 本组织但没权限（别人的私密任务、别人的待办、别人的个人文件）→ 403：对方本来就知道
+ *   组织里有这条东西，藏成「不存在」会让「权限不足」与「记录被删了」变成同一种现象。
+ *
+ * 各业务域**共用这一个信封**，只是把人话动词传进来（「查看任务」/「访问记录」/「访问该文件」）。
+ */
+export function forbidden(message: string): Response {
+  return fail("FORBIDDEN", message, 403);
+}
+
 /** 能否「管理」某组织（改信息、审批申请、管成员）：管理员任意，组织管理者仅本组织 */
 export function assertOrgManage(user: User, orgId: string): Response | null {
   if (user.role === "admin") return null;

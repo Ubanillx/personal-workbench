@@ -1,9 +1,9 @@
 {
   "meta": {
-    "generatedAt": "2026-09-12T06:11:57.003Z",
+    "generatedAt": "2026-09-14T07:44:08.214Z",
     "entry": "npm run serve",
     "node": "24.9.0",
-    "caseCount": 324
+    "caseCount": 369
   },
   "responses": [
     {
@@ -956,7 +956,134 @@
       },
       "body": {
         "ok": true,
-        "data": []
+        "data": [
+          {
+            "id": "t-done",
+            "title": "已完成任务",
+            "description": "",
+            "priority": "P2",
+            "status": "completed",
+            "progress": 100,
+            "dueDate": "2026-09-10",
+            "ownerId": "user-member-a",
+            "createdBy": "user-manager-a",
+            "source": "manual",
+            "isPrivate": false,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "completedAt": "<ts>",
+            "archivedAt": null,
+            "orgId": "org-alpha",
+            "orgName": "阿尔法组",
+            "ownerName": "阿尔法成员甲",
+            "ownerRole": "member"
+          },
+          {
+            "id": "t-doing",
+            "title": "进行中任务",
+            "description": "",
+            "priority": "P0",
+            "status": "in_progress",
+            "progress": 40,
+            "dueDate": "2026-09-30",
+            "ownerId": "user-member-a",
+            "createdBy": "user-manager-a",
+            "source": "manual",
+            "isPrivate": false,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "completedAt": null,
+            "archivedAt": null,
+            "orgId": "org-alpha",
+            "orgName": "阿尔法组",
+            "ownerName": "阿尔法成员甲",
+            "ownerRole": "member"
+          },
+          {
+            "id": "t-review",
+            "title": "待验收任务",
+            "description": "",
+            "priority": "P1",
+            "status": "pending_review",
+            "progress": 100,
+            "dueDate": "2026-09-30",
+            "ownerId": "user-member-a",
+            "createdBy": "user-manager-a",
+            "source": "manual",
+            "isPrivate": false,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "completedAt": null,
+            "archivedAt": null,
+            "orgId": "org-alpha",
+            "orgName": "阿尔法组",
+            "ownerName": "阿尔法成员甲",
+            "ownerRole": "member"
+          },
+          {
+            "id": "t-todo",
+            "title": "待办任务",
+            "description": "",
+            "priority": "P1",
+            "status": "todo",
+            "progress": 0,
+            "dueDate": null,
+            "ownerId": "user-member-a",
+            "createdBy": "user-manager-a",
+            "source": "manual",
+            "isPrivate": false,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "completedAt": null,
+            "archivedAt": null,
+            "orgId": "org-alpha",
+            "orgName": "阿尔法组",
+            "ownerName": "阿尔法成员甲",
+            "ownerRole": "member"
+          },
+          {
+            "id": "t-of-a2",
+            "title": "成员乙的任务",
+            "description": "",
+            "priority": "P1",
+            "status": "todo",
+            "progress": 0,
+            "dueDate": null,
+            "ownerId": "user-member-a2",
+            "createdBy": "user-manager-a",
+            "source": "manual",
+            "isPrivate": false,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "completedAt": null,
+            "archivedAt": null,
+            "orgId": "org-alpha",
+            "orgName": "阿尔法组",
+            "ownerName": "阿尔法成员乙",
+            "ownerRole": "member"
+          },
+          {
+            "id": "t-overdue",
+            "title": "逾期任务",
+            "description": "",
+            "priority": "P0",
+            "status": "todo",
+            "progress": 10,
+            "dueDate": "2020-01-01",
+            "ownerId": "user-member-a",
+            "createdBy": "user-manager-a",
+            "source": "manual",
+            "isPrivate": false,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "completedAt": null,
+            "archivedAt": null,
+            "orgId": "org-alpha",
+            "orgName": "阿尔法组",
+            "ownerName": "阿尔法成员甲",
+            "ownerRole": "member"
+          }
+        ]
       }
     },
     {
@@ -1252,47 +1379,13 @@
               "ownerRole": "member"
             }
           ],
-          "todos": [
-            {
-              "id": "todo-open",
-              "content": "跟进报价",
-              "todoDate": "2026-09-01",
-              "isCompleted": 0,
-              "completedAt": null,
-              "createdAt": "<ts>",
-              "updatedAt": "<ts>"
-            },
-            {
-              "id": "todo-b",
-              "content": "贝塔跟进",
-              "todoDate": "2026-09-01",
-              "isCompleted": 0,
-              "completedAt": null,
-              "createdAt": "<ts>",
-              "updatedAt": "<ts>"
-            }
-          ],
-          "notes": [
-            {
-              "id": "note-1",
-              "content": "会议要点",
-              "isPinned": 0,
-              "createdAt": "<ts>",
-              "updatedAt": "<ts>"
-            },
-            {
-              "id": "note-b",
-              "content": "贝塔会议要点",
-              "isPinned": 0,
-              "createdAt": "<ts>",
-              "updatedAt": "<ts>"
-            }
-          ],
+          "todos": [],
+          "notes": [],
           "stats": {
             "tasks": 8,
             "activeTasks": 7,
-            "pendingTodos": 2,
-            "notes": 2
+            "pendingTodos": 0,
+            "notes": 0
           }
         }
       }
@@ -1480,31 +1573,13 @@
               "ownerRole": "member"
             }
           ],
-          "todos": [
-            {
-              "id": "todo-open",
-              "content": "跟进报价",
-              "todoDate": "2026-09-01",
-              "isCompleted": 0,
-              "completedAt": null,
-              "createdAt": "<ts>",
-              "updatedAt": "<ts>"
-            }
-          ],
-          "notes": [
-            {
-              "id": "note-1",
-              "content": "会议要点",
-              "isPinned": 0,
-              "createdAt": "<ts>",
-              "updatedAt": "<ts>"
-            }
-          ],
+          "todos": [],
+          "notes": [],
           "stats": {
             "tasks": 7,
             "activeTasks": 6,
-            "pendingTodos": 1,
-            "notes": 1
+            "pendingTodos": 0,
+            "notes": 0
           }
         }
       }
@@ -1545,20 +1620,20 @@
           },
           "tasks": [
             {
-              "id": "t-todo",
-              "title": "待办任务",
+              "id": "t-done",
+              "title": "已完成任务",
               "description": "",
-              "priority": "P1",
-              "status": "todo",
-              "progress": 0,
-              "dueDate": null,
+              "priority": "P2",
+              "status": "completed",
+              "progress": 100,
+              "dueDate": "2026-09-10",
               "ownerId": "user-member-a",
               "createdBy": "user-manager-a",
               "source": "manual",
               "isPrivate": false,
               "createdAt": "<ts>",
               "updatedAt": "<ts>",
-              "completedAt": null,
+              "completedAt": "<ts>",
               "archivedAt": null,
               "orgId": "org-alpha",
               "orgName": "阿尔法组",
@@ -1608,24 +1683,45 @@
               "ownerRole": "member"
             },
             {
-              "id": "t-done",
-              "title": "已完成任务",
+              "id": "t-todo",
+              "title": "待办任务",
               "description": "",
-              "priority": "P2",
-              "status": "completed",
-              "progress": 100,
-              "dueDate": "2026-09-10",
+              "priority": "P1",
+              "status": "todo",
+              "progress": 0,
+              "dueDate": null,
               "ownerId": "user-member-a",
               "createdBy": "user-manager-a",
               "source": "manual",
               "isPrivate": false,
               "createdAt": "<ts>",
               "updatedAt": "<ts>",
-              "completedAt": "<ts>",
+              "completedAt": null,
               "archivedAt": null,
               "orgId": "org-alpha",
               "orgName": "阿尔法组",
               "ownerName": "阿尔法成员甲",
+              "ownerRole": "member"
+            },
+            {
+              "id": "t-of-a2",
+              "title": "成员乙的任务",
+              "description": "",
+              "priority": "P1",
+              "status": "todo",
+              "progress": 0,
+              "dueDate": null,
+              "ownerId": "user-member-a2",
+              "createdBy": "user-manager-a",
+              "source": "manual",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": null,
+              "archivedAt": null,
+              "orgId": "org-alpha",
+              "orgName": "阿尔法组",
+              "ownerName": "阿尔法成员乙",
               "ownerRole": "member"
             },
             {
@@ -1671,8 +1767,8 @@
             }
           ],
           "stats": {
-            "tasks": 5,
-            "activeTasks": 4,
+            "tasks": 6,
+            "activeTasks": 5,
             "pendingTodos": 1,
             "notes": 1
           }
@@ -5464,20 +5560,20 @@
         "ok": true,
         "data": [
           {
-            "id": "t-todo",
-            "title": "待办任务",
+            "id": "t-done",
+            "title": "已完成任务",
             "description": "",
-            "priority": "P1",
-            "status": "todo",
-            "progress": 0,
-            "dueDate": null,
+            "priority": "P2",
+            "status": "completed",
+            "progress": 100,
+            "dueDate": "2026-09-10",
             "ownerId": "user-member-a",
             "createdBy": "user-manager-a",
             "source": "manual",
             "isPrivate": false,
             "createdAt": "<ts>",
             "updatedAt": "<ts>",
-            "completedAt": null,
+            "completedAt": "<ts>",
             "archivedAt": null,
             "orgId": "org-alpha",
             "orgName": "阿尔法组",
@@ -5527,24 +5623,45 @@
             "ownerRole": "member"
           },
           {
-            "id": "t-done",
-            "title": "已完成任务",
+            "id": "t-todo",
+            "title": "待办任务",
             "description": "",
-            "priority": "P2",
-            "status": "completed",
-            "progress": 100,
-            "dueDate": "2026-09-10",
+            "priority": "P1",
+            "status": "todo",
+            "progress": 0,
+            "dueDate": null,
             "ownerId": "user-member-a",
             "createdBy": "user-manager-a",
             "source": "manual",
             "isPrivate": false,
             "createdAt": "<ts>",
             "updatedAt": "<ts>",
-            "completedAt": "<ts>",
+            "completedAt": null,
             "archivedAt": null,
             "orgId": "org-alpha",
             "orgName": "阿尔法组",
             "ownerName": "阿尔法成员甲",
+            "ownerRole": "member"
+          },
+          {
+            "id": "t-of-a2",
+            "title": "成员乙的任务",
+            "description": "",
+            "priority": "P1",
+            "status": "todo",
+            "progress": 0,
+            "dueDate": null,
+            "ownerId": "user-member-a2",
+            "createdBy": "user-manager-a",
+            "source": "manual",
+            "isPrivate": false,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "completedAt": null,
+            "archivedAt": null,
+            "orgId": "org-alpha",
+            "orgName": "阿尔法组",
+            "ownerName": "阿尔法成员乙",
             "ownerRole": "member"
           },
           {
@@ -5595,6 +5712,90 @@
         "ok": true,
         "data": [
           {
+            "id": "t-done",
+            "title": "已完成任务",
+            "description": "",
+            "priority": "P2",
+            "status": "completed",
+            "progress": 100,
+            "dueDate": "2026-09-10",
+            "ownerId": "user-member-a",
+            "createdBy": "user-manager-a",
+            "source": "manual",
+            "isPrivate": false,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "completedAt": "<ts>",
+            "archivedAt": null,
+            "orgId": "org-alpha",
+            "orgName": "阿尔法组",
+            "ownerName": "阿尔法成员甲",
+            "ownerRole": "member"
+          },
+          {
+            "id": "t-doing",
+            "title": "进行中任务",
+            "description": "",
+            "priority": "P0",
+            "status": "in_progress",
+            "progress": 40,
+            "dueDate": "2026-09-30",
+            "ownerId": "user-member-a",
+            "createdBy": "user-manager-a",
+            "source": "manual",
+            "isPrivate": false,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "completedAt": null,
+            "archivedAt": null,
+            "orgId": "org-alpha",
+            "orgName": "阿尔法组",
+            "ownerName": "阿尔法成员甲",
+            "ownerRole": "member"
+          },
+          {
+            "id": "t-review",
+            "title": "待验收任务",
+            "description": "",
+            "priority": "P1",
+            "status": "pending_review",
+            "progress": 100,
+            "dueDate": "2026-09-30",
+            "ownerId": "user-member-a",
+            "createdBy": "user-manager-a",
+            "source": "manual",
+            "isPrivate": false,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "completedAt": null,
+            "archivedAt": null,
+            "orgId": "org-alpha",
+            "orgName": "阿尔法组",
+            "ownerName": "阿尔法成员甲",
+            "ownerRole": "member"
+          },
+          {
+            "id": "t-todo",
+            "title": "待办任务",
+            "description": "",
+            "priority": "P1",
+            "status": "todo",
+            "progress": 0,
+            "dueDate": null,
+            "ownerId": "user-member-a",
+            "createdBy": "user-manager-a",
+            "source": "manual",
+            "isPrivate": false,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "completedAt": null,
+            "archivedAt": null,
+            "orgId": "org-alpha",
+            "orgName": "阿尔法组",
+            "ownerName": "阿尔法成员甲",
+            "ownerRole": "member"
+          },
+          {
             "id": "t-of-a2",
             "title": "成员乙的任务",
             "description": "",
@@ -5613,6 +5814,27 @@
             "orgId": "org-alpha",
             "orgName": "阿尔法组",
             "ownerName": "阿尔法成员乙",
+            "ownerRole": "member"
+          },
+          {
+            "id": "t-overdue",
+            "title": "逾期任务",
+            "description": "",
+            "priority": "P0",
+            "status": "todo",
+            "progress": 10,
+            "dueDate": "2020-01-01",
+            "ownerId": "user-member-a",
+            "createdBy": "user-manager-a",
+            "source": "manual",
+            "isPrivate": false,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "completedAt": null,
+            "archivedAt": null,
+            "orgId": "org-alpha",
+            "orgName": "阿尔法组",
+            "ownerName": "阿尔法成员甲",
             "ownerRole": "member"
           }
         ]
@@ -6000,6 +6222,56 @@
           "orgName": "阿尔法组",
           "ownerName": "阿尔法管理者",
           "ownerRole": "manager"
+        }
+      }
+    },
+    {
+      "name": "tasks.create.managerA.private.other-owner",
+      "role": "managerA",
+      "request": {
+        "method": "POST",
+        "path": "/api/tasks",
+        "body": {
+          "title": "契约-派给成员乙的私密任务",
+          "isPrivate": true,
+          "ownerId": "user-member-a2"
+        }
+      },
+      "status": 201,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "id": "<uuid>",
+          "title": "契约-派给成员乙的私密任务",
+          "description": "",
+          "priority": "P1",
+          "status": "todo",
+          "progress": 0,
+          "dueDate": null,
+          "ownerId": "user-member-a2",
+          "createdBy": "user-manager-a",
+          "source": "manual",
+          "isPrivate": true,
+          "createdAt": "<ts>",
+          "updatedAt": "<ts>",
+          "completedAt": null,
+          "archivedAt": null,
+          "orgId": "org-alpha",
+          "orgName": "阿尔法组",
+          "ownerName": "阿尔法成员乙",
+          "ownerRole": "member"
         }
       }
     },
@@ -6476,6 +6748,198 @@
         "error": {
           "code": "ARCHIVED",
           "message": "请先恢复归档任务"
+        }
+      }
+    },
+    {
+      "name": "tasks.patch.managerA.private.others-reassign",
+      "role": "managerA",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/tasks/t-private",
+        "body": {
+          "ownerId": "user-member-a2"
+        }
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "id": "t-private",
+          "title": "私密任务",
+          "description": "",
+          "priority": "P2",
+          "status": "todo",
+          "progress": 0,
+          "dueDate": null,
+          "ownerId": "user-member-a2",
+          "createdBy": "user-manager-a",
+          "source": "manual",
+          "isPrivate": true,
+          "createdAt": "<ts>",
+          "updatedAt": "<ts>",
+          "completedAt": null,
+          "archivedAt": null,
+          "orgId": "org-alpha",
+          "orgName": "阿尔法组",
+          "ownerName": "阿尔法成员乙",
+          "ownerRole": "member"
+        }
+      }
+    },
+    {
+      "name": "tasks.patch.managerA.private.unprivate",
+      "role": "managerA",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/tasks/t-private",
+        "body": {
+          "isPrivate": false
+        }
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "id": "t-private",
+          "title": "私密任务",
+          "description": "",
+          "priority": "P2",
+          "status": "todo",
+          "progress": 0,
+          "dueDate": null,
+          "ownerId": "user-member-a2",
+          "createdBy": "user-manager-a",
+          "source": "manual",
+          "isPrivate": false,
+          "createdAt": "<ts>",
+          "updatedAt": "<ts>",
+          "completedAt": null,
+          "archivedAt": null,
+          "orgId": "org-alpha",
+          "orgName": "阿尔法组",
+          "ownerName": "阿尔法成员乙",
+          "ownerRole": "member"
+        }
+      }
+    },
+    {
+      "name": "tasks.patch.managerA.private.own-reassign",
+      "role": "managerA",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/tasks/<uuid>",
+        "body": {
+          "ownerId": "user-member-a"
+        }
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "id": "<uuid>",
+          "title": "契约-管理者私密任务",
+          "description": "",
+          "priority": "P1",
+          "status": "todo",
+          "progress": 0,
+          "dueDate": null,
+          "ownerId": "user-member-a",
+          "createdBy": "user-manager-a",
+          "source": "manual",
+          "isPrivate": true,
+          "createdAt": "<ts>",
+          "updatedAt": "<ts>",
+          "completedAt": null,
+          "archivedAt": null,
+          "orgId": "org-alpha",
+          "orgName": "阿尔法组",
+          "ownerName": "阿尔法成员甲",
+          "ownerRole": "member"
+        }
+      }
+    },
+    {
+      "name": "tasks.patch.managerA.private.own-reassign-back",
+      "role": "managerA",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/tasks/<uuid>",
+        "body": {
+          "ownerId": "user-manager-a"
+        }
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "id": "<uuid>",
+          "title": "契约-管理者私密任务",
+          "description": "",
+          "priority": "P1",
+          "status": "todo",
+          "progress": 0,
+          "dueDate": null,
+          "ownerId": "user-manager-a",
+          "createdBy": "user-manager-a",
+          "source": "manual",
+          "isPrivate": true,
+          "createdAt": "<ts>",
+          "updatedAt": "<ts>",
+          "completedAt": null,
+          "archivedAt": null,
+          "orgId": "org-alpha",
+          "orgName": "阿尔法组",
+          "ownerName": "阿尔法管理者",
+          "ownerRole": "manager"
         }
       }
     },
@@ -7475,7 +7939,7 @@
         "method": "GET",
         "path": "/api/tasks/t-doing/comments"
       },
-      "status": 403,
+      "status": 200,
       "headers": {
         "contentType": "application/json; charset=utf-8",
         "contentDisposition": null,
@@ -7489,11 +7953,18 @@
         "xContentTypeOptions": true
       },
       "body": {
-        "ok": false,
-        "error": {
-          "code": "FORBIDDEN",
-          "message": "无权查看该任务"
-        }
+        "ok": true,
+        "data": [
+          {
+            "id": "comment-1",
+            "taskId": "t-doing",
+            "authorId": "user-manager-a",
+            "authorName": "阿尔法管理者",
+            "authorRole": "manager",
+            "content": "请补充报价单",
+            "createdAt": "<ts>"
+          }
+        ]
       }
     },
     {
@@ -7570,7 +8041,7 @@
           "content": "越权评论"
         }
       },
-      "status": 403,
+      "status": 201,
       "headers": {
         "contentType": "application/json; charset=utf-8",
         "contentDisposition": null,
@@ -7584,10 +8055,15 @@
         "xContentTypeOptions": true
       },
       "body": {
-        "ok": false,
-        "error": {
-          "code": "FORBIDDEN",
-          "message": "无权评论该任务"
+        "ok": true,
+        "data": {
+          "id": "<uuid>",
+          "taskId": "t-doing",
+          "authorId": "user-member-a2",
+          "authorName": "阿尔法成员乙",
+          "authorRole": "member",
+          "content": "越权评论",
+          "createdAt": "<ts>"
         }
       }
     },
@@ -7632,7 +8108,7 @@
           "content": "越权评论私密任务"
         }
       },
-      "status": 403,
+      "status": 201,
       "headers": {
         "contentType": "application/json; charset=utf-8",
         "contentDisposition": null,
@@ -7646,10 +8122,15 @@
         "xContentTypeOptions": true
       },
       "body": {
-        "ok": false,
-        "error": {
-          "code": "FORBIDDEN",
-          "message": "无权评论该任务"
+        "ok": true,
+        "data": {
+          "id": "<uuid>",
+          "taskId": "t-private",
+          "authorId": "user-member-a",
+          "authorName": "阿尔法成员甲",
+          "authorRole": "member",
+          "content": "越权评论私密任务",
+          "createdAt": "<ts>"
         }
       }
     },
@@ -7686,6 +8167,410 @@
           "authorRole": "manager",
           "content": "私密任务由创建者评论",
           "createdAt": "<ts>"
+        }
+      }
+    },
+    {
+      "name": "comments.list.managerA.private-task",
+      "role": "managerA",
+      "request": {
+        "method": "GET",
+        "path": "/api/tasks/t-private/comments"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": [
+          {
+            "id": "<uuid>",
+            "taskId": "t-private",
+            "authorId": "user-member-a",
+            "authorName": "阿尔法成员甲",
+            "authorRole": "member",
+            "content": "越权评论私密任务",
+            "createdAt": "<ts>"
+          },
+          {
+            "id": "<uuid>",
+            "taskId": "t-private",
+            "authorId": "user-manager-a",
+            "authorName": "阿尔法管理者",
+            "authorRole": "manager",
+            "content": "私密任务由创建者评论",
+            "createdAt": "<ts>"
+          }
+        ]
+      }
+    },
+    {
+      "name": "comments.list.memberA.private-task",
+      "role": "memberA",
+      "request": {
+        "method": "GET",
+        "path": "/api/tasks/t-private/comments"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": [
+          {
+            "id": "<uuid>",
+            "taskId": "t-private",
+            "authorId": "user-member-a",
+            "authorName": "阿尔法成员甲",
+            "authorRole": "member",
+            "content": "越权评论私密任务",
+            "createdAt": "<ts>"
+          },
+          {
+            "id": "<uuid>",
+            "taskId": "t-private",
+            "authorId": "user-manager-a",
+            "authorName": "阿尔法管理者",
+            "authorRole": "manager",
+            "content": "私密任务由创建者评论",
+            "createdAt": "<ts>"
+          }
+        ]
+      }
+    },
+    {
+      "name": "comments.list.memberA2.private-task",
+      "role": "memberA2",
+      "request": {
+        "method": "GET",
+        "path": "/api/tasks/t-private/comments"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": [
+          {
+            "id": "<uuid>",
+            "taskId": "t-private",
+            "authorId": "user-member-a",
+            "authorName": "阿尔法成员甲",
+            "authorRole": "member",
+            "content": "越权评论私密任务",
+            "createdAt": "<ts>"
+          },
+          {
+            "id": "<uuid>",
+            "taskId": "t-private",
+            "authorId": "user-manager-a",
+            "authorName": "阿尔法管理者",
+            "authorRole": "manager",
+            "content": "私密任务由创建者评论",
+            "createdAt": "<ts>"
+          }
+        ]
+      }
+    },
+    {
+      "name": "tasks.patch.memberA2.private-task",
+      "role": "memberA2",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/tasks/t-private",
+        "body": {
+          "title": "x"
+        }
+      },
+      "status": 403,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "FORBIDDEN",
+          "message": "只有管理员或组织管理者可以执行此操作"
+        }
+      }
+    },
+    {
+      "name": "comments.create.memberA2.private-task-not-owner",
+      "role": "memberA2",
+      "request": {
+        "method": "POST",
+        "path": "/api/tasks/t-private/comments",
+        "body": {
+          "content": "成员乙不是这条私密任务的负责人"
+        }
+      },
+      "status": 201,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "id": "<uuid>",
+          "taskId": "t-private",
+          "authorId": "user-member-a2",
+          "authorName": "阿尔法成员乙",
+          "authorRole": "member",
+          "content": "成员乙不是这条私密任务的负责人",
+          "createdAt": "<ts>"
+        }
+      }
+    },
+    {
+      "name": "comments.list.admin.private-task",
+      "role": "admin",
+      "request": {
+        "method": "GET",
+        "path": "/api/tasks/t-private/comments"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": [
+          {
+            "id": "<uuid>",
+            "taskId": "t-private",
+            "authorId": "user-member-a",
+            "authorName": "阿尔法成员甲",
+            "authorRole": "member",
+            "content": "越权评论私密任务",
+            "createdAt": "<ts>"
+          },
+          {
+            "id": "<uuid>",
+            "taskId": "t-private",
+            "authorId": "user-manager-a",
+            "authorName": "阿尔法管理者",
+            "authorRole": "manager",
+            "content": "私密任务由创建者评论",
+            "createdAt": "<ts>"
+          },
+          {
+            "id": "<uuid>",
+            "taskId": "t-private",
+            "authorId": "user-member-a2",
+            "authorName": "阿尔法成员乙",
+            "authorRole": "member",
+            "content": "成员乙不是这条私密任务的负责人",
+            "createdAt": "<ts>"
+          }
+        ]
+      }
+    },
+    {
+      "name": "comments.list.memberA2.private-assigned",
+      "role": "memberA2",
+      "request": {
+        "method": "GET",
+        "path": "/api/tasks/<uuid>/comments"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": []
+      }
+    },
+    {
+      "name": "comments.create.memberA2.private-assigned",
+      "role": "memberA2",
+      "request": {
+        "method": "POST",
+        "path": "/api/tasks/<uuid>/comments",
+        "body": {
+          "content": "负责人评论自己的私密任务"
+        }
+      },
+      "status": 201,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "id": "<uuid>",
+          "taskId": "<uuid>",
+          "authorId": "user-member-a2",
+          "authorName": "阿尔法成员乙",
+          "authorRole": "member",
+          "content": "负责人评论自己的私密任务",
+          "createdAt": "<ts>"
+        }
+      }
+    },
+    {
+      "name": "comments.list.managerA.private-assigned",
+      "role": "managerA",
+      "request": {
+        "method": "GET",
+        "path": "/api/tasks/<uuid>/comments"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": [
+          {
+            "id": "<uuid>",
+            "taskId": "<uuid>",
+            "authorId": "user-member-a2",
+            "authorName": "阿尔法成员乙",
+            "authorRole": "member",
+            "content": "负责人评论自己的私密任务",
+            "createdAt": "<ts>"
+          }
+        ]
+      }
+    },
+    {
+      "name": "comments.list.memberA.private-assigned",
+      "role": "memberA",
+      "request": {
+        "method": "GET",
+        "path": "/api/tasks/<uuid>/comments"
+      },
+      "status": 403,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "FORBIDDEN",
+          "message": "无权查看该任务"
+        }
+      }
+    },
+    {
+      "name": "comments.list.managerB.private-assigned.cross-org",
+      "role": "managerB",
+      "request": {
+        "method": "GET",
+        "path": "/api/tasks/<uuid>/comments"
+      },
+      "status": 404,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "未找到该资源"
         }
       }
     },
@@ -7776,6 +8661,15 @@
             "authorId": "user-member-a",
             "authorName": "阿尔法成员甲",
             "content": "阿尔法成员甲的评论",
+            "progress": null,
+            "createdAt": "<ts>"
+          },
+          {
+            "id": "<uuid>",
+            "kind": "comment",
+            "authorId": "user-member-a2",
+            "authorName": "阿尔法成员乙",
+            "content": "越权评论",
             "progress": null,
             "createdAt": "<ts>"
           }
@@ -7917,12 +8811,51 @@
           {
             "id": "<uuid>",
             "recipientId": "user-member-a",
+            "actorId": "user-member-a2",
+            "taskId": "t-doing",
+            "reportId": null,
+            "eventType": "task_commented",
+            "title": "任务有新评论",
+            "message": "阿尔法成员乙 评论了任务“进行中任务”",
+            "isRead": 0,
+            "createdAt": "<ts>",
+            "readAt": null
+          },
+          {
+            "id": "<uuid>",
+            "recipientId": "user-member-a",
             "actorId": "user-manager-a",
             "taskId": "<uuid>",
             "reportId": null,
             "eventType": "task_approved",
             "title": "任务验收通过",
             "message": "任务“契约-改名”已通过验收",
+            "isRead": 0,
+            "createdAt": "<ts>",
+            "readAt": null
+          },
+          {
+            "id": "<uuid>",
+            "recipientId": "user-member-a",
+            "actorId": "user-manager-a",
+            "taskId": "<uuid>",
+            "reportId": null,
+            "eventType": "task_reassigned",
+            "title": "任务负责人已变更",
+            "message": "任务“契约-管理者私密任务”已重新分配",
+            "isRead": 0,
+            "createdAt": "<ts>",
+            "readAt": null
+          },
+          {
+            "id": "<uuid>",
+            "recipientId": "user-member-a",
+            "actorId": "user-manager-a",
+            "taskId": "<uuid>",
+            "reportId": null,
+            "eventType": "task_reassigned",
+            "title": "任务负责人已变更",
+            "message": "任务“契约-管理者私密任务”已重新分配",
             "isRead": 0,
             "createdAt": "<ts>",
             "readAt": null
@@ -7995,12 +8928,51 @@
           {
             "id": "<uuid>",
             "recipientId": "user-member-a",
+            "actorId": "user-member-a2",
+            "taskId": "t-doing",
+            "reportId": null,
+            "eventType": "task_commented",
+            "title": "任务有新评论",
+            "message": "阿尔法成员乙 评论了任务“进行中任务”",
+            "isRead": 0,
+            "createdAt": "<ts>",
+            "readAt": null
+          },
+          {
+            "id": "<uuid>",
+            "recipientId": "user-member-a",
             "actorId": "user-manager-a",
             "taskId": "<uuid>",
             "reportId": null,
             "eventType": "task_approved",
             "title": "任务验收通过",
             "message": "任务“契约-改名”已通过验收",
+            "isRead": 0,
+            "createdAt": "<ts>",
+            "readAt": null
+          },
+          {
+            "id": "<uuid>",
+            "recipientId": "user-member-a",
+            "actorId": "user-manager-a",
+            "taskId": "<uuid>",
+            "reportId": null,
+            "eventType": "task_reassigned",
+            "title": "任务负责人已变更",
+            "message": "任务“契约-管理者私密任务”已重新分配",
+            "isRead": 0,
+            "createdAt": "<ts>",
+            "readAt": null
+          },
+          {
+            "id": "<uuid>",
+            "recipientId": "user-member-a",
+            "actorId": "user-manager-a",
+            "taskId": "<uuid>",
+            "reportId": null,
+            "eventType": "task_reassigned",
+            "title": "任务负责人已变更",
+            "message": "任务“契约-管理者私密任务”已重新分配",
             "isRead": 0,
             "createdAt": "<ts>",
             "readAt": null
@@ -8332,6 +9304,48 @@
             },
             {
               "id": "<uuid>",
+              "title": "契约-管理者私密任务",
+              "description": "",
+              "priority": "P1",
+              "status": "todo",
+              "progress": 0,
+              "dueDate": null,
+              "ownerId": "user-manager-a",
+              "createdBy": "user-manager-a",
+              "source": "manual",
+              "isPrivate": true,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": null,
+              "archivedAt": null,
+              "orgId": "org-alpha",
+              "orgName": "阿尔法组",
+              "ownerName": "阿尔法管理者",
+              "ownerRole": "manager"
+            },
+            {
+              "id": "t-private",
+              "title": "私密任务",
+              "description": "",
+              "priority": "P2",
+              "status": "todo",
+              "progress": 0,
+              "dueDate": null,
+              "ownerId": "user-member-a2",
+              "createdBy": "user-manager-a",
+              "source": "manual",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": null,
+              "archivedAt": null,
+              "orgId": "org-alpha",
+              "orgName": "阿尔法组",
+              "ownerName": "阿尔法成员乙",
+              "ownerRole": "member"
+            },
+            {
+              "id": "<uuid>",
               "title": "契约-贝塔管理者建任务",
               "description": "",
               "priority": "P1",
@@ -8416,13 +9430,13 @@
             },
             {
               "id": "<uuid>",
-              "title": "契约-管理者私密任务",
+              "title": "契约-派给成员乙的私密任务",
               "description": "",
               "priority": "P1",
               "status": "todo",
               "progress": 0,
               "dueDate": null,
-              "ownerId": "user-manager-a",
+              "ownerId": "user-member-a2",
               "createdBy": "user-manager-a",
               "source": "manual",
               "isPrivate": true,
@@ -8432,8 +9446,8 @@
               "archivedAt": null,
               "orgId": "org-alpha",
               "orgName": "阿尔法组",
-              "ownerName": "阿尔法管理者",
-              "ownerRole": "manager"
+              "ownerName": "阿尔法成员乙",
+              "ownerRole": "member"
             },
             {
               "id": "t-todo",
@@ -8520,27 +9534,6 @@
               "ownerRole": "member"
             },
             {
-              "id": "t-private",
-              "title": "私密任务",
-              "description": "",
-              "priority": "P2",
-              "status": "todo",
-              "progress": 0,
-              "dueDate": null,
-              "ownerId": "user-manager-a",
-              "createdBy": "user-manager-a",
-              "source": "manual",
-              "isPrivate": true,
-              "createdAt": "<ts>",
-              "updatedAt": "<ts>",
-              "completedAt": null,
-              "archivedAt": null,
-              "orgId": "org-alpha",
-              "orgName": "阿尔法组",
-              "ownerName": "阿尔法管理者",
-              "ownerRole": "manager"
-            },
-            {
               "id": "t-overdue",
               "title": "逾期任务",
               "description": "",
@@ -8605,9 +9598,9 @@
             }
           ],
           "summary": {
-            "total": 15,
+            "total": 16,
             "completed": 2,
-            "active": 13,
+            "active": 14,
             "overdue": 1,
             "completionRate": 13
           }
@@ -8738,6 +9731,48 @@
             },
             {
               "id": "<uuid>",
+              "title": "契约-管理者私密任务",
+              "description": "",
+              "priority": "P1",
+              "status": "todo",
+              "progress": 0,
+              "dueDate": null,
+              "ownerId": "user-manager-a",
+              "createdBy": "user-manager-a",
+              "source": "manual",
+              "isPrivate": true,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": null,
+              "archivedAt": null,
+              "orgId": "org-alpha",
+              "orgName": "阿尔法组",
+              "ownerName": "阿尔法管理者",
+              "ownerRole": "manager"
+            },
+            {
+              "id": "t-private",
+              "title": "私密任务",
+              "description": "",
+              "priority": "P2",
+              "status": "todo",
+              "progress": 0,
+              "dueDate": null,
+              "ownerId": "user-member-a2",
+              "createdBy": "user-manager-a",
+              "source": "manual",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": null,
+              "archivedAt": null,
+              "orgId": "org-alpha",
+              "orgName": "阿尔法组",
+              "ownerName": "阿尔法成员乙",
+              "ownerRole": "member"
+            },
+            {
+              "id": "<uuid>",
               "title": "契约-贝塔管理者建任务",
               "description": "",
               "priority": "P1",
@@ -8822,13 +9857,13 @@
             },
             {
               "id": "<uuid>",
-              "title": "契约-管理者私密任务",
+              "title": "契约-派给成员乙的私密任务",
               "description": "",
               "priority": "P1",
               "status": "todo",
               "progress": 0,
               "dueDate": null,
-              "ownerId": "user-manager-a",
+              "ownerId": "user-member-a2",
               "createdBy": "user-manager-a",
               "source": "manual",
               "isPrivate": true,
@@ -8838,8 +9873,8 @@
               "archivedAt": null,
               "orgId": "org-alpha",
               "orgName": "阿尔法组",
-              "ownerName": "阿尔法管理者",
-              "ownerRole": "manager"
+              "ownerName": "阿尔法成员乙",
+              "ownerRole": "member"
             },
             {
               "id": "t-todo",
@@ -8926,27 +9961,6 @@
               "ownerRole": "member"
             },
             {
-              "id": "t-private",
-              "title": "私密任务",
-              "description": "",
-              "priority": "P2",
-              "status": "todo",
-              "progress": 0,
-              "dueDate": null,
-              "ownerId": "user-manager-a",
-              "createdBy": "user-manager-a",
-              "source": "manual",
-              "isPrivate": true,
-              "createdAt": "<ts>",
-              "updatedAt": "<ts>",
-              "completedAt": null,
-              "archivedAt": null,
-              "orgId": "org-alpha",
-              "orgName": "阿尔法组",
-              "ownerName": "阿尔法管理者",
-              "ownerRole": "manager"
-            },
-            {
               "id": "t-overdue",
               "title": "逾期任务",
               "description": "",
@@ -9011,9 +10025,9 @@
             }
           ],
           "summary": {
-            "total": 15,
+            "total": 16,
             "completed": 2,
-            "active": 13,
+            "active": 14,
             "overdue": 1,
             "completionRate": 13
           }
@@ -9165,6 +10179,48 @@
             },
             {
               "id": "<uuid>",
+              "title": "契约-管理者私密任务",
+              "description": "",
+              "priority": "P1",
+              "status": "todo",
+              "progress": 0,
+              "dueDate": null,
+              "ownerId": "user-manager-a",
+              "createdBy": "user-manager-a",
+              "source": "manual",
+              "isPrivate": true,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": null,
+              "archivedAt": null,
+              "orgId": "org-alpha",
+              "orgName": "阿尔法组",
+              "ownerName": "阿尔法管理者",
+              "ownerRole": "manager"
+            },
+            {
+              "id": "t-private",
+              "title": "私密任务",
+              "description": "",
+              "priority": "P2",
+              "status": "todo",
+              "progress": 0,
+              "dueDate": null,
+              "ownerId": "user-member-a2",
+              "createdBy": "user-manager-a",
+              "source": "manual",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": null,
+              "archivedAt": null,
+              "orgId": "org-alpha",
+              "orgName": "阿尔法组",
+              "ownerName": "阿尔法成员乙",
+              "ownerRole": "member"
+            },
+            {
+              "id": "<uuid>",
               "title": "契约-成员甲想建私密任务",
               "description": "",
               "priority": "P1",
@@ -9228,13 +10284,13 @@
             },
             {
               "id": "<uuid>",
-              "title": "契约-管理者私密任务",
+              "title": "契约-派给成员乙的私密任务",
               "description": "",
               "priority": "P1",
               "status": "todo",
               "progress": 0,
               "dueDate": null,
-              "ownerId": "user-manager-a",
+              "ownerId": "user-member-a2",
               "createdBy": "user-manager-a",
               "source": "manual",
               "isPrivate": true,
@@ -9244,8 +10300,8 @@
               "archivedAt": null,
               "orgId": "org-alpha",
               "orgName": "阿尔法组",
-              "ownerName": "阿尔法管理者",
-              "ownerRole": "manager"
+              "ownerName": "阿尔法成员乙",
+              "ownerRole": "member"
             },
             {
               "id": "t-done",
@@ -9332,27 +10388,6 @@
               "ownerRole": "member"
             },
             {
-              "id": "t-private",
-              "title": "私密任务",
-              "description": "",
-              "priority": "P2",
-              "status": "todo",
-              "progress": 0,
-              "dueDate": null,
-              "ownerId": "user-manager-a",
-              "createdBy": "user-manager-a",
-              "source": "manual",
-              "isPrivate": true,
-              "createdAt": "<ts>",
-              "updatedAt": "<ts>",
-              "completedAt": null,
-              "archivedAt": null,
-              "orgId": "org-alpha",
-              "orgName": "阿尔法组",
-              "ownerName": "阿尔法管理者",
-              "ownerRole": "manager"
-            },
-            {
               "id": "t-of-a2",
               "title": "成员乙的任务",
               "description": "",
@@ -9396,11 +10431,11 @@
             }
           ],
           "summary": {
-            "total": 13,
+            "total": 14,
             "completed": 2,
-            "active": 11,
+            "active": 12,
             "overdue": 1,
-            "completionRate": 15
+            "completionRate": 14
           }
         }
       }
@@ -9451,6 +10486,48 @@
               "ownerRole": "member"
             },
             {
+              "id": "t-private",
+              "title": "私密任务",
+              "description": "",
+              "priority": "P2",
+              "status": "todo",
+              "progress": 0,
+              "dueDate": null,
+              "ownerId": "user-member-a2",
+              "createdBy": "user-manager-a",
+              "source": "manual",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": null,
+              "archivedAt": null,
+              "orgId": "org-alpha",
+              "orgName": "阿尔法组",
+              "ownerName": "阿尔法成员乙",
+              "ownerRole": "member"
+            },
+            {
+              "id": "<uuid>",
+              "title": "契约-派给成员乙的私密任务",
+              "description": "",
+              "priority": "P1",
+              "status": "todo",
+              "progress": 0,
+              "dueDate": null,
+              "ownerId": "user-member-a2",
+              "createdBy": "user-manager-a",
+              "source": "manual",
+              "isPrivate": true,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": null,
+              "archivedAt": null,
+              "orgId": "org-alpha",
+              "orgName": "阿尔法组",
+              "ownerName": "阿尔法成员乙",
+              "ownerRole": "member"
+            },
+            {
               "id": "t-of-a2",
               "title": "成员乙的任务",
               "description": "",
@@ -9473,9 +10550,9 @@
             }
           ],
           "summary": {
-            "total": 2,
+            "total": 4,
             "completed": 0,
-            "active": 2,
+            "active": 4,
             "overdue": 0,
             "completionRate": 0
           }
@@ -10114,26 +11191,7 @@
       },
       "body": {
         "ok": true,
-        "data": [
-          {
-            "id": "todo-open",
-            "content": "跟进报价",
-            "todoDate": "2026-09-01",
-            "isCompleted": 0,
-            "completedAt": null,
-            "createdAt": "<ts>",
-            "updatedAt": "<ts>"
-          },
-          {
-            "id": "todo-b",
-            "content": "贝塔跟进",
-            "todoDate": "2026-09-01",
-            "isCompleted": 0,
-            "completedAt": null,
-            "createdAt": "<ts>",
-            "updatedAt": "<ts>"
-          }
-        ]
+        "data": []
       }
     },
     {
@@ -10158,17 +11216,7 @@
       },
       "body": {
         "ok": true,
-        "data": [
-          {
-            "id": "todo-open",
-            "content": "跟进报价",
-            "todoDate": "2026-09-01",
-            "isCompleted": 0,
-            "completedAt": null,
-            "createdAt": "<ts>",
-            "updatedAt": "<ts>"
-          }
-        ]
+        "data": []
       }
     },
     {
@@ -10228,17 +11276,7 @@
       },
       "body": {
         "ok": true,
-        "data": [
-          {
-            "id": "todo-b",
-            "content": "贝塔跟进",
-            "todoDate": "2026-09-01",
-            "isCompleted": 0,
-            "completedAt": null,
-            "createdAt": "<ts>",
-            "updatedAt": "<ts>"
-          }
-        ]
+        "data": []
       }
     },
     {
@@ -10340,6 +11378,43 @@
       }
     },
     {
+      "name": "todos.create.memberA.owner-ignored",
+      "role": "memberA",
+      "request": {
+        "method": "POST",
+        "path": "/api/todos",
+        "body": {
+          "content": "想让别人当归属人",
+          "ownerId": "user-member-a2"
+        }
+      },
+      "status": 201,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "id": "<uuid>",
+          "content": "想让别人当归属人",
+          "todoDate": null,
+          "isCompleted": 0,
+          "completedAt": null,
+          "createdAt": "<ts>",
+          "updatedAt": "<ts>"
+        }
+      }
+    },
+    {
       "name": "todos.create.empty",
       "role": "managerA",
       "request": {
@@ -10401,6 +11476,68 @@
           "completedAt": "<ts>",
           "createdAt": "<ts>",
           "updatedAt": "<ts>"
+        }
+      }
+    },
+    {
+      "name": "todos.patch.memberA2.others-todo",
+      "role": "memberA2",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/todos/todo-open",
+        "body": {
+          "isCompleted": true
+        }
+      },
+      "status": 403,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "FORBIDDEN",
+          "message": "只能访问本人的记录"
+        }
+      }
+    },
+    {
+      "name": "todos.patch.managerA.others-todo",
+      "role": "managerA",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/todos/todo-open",
+        "body": {
+          "content": "x"
+        }
+      },
+      "status": 403,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "FORBIDDEN",
+          "message": "只能访问本人的记录"
         }
       }
     },
@@ -10489,6 +11626,34 @@
       "body": {
         "ok": true,
         "data": null
+      }
+    },
+    {
+      "name": "todos.delete.memberA.others-todo",
+      "role": "memberA",
+      "request": {
+        "method": "DELETE",
+        "path": "/api/todos/<uuid>"
+      },
+      "status": 403,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "FORBIDDEN",
+          "message": "只能访问本人的记录"
+        }
       }
     },
     {
@@ -10594,22 +11759,7 @@
       },
       "body": {
         "ok": true,
-        "data": [
-          {
-            "id": "note-1",
-            "content": "会议要点",
-            "isPinned": 0,
-            "createdAt": "<ts>",
-            "updatedAt": "<ts>"
-          },
-          {
-            "id": "note-b",
-            "content": "贝塔会议要点",
-            "isPinned": 0,
-            "createdAt": "<ts>",
-            "updatedAt": "<ts>"
-          }
-        ]
+        "data": []
       }
     },
     {
@@ -10634,15 +11784,7 @@
       },
       "body": {
         "ok": true,
-        "data": [
-          {
-            "id": "note-1",
-            "content": "会议要点",
-            "isPinned": 0,
-            "createdAt": "<ts>",
-            "updatedAt": "<ts>"
-          }
-        ]
+        "data": []
       }
     },
     {
@@ -10700,15 +11842,7 @@
       },
       "body": {
         "ok": true,
-        "data": [
-          {
-            "id": "note-b",
-            "content": "贝塔会议要点",
-            "isPinned": 0,
-            "createdAt": "<ts>",
-            "updatedAt": "<ts>"
-          }
-        ]
+        "data": []
       }
     },
     {
@@ -10835,6 +11969,37 @@
       }
     },
     {
+      "name": "notes.patch.memberA2.others-note",
+      "role": "memberA2",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/notes/note-1",
+        "body": {
+          "content": "x"
+        }
+      },
+      "status": 403,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "FORBIDDEN",
+          "message": "只能访问本人的记录"
+        }
+      }
+    },
+    {
       "name": "notes.patch.managerB.cross-org",
       "role": "managerB",
       "request": {
@@ -10893,6 +12058,34 @@
         "error": {
           "code": "NOT_FOUND",
           "message": "未找到该资源"
+        }
+      }
+    },
+    {
+      "name": "notes.delete.memberA.others-note",
+      "role": "memberA",
+      "request": {
+        "method": "DELETE",
+        "path": "/api/notes/<uuid>"
+      },
+      "status": 403,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "FORBIDDEN",
+          "message": "只能访问本人的记录"
         }
       }
     },
@@ -11007,7 +12200,9 @@
             "category": "报价",
             "lastUsedAt": null,
             "createdAt": "<ts>",
-            "updatedAt": "<ts>"
+            "updatedAt": "<ts>",
+            "visibility": "org",
+            "owned": false
           },
           {
             "id": "file-remote",
@@ -11016,7 +12211,20 @@
             "category": "报价",
             "lastUsedAt": null,
             "createdAt": "<ts>",
-            "updatedAt": "<ts>"
+            "updatedAt": "<ts>",
+            "visibility": "org",
+            "owned": false
+          },
+          {
+            "id": "file-private",
+            "name": "我的报价底稿",
+            "filePath": "C:\\fixture\\private-draft.xlsx",
+            "category": "报价",
+            "lastUsedAt": null,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "visibility": "private",
+            "owned": false
           },
           {
             "id": "file-b",
@@ -11025,7 +12233,9 @@
             "category": "报价",
             "lastUsedAt": null,
             "createdAt": "<ts>",
-            "updatedAt": "<ts>"
+            "updatedAt": "<ts>",
+            "visibility": "org",
+            "owned": false
           }
         ]
       }
@@ -11060,7 +12270,9 @@
             "category": "报价",
             "lastUsedAt": null,
             "createdAt": "<ts>",
-            "updatedAt": "<ts>"
+            "updatedAt": "<ts>",
+            "visibility": "org",
+            "owned": true
           },
           {
             "id": "file-remote",
@@ -11069,7 +12281,20 @@
             "category": "报价",
             "lastUsedAt": null,
             "createdAt": "<ts>",
-            "updatedAt": "<ts>"
+            "updatedAt": "<ts>",
+            "visibility": "org",
+            "owned": true
+          },
+          {
+            "id": "file-private",
+            "name": "我的报价底稿",
+            "filePath": "C:\\fixture\\private-draft.xlsx",
+            "category": "报价",
+            "lastUsedAt": null,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "visibility": "private",
+            "owned": true
           }
         ]
       }
@@ -11081,7 +12306,7 @@
         "method": "GET",
         "path": "/api/files"
       },
-      "status": 403,
+      "status": 200,
       "headers": {
         "contentType": "application/json; charset=utf-8",
         "contentDisposition": null,
@@ -11095,11 +12320,31 @@
         "xContentTypeOptions": true
       },
       "body": {
-        "ok": false,
-        "error": {
-          "code": "FORBIDDEN",
-          "message": "只有管理员或组织管理者可以执行此操作"
-        }
+        "ok": true,
+        "data": [
+          {
+            "id": "file-1",
+            "name": "报价单模板",
+            "filePath": "C:\\fixture\\quote-template.xlsx",
+            "category": "报价",
+            "lastUsedAt": null,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "visibility": "org",
+            "owned": false
+          },
+          {
+            "id": "file-remote",
+            "name": "2026 报价单",
+            "filePath": "webdav:报价/2026报价单.xlsx",
+            "category": "报价",
+            "lastUsedAt": null,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "visibility": "org",
+            "owned": false
+          }
+        ]
       }
     },
     {
@@ -11132,7 +12377,9 @@
             "category": "报价",
             "lastUsedAt": null,
             "createdAt": "<ts>",
-            "updatedAt": "<ts>"
+            "updatedAt": "<ts>",
+            "visibility": "org",
+            "owned": true
           }
         ]
       }
@@ -11167,7 +12414,9 @@
             "category": "报价",
             "lastUsedAt": null,
             "createdAt": "<ts>",
-            "updatedAt": "<ts>"
+            "updatedAt": "<ts>",
+            "visibility": "org",
+            "owned": true
           },
           {
             "id": "file-remote",
@@ -11176,7 +12425,20 @@
             "category": "报价",
             "lastUsedAt": null,
             "createdAt": "<ts>",
-            "updatedAt": "<ts>"
+            "updatedAt": "<ts>",
+            "visibility": "org",
+            "owned": true
+          },
+          {
+            "id": "file-private",
+            "name": "我的报价底稿",
+            "filePath": "C:\\fixture\\private-draft.xlsx",
+            "category": "报价",
+            "lastUsedAt": null,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "visibility": "private",
+            "owned": true
           }
         ]
       }
@@ -11211,7 +12473,9 @@
             "category": "报价",
             "lastUsedAt": null,
             "createdAt": "<ts>",
-            "updatedAt": "<ts>"
+            "updatedAt": "<ts>",
+            "visibility": "org",
+            "owned": true
           },
           {
             "id": "file-remote",
@@ -11220,7 +12484,20 @@
             "category": "报价",
             "lastUsedAt": null,
             "createdAt": "<ts>",
-            "updatedAt": "<ts>"
+            "updatedAt": "<ts>",
+            "visibility": "org",
+            "owned": true
+          },
+          {
+            "id": "file-private",
+            "name": "我的报价底稿",
+            "filePath": "C:\\fixture\\private-draft.xlsx",
+            "category": "报价",
+            "lastUsedAt": null,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "visibility": "private",
+            "owned": true
           }
         ]
       }
@@ -11259,7 +12536,9 @@
           "category": "报价",
           "lastUsedAt": null,
           "createdAt": "<ts>",
-          "updatedAt": "<ts>"
+          "updatedAt": "<ts>",
+          "visibility": "org",
+          "owned": true
         }
       }
     },
@@ -11296,6 +12575,397 @@
       }
     },
     {
+      "name": "files.create.memberA.default-visibility",
+      "role": "memberA",
+      "request": {
+        "method": "POST",
+        "path": "/api/files",
+        "body": {
+          "name": "成员甲建的默认文件",
+          "filePath": "C:\\fixture\\member-default.xlsx"
+        }
+      },
+      "status": 201,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "id": "<uuid>",
+          "name": "成员甲建的默认文件",
+          "filePath": "C:\\fixture\\member-default.xlsx",
+          "category": "",
+          "lastUsedAt": null,
+          "createdAt": "<ts>",
+          "updatedAt": "<ts>",
+          "visibility": "org",
+          "owned": true
+        }
+      }
+    },
+    {
+      "name": "files.create.memberA.private",
+      "role": "memberA",
+      "request": {
+        "method": "POST",
+        "path": "/api/files",
+        "body": {
+          "name": "成员甲的个人文件",
+          "filePath": "C:\\fixture\\member-private.xlsx",
+          "visibility": "private"
+        }
+      },
+      "status": 201,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "id": "<uuid>",
+          "name": "成员甲的个人文件",
+          "filePath": "C:\\fixture\\member-private.xlsx",
+          "category": "",
+          "lastUsedAt": null,
+          "createdAt": "<ts>",
+          "updatedAt": "<ts>",
+          "visibility": "private",
+          "owned": true
+        }
+      }
+    },
+    {
+      "name": "files.create.memberA",
+      "role": "memberA",
+      "request": {
+        "method": "POST",
+        "path": "/api/files",
+        "body": {
+          "name": "契约文件-成员甲",
+          "filePath": "C:\\fixture\\contract-member.xlsx",
+          "category": "报价"
+        }
+      },
+      "status": 201,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "id": "<uuid>",
+          "name": "契约文件-成员甲",
+          "filePath": "C:\\fixture\\contract-member.xlsx",
+          "category": "报价",
+          "lastUsedAt": null,
+          "createdAt": "<ts>",
+          "updatedAt": "<ts>",
+          "visibility": "org",
+          "owned": true
+        }
+      }
+    },
+    {
+      "name": "files.edit.memberA.others-file",
+      "role": "memberA",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/files/<uuid>",
+        "body": {
+          "name": "成员甲改管理者的文件"
+        }
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "id": "<uuid>",
+          "name": "成员甲改管理者的文件",
+          "filePath": "C:\\fixture\\contract.xlsx",
+          "category": "报价",
+          "lastUsedAt": null,
+          "createdAt": "<ts>",
+          "updatedAt": "<ts>",
+          "visibility": "org",
+          "owned": false
+        }
+      }
+    },
+    {
+      "name": "files.list.memberA.private-hidden",
+      "role": "memberA",
+      "request": {
+        "method": "GET",
+        "path": "/api/files?search=我的报价底稿"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": []
+      }
+    },
+    {
+      "name": "files.list.managerA.private-visible",
+      "role": "managerA",
+      "request": {
+        "method": "GET",
+        "path": "/api/files?search=我的报价底稿"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": [
+          {
+            "id": "file-private",
+            "name": "我的报价底稿",
+            "filePath": "C:\\fixture\\private-draft.xlsx",
+            "category": "报价",
+            "lastUsedAt": null,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "visibility": "private",
+            "owned": true
+          }
+        ]
+      }
+    },
+    {
+      "name": "files.list.admin.private-visible",
+      "role": "admin",
+      "request": {
+        "method": "GET",
+        "path": "/api/files?search=我的报价底稿"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": [
+          {
+            "id": "file-private",
+            "name": "我的报价底稿",
+            "filePath": "C:\\fixture\\private-draft.xlsx",
+            "category": "报价",
+            "lastUsedAt": null,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "visibility": "private",
+            "owned": false
+          }
+        ]
+      }
+    },
+    {
+      "name": "files.edit.managerB.others-private.cross-org",
+      "role": "managerB",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/files/file-private",
+        "body": {
+          "name": "跨组织改个人文件"
+        }
+      },
+      "status": 404,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "未找到该资源"
+        }
+      }
+    },
+    {
+      "name": "files.edit.managerA.org-to-private",
+      "role": "managerA",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/files/file-remote",
+        "body": {
+          "visibility": "private"
+        }
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "id": "file-remote",
+          "name": "2026 报价单",
+          "filePath": "webdav:报价/2026报价单.xlsx",
+          "category": "报价",
+          "lastUsedAt": null,
+          "createdAt": "<ts>",
+          "updatedAt": "<ts>",
+          "visibility": "private",
+          "owned": true
+        }
+      }
+    },
+    {
+      "name": "files.use.memberA.after-private",
+      "role": "memberA",
+      "request": {
+        "method": "POST",
+        "path": "/api/files/file-remote/use"
+      },
+      "status": 403,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "FORBIDDEN",
+          "message": "只能访问自己的个人文件"
+        }
+      }
+    },
+    {
+      "name": "files.edit.managerA.back-to-org",
+      "role": "managerA",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/files/file-remote",
+        "body": {
+          "visibility": "org"
+        }
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "id": "file-remote",
+          "name": "2026 报价单",
+          "filePath": "webdav:报价/2026报价单.xlsx",
+          "category": "报价",
+          "lastUsedAt": null,
+          "createdAt": "<ts>",
+          "updatedAt": "<ts>",
+          "visibility": "org",
+          "owned": true
+        }
+      }
+    },
+    {
       "name": "files.use.managerA",
       "role": "managerA",
       "request": {
@@ -11319,12 +12989,49 @@
         "ok": true,
         "data": {
           "id": "<uuid>",
-          "name": "契约文件",
+          "name": "成员甲改管理者的文件",
           "filePath": "C:\\fixture\\contract.xlsx",
           "category": "报价",
           "lastUsedAt": "<ts>",
           "createdAt": "<ts>",
-          "updatedAt": "<ts>"
+          "updatedAt": "<ts>",
+          "visibility": "org",
+          "owned": true
+        }
+      }
+    },
+    {
+      "name": "files.use.memberA",
+      "role": "memberA",
+      "request": {
+        "method": "POST",
+        "path": "/api/files/<uuid>/use"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "id": "<uuid>",
+          "name": "成员甲改管理者的文件",
+          "filePath": "C:\\fixture\\contract.xlsx",
+          "category": "报价",
+          "lastUsedAt": "<ts>",
+          "createdAt": "<ts>",
+          "updatedAt": "<ts>",
+          "visibility": "org",
+          "owned": false
         }
       }
     },
@@ -11385,6 +13092,137 @@
       }
     },
     {
+      "name": "files.delete.memberA",
+      "role": "memberA",
+      "request": {
+        "method": "DELETE",
+        "path": "/api/files/<uuid>"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": null
+      }
+    },
+    {
+      "name": "files.delete.memberA.others-org-file",
+      "role": "memberA",
+      "request": {
+        "method": "DELETE",
+        "path": "/api/files/file-1"
+      },
+      "status": 403,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "FORBIDDEN",
+          "message": "只有创建人、组织管理者或管理员可以删除重要文件"
+        }
+      }
+    },
+    {
+      "name": "files.delete.managerA.own-private",
+      "role": "managerA",
+      "request": {
+        "method": "DELETE",
+        "path": "/api/files/file-private"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": null
+      }
+    },
+    {
+      "name": "files.delete.managerA.others-private",
+      "role": "managerA",
+      "request": {
+        "method": "DELETE",
+        "path": "/api/files/<uuid>"
+      },
+      "status": 403,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "FORBIDDEN",
+          "message": "只能访问自己的个人文件"
+        }
+      }
+    },
+    {
+      "name": "files.delete.memberA.own-private",
+      "role": "memberA",
+      "request": {
+        "method": "DELETE",
+        "path": "/api/files/<uuid>"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": null
+      }
+    },
+    {
       "name": "files.delete.managerB.cross-org",
       "role": "managerB",
       "request": {
@@ -11438,6 +13276,34 @@
       }
     },
     {
+      "name": "files.delete.managerA.member-file",
+      "role": "managerA",
+      "request": {
+        "method": "DELETE",
+        "path": "/api/files/<uuid>"
+      },
+      "status": 404,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "未找到该资源"
+        }
+      }
+    },
+    {
       "name": "files.download.anon",
       "role": "anon",
       "request": {
@@ -11472,7 +13338,7 @@
         "method": "GET",
         "path": "/api/files/file-1/download"
       },
-      "status": 403,
+      "status": 400,
       "headers": {
         "contentType": "application/json; charset=utf-8",
         "contentDisposition": null,
@@ -11488,8 +13354,64 @@
       "body": {
         "ok": false,
         "error": {
-          "code": "FORBIDDEN",
-          "message": "只有管理员或组织管理者可以执行此操作"
+          "code": "NOT_REMOTE",
+          "message": "这条索引指向本机路径，只能复制、不能下载"
+        }
+      }
+    },
+    {
+      "name": "files.download.memberA.cross-org",
+      "role": "memberA",
+      "request": {
+        "method": "GET",
+        "path": "/api/files/file-b/download"
+      },
+      "status": 404,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "未找到该资源"
+        }
+      }
+    },
+    {
+      "name": "files.download.memberA.others-private",
+      "role": "memberA",
+      "request": {
+        "method": "GET",
+        "path": "/api/files/file-private/download"
+      },
+      "status": 404,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "未找到该文件索引"
         }
       }
     },
@@ -11573,7 +13495,7 @@
         "ok": false,
         "error": {
           "code": "NOT_FOUND",
-          "message": "未找到该文件索引"
+          "message": "未找到该资源"
         }
       }
     },
@@ -11640,7 +13562,7 @@
         "method": "GET",
         "path": "/api/webdav"
       },
-      "status": 403,
+      "status": 503,
       "headers": {
         "contentType": "application/json; charset=utf-8",
         "contentDisposition": null,
@@ -11656,8 +13578,8 @@
       "body": {
         "ok": false,
         "error": {
-          "code": "FORBIDDEN",
-          "message": "只有管理员或组织管理者可以执行此操作"
+          "code": "WEBDAV_DISABLED",
+          "message": "未配置 WebDAV：请到「设置 → WebDAV」填写地址与账号"
         }
       }
     },
@@ -11727,7 +13649,7 @@
         "path": "/api/webdav",
         "upload": "contract.txt"
       },
-      "status": 403,
+      "status": 503,
       "headers": {
         "contentType": "application/json; charset=utf-8",
         "contentDisposition": null,
@@ -11743,8 +13665,8 @@
       "body": {
         "ok": false,
         "error": {
-          "code": "FORBIDDEN",
-          "message": "只有管理员或组织管理者可以执行此操作"
+          "code": "WEBDAV_DISABLED",
+          "message": "未配置 WebDAV：请到「设置 → WebDAV」填写地址与账号"
         }
       }
     },
@@ -12185,7 +14107,7 @@
         "method": "GET",
         "path": "/api/reports/report-submitted"
       },
-      "status": 404,
+      "status": 200,
       "headers": {
         "contentType": "application/json; charset=utf-8",
         "contentDisposition": null,
@@ -12199,11 +14121,97 @@
         "xContentTypeOptions": true
       },
       "body": {
-        "ok": false,
-        "error": {
-          "code": "NOT_FOUND",
-          "message": "未找到该资源"
+        "ok": true,
+        "data": {
+          "id": "report-submitted",
+          "ownerId": "user-member-a",
+          "ownerName": "阿尔法成员甲",
+          "periodStart": "2026-08-24",
+          "periodEnd": "2026-08-30",
+          "docType": "weekly_report",
+          "note": "第八周",
+          "status": "submitted",
+          "currentVersion": 1,
+          "uploadedBy": "user-member-a",
+          "reviewNote": null,
+          "createdAt": "<ts>",
+          "updatedAt": "<ts>",
+          "submittedAt": "<ts>",
+          "reviewedAt": null,
+          "returnedAt": null,
+          "files": [
+            {
+              "id": "rf-1",
+              "reportId": "report-submitted",
+              "version": 1,
+              "originalName": "第八周周报.docx",
+              "storedName": "v1.docx",
+              "sizeBytes": 12,
+              "ext": ".docx",
+              "mimeType": "application/msword",
+              "uploadedBy": "user-member-a",
+              "uploadedAt": "<ts>"
+            }
+          ]
         }
+      }
+    },
+    {
+      "name": "reports.list.memberA2",
+      "role": "memberA2",
+      "request": {
+        "method": "GET",
+        "path": "/api/reports"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": [
+          {
+            "id": "report-submitted",
+            "ownerId": "user-member-a",
+            "ownerName": "阿尔法成员甲",
+            "periodStart": "2026-08-24",
+            "periodEnd": "2026-08-30",
+            "docType": "weekly_report",
+            "note": "第八周",
+            "status": "submitted",
+            "currentVersion": 1,
+            "uploadedBy": "user-member-a",
+            "reviewNote": null,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "submittedAt": "<ts>",
+            "reviewedAt": null,
+            "returnedAt": null,
+            "files": [
+              {
+                "id": "rf-1",
+                "reportId": "report-submitted",
+                "version": 1,
+                "originalName": "第八周周报.docx",
+                "storedName": "v1.docx",
+                "sizeBytes": 12,
+                "ext": ".docx",
+                "mimeType": "application/msword",
+                "uploadedBy": "user-member-a",
+                "uploadedAt": "<ts>"
+              }
+            ]
+          }
+        ]
       }
     },
     {
@@ -12285,6 +14293,28 @@
       "body": "fake-docx-v1"
     },
     {
+      "name": "reports.download.memberA2.others-report",
+      "role": "memberA2",
+      "request": {
+        "method": "GET",
+        "path": "/api/reports/report-submitted/file/1"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/msword",
+        "contentDisposition": "attachment; filename*=UTF-8''%E7%AC%AC%E5%85%AB%E5%91%A8%E5%91%A8%E6%8A%A5.docx",
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": "fake-docx-v1"
+    },
+    {
       "name": "reports.download.managerB.cross-org",
       "role": "managerB",
       "request": {
@@ -12337,6 +14367,35 @@
         "error": {
           "code": "NOT_FOUND",
           "message": "文件版本不存在"
+        }
+      }
+    },
+    {
+      "name": "reports.reupload.memberA2.others-report",
+      "role": "memberA2",
+      "request": {
+        "method": "POST",
+        "path": "/api/reports/report-submitted/file",
+        "upload": "contract-robbed.xlsx"
+      },
+      "status": 404,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "未找到该资源"
         }
       }
     },
@@ -14596,6 +16655,48 @@
           },
           {
             "id": "<uuid>",
+            "title": "契约-管理者私密任务",
+            "description": "",
+            "priority": "P1",
+            "status": "todo",
+            "progress": 0,
+            "dueDate": null,
+            "ownerId": "user-manager-a",
+            "createdBy": "user-manager-a",
+            "source": "manual",
+            "isPrivate": true,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "completedAt": null,
+            "archivedAt": null,
+            "orgId": "org-alpha",
+            "orgName": "阿尔法组",
+            "ownerName": "阿尔法管理者",
+            "ownerRole": "manager"
+          },
+          {
+            "id": "t-private",
+            "title": "私密任务",
+            "description": "",
+            "priority": "P2",
+            "status": "todo",
+            "progress": 0,
+            "dueDate": null,
+            "ownerId": "user-member-a2",
+            "createdBy": "user-manager-a",
+            "source": "manual",
+            "isPrivate": false,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "completedAt": null,
+            "archivedAt": null,
+            "orgId": "org-alpha",
+            "orgName": "阿尔法组",
+            "ownerName": "阿尔法成员乙",
+            "ownerRole": "member"
+          },
+          {
+            "id": "<uuid>",
             "title": "契约-贝塔管理者建任务",
             "description": "",
             "priority": "P1",
@@ -14680,13 +16781,13 @@
           },
           {
             "id": "<uuid>",
-            "title": "契约-管理者私密任务",
+            "title": "契约-派给成员乙的私密任务",
             "description": "",
             "priority": "P1",
             "status": "todo",
             "progress": 0,
             "dueDate": null,
-            "ownerId": "user-manager-a",
+            "ownerId": "user-member-a2",
             "createdBy": "user-manager-a",
             "source": "manual",
             "isPrivate": true,
@@ -14696,8 +16797,8 @@
             "archivedAt": null,
             "orgId": "org-alpha",
             "orgName": "阿尔法组",
-            "ownerName": "阿尔法管理者",
-            "ownerRole": "manager"
+            "ownerName": "阿尔法成员乙",
+            "ownerRole": "member"
           },
           {
             "id": "t-todo",
@@ -14761,27 +16862,6 @@
             "orgName": "阿尔法组",
             "ownerName": "阿尔法成员甲",
             "ownerRole": "member"
-          },
-          {
-            "id": "t-private",
-            "title": "私密任务",
-            "description": "",
-            "priority": "P2",
-            "status": "todo",
-            "progress": 0,
-            "dueDate": null,
-            "ownerId": "user-manager-a",
-            "createdBy": "user-manager-a",
-            "source": "manual",
-            "isPrivate": true,
-            "createdAt": "<ts>",
-            "updatedAt": "<ts>",
-            "completedAt": null,
-            "archivedAt": null,
-            "orgId": "org-alpha",
-            "orgName": "阿尔法组",
-            "ownerName": "阿尔法管理者",
-            "ownerRole": "manager"
           },
           {
             "id": "t-overdue",

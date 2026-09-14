@@ -1,26 +1,36 @@
 import { randomUUID } from "node:crypto";
 import { date, db, now, rows, run, type User } from "./db.server";
 import {
+  denialFailure,
   done,
   failed,
   locateTodo,
   notFoundResult,
-  recordClauses,
+  personalClauses,
+  RECORD_FORBIDDEN_MESSAGE,
   resolveRecordOrg,
   TODO_SELECT,
   toTodoView,
+  type LocatedRecord,
   type RecordResult,
 } from "./records.server";
 
 /**
  * 待办查询与写入：页面 loader/action 与 /api/todos* 共用同一份实现。
- * 这样页面表单（form-urlencoded）与 JSON API 走的是同一份逻辑，不会出现两套行为。
+ * 这样页面表单（form-urlencoded）与 JSON 请求走的是同一份逻辑，不会出现两套行为。
  *
- * 组织隔离见 app/lib/records.server.ts：列表按 `recordClauses(user)` 过滤，
- * 写入显式带 `org_id`（迁移 009 起是 NOT NULL），按 id 的单条操作先判定组织边界。
+ * **归属见 app/lib/records.server.ts（D-54）**：待办是**本人数据**，列表按 `personalClauses(user)`
+ * 过滤（`owner_id = 本人`，管理员也不例外），写入显式写 `owner_id`，按 id 的单条操作先判定归属边界
+ * （跨组织 404 / 同组织但不是本人 403）。
  */
+
+/** 无权（403）与不存在 / 跨组织（404）的映射只写在 records.server.ts，这里只做转手 */
+function denied(located: LocatedRecord): RecordResult<never> | null {
+  return located.deny ? denialFailure(located.deny, RECORD_FORBIDDEN_MESSAGE).failure : null;
+}
+
 export function listTodos(user: User, orgFilter?: string | null): Record<string, unknown>[] {
-  const { clauses, params } = recordClauses(user);
+  const { clauses, params } = personalClauses(user);
   // 管理员的组织筛选器（D-28）。非管理员带上别人的组织也只会得到空列表，不会越权。
   if (orgFilter) {
     clauses.push("org_id=?");
@@ -30,7 +40,10 @@ export function listTodos(user: User, orgFilter?: string | null): Record<string,
   return rows(db(), `${TODO_SELECT} ${where} ORDER BY created_at DESC`, ...params).map(toTodoView);
 }
 
-/** 新建待办；组织归属由 resolveRecordOrg 解析（成员/管理者写自己的组织，管理员取请求里的 orgId） */
+/**
+ * 新建待办；组织归属由 `resolveRecordOrg` 解析（成员/管理者写自己的组织，管理员取请求里的 orgId），
+ * 归属人**恒为当前账号**——待办没有「替别人建」这回事，请求里的 ownerId 一律忽略。
+ */
 export function createTodoRecord(user: User, body: Record<string, unknown>): RecordResult<Record<string, unknown>> {
   const content = String(body.content ?? "").trim();
   if (!content) return failed("VALIDATION_ERROR", "待办内容不能为空", 400);
@@ -40,9 +53,10 @@ export function createTodoRecord(user: User, body: Record<string, unknown>): Rec
   const id = randomUUID();
   run(
     db(),
-    "INSERT INTO todos(id,org_id,content,todo_date,is_completed,completed_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)",
+    "INSERT INTO todos(id,org_id,owner_id,content,todo_date,is_completed,completed_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)",
     id,
     org.orgId,
+    user.id,
     content,
     date(body.todoDate),
     0,
@@ -51,14 +65,15 @@ export function createTodoRecord(user: User, body: Record<string, unknown>): Rec
     stamp,
   );
   const created = locateTodo(user, id);
-  if (!created) return failed("INTERNAL", "创建待办失败", 500);
-  return done(created, 201);
+  if (!created.view) return denied(created) ?? failed("INTERNAL", "创建待办失败", 500);
+  return done(created.view, 201);
 }
 
-/** 更新待办：不存在或跨组织都返回 404（同一个响应，不泄露资源是否存在） */
+/** 更新待办：不存在 / 跨组织 404，同组织但不是本人 403（两种失败不共用同一个响应） */
 export function updateTodoRecord(user: User, id: string, body: Record<string, unknown>): RecordResult<Record<string, unknown>> {
-  const current = locateTodo(user, id);
-  if (!current) return notFoundResult();
+  const located = locateTodo(user, id);
+  if (!located.view) return denied(located) ?? notFoundResult();
+  const current = located.view;
   const completed = body.isCompleted === undefined ? Number(current.isCompleted) : body.isCompleted ? 1 : 0;
   const stamp = now();
   run(
@@ -72,13 +87,14 @@ export function updateTodoRecord(user: User, id: string, body: Record<string, un
     id,
   );
   const updated = locateTodo(user, id);
-  if (!updated) return notFoundResult();
-  return done(updated);
+  if (!updated.view) return denied(updated) ?? notFoundResult();
+  return done(updated.view);
 }
 
-/** 删除待办：不存在或跨组织都返回 404（旧实现「不存在也回 200」会让跨组织请求与不存在可区分） */
+/** 删除待办：不存在 / 跨组织 404，同组织但不是本人 403 */
 export function deleteTodoRecord(user: User, id: string): RecordResult<null> {
-  if (!locateTodo(user, id)) return notFoundResult();
+  const located = locateTodo(user, id);
+  if (!located.view) return denied(located) ?? notFoundResult();
   run(db(), "DELETE FROM todos WHERE id=?", id);
   return done(null);
 }

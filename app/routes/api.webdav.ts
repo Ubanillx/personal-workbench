@@ -3,7 +3,7 @@ import { appConfig } from "../lib/context.server";
 import type { User } from "../lib/db.server";
 import { createFileRecord } from "../lib/files.server";
 import { fail, ok } from "../lib/http.server";
-import { requireManager } from "../lib/session.server";
+import { requireAuth } from "../lib/session.server";
 import { browseRemote, joinRemotePath, safeFileName, webDavClient, webDavErrorMessage, webDavStatus } from "../lib/webdav.server";
 
 /**
@@ -12,7 +12,8 @@ import { browseRemote, joinRemotePath, safeFileName, webDavClient, webDavErrorMe
  *   GET  ?path=<相对目录>                                       → 列目录（条目自带可直接入库的 filePath）
  *   POST multipart（dir + file + 可选 register/category/orgId） → 上传到远端，可选同时登记索引
  *
- * 权限与文件库一致：只有管理员与组织管理者（§4），角色不够是 403、未配置是 503。
+ * 权限与文件库一致（D-54）：**登录即可**（组织内所有人都能浏览、选择、上传），组织边界由
+ * `createFileRecord` → `resolveRecordOrg` 兜住；本账号没配 WebDAV 是 503（凭据按账号走，见 §20/§21）。
  * **刻意不提供远端删除**：误删不可恢复，删文件请用 NAS 自己的界面（见 docs/harness/WEBDAV.md）。
  */
 
@@ -30,7 +31,7 @@ function remoteFail(error: unknown): Response {
 }
 
 export async function loader({ request }: { request: Request }): Promise<Response> {
-  const auth = requireManager(request, appConfig().sessionCookieName);
+  const auth = requireAuth(request, appConfig().sessionCookieName);
   if (!auth.ok) return auth.response;
   const status = webDavStatus(auth.user.id);
   if (!status.enabled) return disabled();
@@ -43,7 +44,7 @@ export async function loader({ request }: { request: Request }): Promise<Respons
 }
 
 export async function action({ request }: { request: Request }): Promise<Response> {
-  const auth = requireManager(request, appConfig().sessionCookieName);
+  const auth = requireAuth(request, appConfig().sessionCookieName);
   if (!auth.ok) return auth.response;
   const client = webDavClient(auth.user.id);
   if (!client) return disabled();
@@ -77,6 +78,8 @@ async function upload(client: UploadClient, user: User, request: Request): Promi
     name: String(form.get("name") ?? "").trim() || safeFileName(file.name),
     filePath: `webdav:${remotePath}`,
     category: String(form.get("category") ?? ""),
+    // 可见范围（D-55）：`private` = 仅自己与本组织管理员；缺省 / 其他值按 `org`（组织可见）
+    visibility: form.get("visibility") ?? undefined,
     orgId: form.get("orgId") ?? undefined,
   });
   if (!created.ok) {

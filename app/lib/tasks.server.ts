@@ -7,10 +7,11 @@ import { orgScope } from "./session.server";
 /**
  * 任务读模型与可见性规则（组织隔离的收敛点）。
  *
- * 设计见 docs/harness/ACCOUNTS_AND_ORGS.md §14：
+ * 设计见 docs/harness/ACCOUNTS_AND_ORGS.md §14 与 §23（D-54）：
  * - `tasks` 有 `org_id`，所有查询都必须带组织条件，条件由 `visibilityClauses` 统一产出；
- * - 角色映射（§14.3）：admin 看全部组织；manager 看本组织全部；member 只看自己负责的；
- *   私密任务：admin 全可见、manager 只见自己创建的、member 不可见；
+ * - 角色映射（§14.3 + D-54）：admin 看全部组织；manager 与 member 都是**本组织全部非私密任务**；
+ * - 私密任务（`is_private=1`）只有三类人可见：**发布人（`created_by`）、负责人（`owner_id`）、全局管理员**，
+ *   组织管理者不因管理员身份自动获得他人的私密任务；
  * - 按 id 取单条资源时先取 `org_id` 再用 `assertOrgAccess` 判定（见 app/lib/task-service.server.ts）。
  */
 
@@ -54,12 +55,15 @@ export function canManageTasks(user: User): boolean {
 }
 
 /**
- * 可见性 SQL 条件（§14.3）。调用方把 clauses 用 AND 拼进自己的 WHERE，参数按顺序拼进 params，
+ * 可见性 SQL 条件（§14.3 + D-54）。调用方把 clauses 用 AND 拼进自己的 WHERE，参数按顺序拼进 params，
  * 这样"漏加组织过滤"只可能发生在这一处，而不是散落在每个查询里。
  * - admin：全部组织（私密任务也全部可见）；
- * - manager：本组织全部任务，私密任务仅自己创建的；
- * - member：仅自己负责的非私密任务；
+ * - manager / member：**本组织全部非私密任务**（组织内协作对所有人可见），
+ *   外加**自己发布或自己负责**的私密任务；
  * - 未加入组织的账号（orgId 为 NULL，D-24）：不落在任何组织范围内，一条都看不到。
+ *
+ * 私密任务的三个可见条件与 `canView` 逐条对应：改这里必须同步改 `canView`，
+ * 否则会出现「列表里看得到、点进去 403」（或反过来）。
  */
 export function visibilityClauses(user: User): { clauses: string[]; params: string[] } {
   const clauses: string[] = [];
@@ -71,13 +75,9 @@ export function visibilityClauses(user: User): { clauses: string[]; params: stri
   } else if (user.role !== "admin") {
     clauses.push("1=0");
   }
-  if (user.role === "manager") {
-    clauses.push("(t.is_private=0 OR t.created_by=?)");
-    params.push(user.id);
-  } else if (user.role === "member") {
-    clauses.push("t.is_private=0");
-    clauses.push("t.owner_id=?");
-    params.push(user.id);
+  if (user.role !== "admin") {
+    clauses.push("(t.is_private=0 OR t.created_by=? OR t.owner_id=?)");
+    params.push(user.id, user.id);
   }
   return { clauses, params };
 }
@@ -127,14 +127,16 @@ export function findTaskWithOrg(database: Db, id: string): { task: TaskView; org
 }
 
 /**
- * 单条任务对某人是否可见（组织边界由调用方先用 assertOrgAccess 判定，§14.2）：
- * - admin 全可见；manager 本组织全部，但私密任务只见自己创建的；member 只看自己负责的非私密任务。
+ * 单条任务对某人是否可见（组织边界由调用方先用 assertOrgAccess 判定，§14.2）。
+ *
+ * D-54 起私密任务只有三类人可见，**组织管理者身份不再自动带来看他人的私密任务的权限**：
+ * 发布人（`createdBy`）、负责人（`ownerId`）、全局管理员。非私密任务是组织内公开的，
+ * 组织边界已经由调用方判过，到这里就放行。
  */
 export function canView(t: TaskView, user: User): boolean {
   if (user.role === "admin") return true;
-  if (t.isPrivate) return user.role === "manager" && t.createdBy === user.id;
-  if (user.role === "manager") return true;
-  return t.ownerId === user.id;
+  if (t.isPrivate) return t.createdBy === user.id || t.ownerId === user.id;
+  return true;
 }
 
 /**
@@ -186,11 +188,12 @@ export function orgManagerIds(database: Db, taskId: string): string[] {
 
 /**
  * 通知任务参与者：负责人 + 本组织的组织管理者（验收方）。
- * 私密任务只通知负责人——manager 看不到别人创建的私密任务，把标题发过去就是泄露。
+ * 私密任务只通知**可见的参与方**——负责人与发布人；其他组织管理者看不到这条任务，
+ * 把标题发过去就是泄露（D-54 起负责人与发布人可以是两个人，因此这里要带上双方）。
  */
 export function notifyParticipants(database: Db, t: TaskView | null, actor: string, type: string, title: string, message: string): void {
   if (!t) return;
-  const recipients = t.isPrivate ? [t.ownerId] : [t.ownerId, ...orgManagerIds(database, t.id)];
+  const recipients = t.isPrivate ? [t.ownerId, t.createdBy] : [t.ownerId, ...orgManagerIds(database, t.id)];
   notify(
     database,
     recipients.filter((x): x is string => Boolean(x)),
@@ -254,7 +257,8 @@ export function notifyOverdueTasks(database: Db): void {
     today,
   ).map(toTaskView) as TaskView[];
   for (const item of overdue) {
-    const recipients = item.isPrivate ? [item.ownerId] : [item.ownerId, ...orgManagerIds(database, item.id)];
+    // 与 notifyParticipants 同一收件人口径：私密任务只发负责人与发布人（其他人看不到它）
+    const recipients = item.isPrivate ? [item.ownerId, item.createdBy] : [item.ownerId, ...orgManagerIds(database, item.id)];
     for (const recipient of new Set(recipients.filter((value): value is string => Boolean(value))))
       createNotification(database, {
         recipientId: recipient,

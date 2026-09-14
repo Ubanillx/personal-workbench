@@ -108,7 +108,6 @@ export default function DashboardRoute(): React.ReactElement {
   const revalidator = useRevalidator();
   const busy = revalidator.state !== "idle";
   const { board } = data;
-  const canSeeFiles = board.recentFiles !== null;
   // `dashboardData().tasks` 是 `unknown[]`（它就是 API 载荷，不在这里收紧形状），
   // 页面只读其中几个字段，这里就地声明一次视图形状给 Listy 用
   const tasks = data.tasks as unknown as Array<{
@@ -345,7 +344,7 @@ export default function DashboardRoute(): React.ReactElement {
       </Row>
 
       <Row gutter={[16, 16]}>
-        <Col xs={24} lg={canSeeFiles ? 13 : 24}>
+        <Col xs={24} lg={board.recentFiles ? 13 : 24}>
           <Card
             title={
               <Space size={6}>

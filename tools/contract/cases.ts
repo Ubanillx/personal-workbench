@@ -449,6 +449,16 @@ export const CASES: ContractCase[] = [
     body: { title: "契约-管理者私密任务", isPrivate: true },
     capture: { taskPrivateManager: "data.id" },
   },
+  // D-54 起私密任务的**负责人可以是别人**（发布人 ≠ 负责人，两个角色这时才真的分得开）：
+  // 管理者把私密任务派给成员乙，用来验证「负责人可见 / 同组织其他成员不可见 / 组织管理者不可见」
+  {
+    name: "tasks.create.managerA.private.other-owner",
+    role: "managerA",
+    method: "POST",
+    path: "/api/tasks",
+    body: { title: "契约-派给成员乙的私密任务", isPrivate: true, ownerId: IDS.userMemberA2 },
+    capture: { taskPrivateAssigned: "data.id" },
+  },
   { name: "tasks.create.managerA.no-title", role: "managerA", method: "POST", path: "/api/tasks", body: {} },
   {
     name: "tasks.create.memberA",
@@ -526,6 +536,39 @@ export const CASES: ContractCase[] = [
     method: "PATCH",
     path: "/api/tasks/{{taskArchived}}",
     body: { title: "改归档任务" },
+  },
+  // 私密任务的「私密开关」与「负责人」是可见性规则的两个输入（D-54）：管理者不是发布人，
+  // 因此他改不动这两项（403）——否则他可以把别人的私密任务改成公开，或把负责人换成自己。
+  // 而且他**先**卡在「看不见这条任务」这道门上：写操作与读操作用的是同一个 `canView`。
+  {
+    name: "tasks.patch.managerA.private.others-reassign",
+    role: "managerA",
+    method: "PATCH",
+    path: "/api/tasks/{{taskPrivate}}",
+    body: { ownerId: IDS.userMemberA2 },
+  },
+  {
+    name: "tasks.patch.managerA.private.unprivate",
+    role: "managerA",
+    method: "PATCH",
+    path: "/api/tasks/{{taskPrivate}}",
+    body: { isPrivate: false },
+  },
+  // 发布人（创建者）改得动自己那条私密任务的负责人
+  {
+    name: "tasks.patch.managerA.private.own-reassign",
+    role: "managerA",
+    method: "PATCH",
+    path: "/api/tasks/{{taskPrivateManager}}",
+    body: { ownerId: IDS.userMemberA },
+  },
+  // 改回原状：后面 comments.* 还把这条当成「管理者自己发布的私密任务」用
+  {
+    name: "tasks.patch.managerA.private.own-reassign-back",
+    role: "managerA",
+    method: "PATCH",
+    path: "/api/tasks/{{taskPrivateManager}}",
+    body: { ownerId: IDS.userManagerA },
   },
   {
     name: "tasks.patch.memberA",
@@ -672,6 +715,46 @@ export const CASES: ContractCase[] = [
     path: "/api/tasks/{{taskPrivate}}/comments",
     body: { content: "私密任务由创建者评论" },
   },
+  // D-54 私密任务的三个可见方：发布人 / 负责人 / 全局管理员。
+  // `taskPrivate` 由管理者发布、管理者负责；`taskPrivateAssigned` 由管理者发布、**成员乙负责**。
+  { name: "comments.list.managerA.private-task", role: "managerA", method: "GET", path: "/api/tasks/{{taskPrivate}}/comments" },
+  // 成员甲也不是这条的发布人或负责人 → 403（同组织但看不见）
+  { name: "comments.list.memberA.private-task", role: "memberA", method: "GET", path: "/api/tasks/{{taskPrivate}}/comments" },
+  { name: "comments.list.memberA2.private-task", role: "memberA2", method: "GET", path: "/api/tasks/{{taskPrivate}}/comments" },
+  // 直接 PATCH 也过不去：写操作与读操作共用同一个 `canView`（否则「列表看不见、接口改得动」）
+  {
+    name: "tasks.patch.memberA2.private-task",
+    role: "memberA2",
+    method: "PATCH",
+    path: "/api/tasks/{{taskPrivate}}",
+    body: { title: "x" },
+  },
+  {
+    name: "comments.create.memberA2.private-task-not-owner",
+    role: "memberA2",
+    method: "POST",
+    path: "/api/tasks/{{taskPrivate}}/comments",
+    body: { content: "成员乙不是这条私密任务的负责人" },
+  },
+  { name: "comments.list.admin.private-task", role: "admin", method: "GET", path: "/api/tasks/{{taskPrivate}}/comments" },
+  // 负责人（成员乙）看得到、也能评论派给自己的私密任务
+  { name: "comments.list.memberA2.private-assigned", role: "memberA2", method: "GET", path: "/api/tasks/{{taskPrivateAssigned}}/comments" },
+  {
+    name: "comments.create.memberA2.private-assigned",
+    role: "memberA2",
+    method: "POST",
+    path: "/api/tasks/{{taskPrivateAssigned}}/comments",
+    body: { content: "负责人评论自己的私密任务" },
+  },
+  { name: "comments.list.managerA.private-assigned", role: "managerA", method: "GET", path: "/api/tasks/{{taskPrivateAssigned}}/comments" },
+  { name: "comments.list.memberA.private-assigned", role: "memberA", method: "GET", path: "/api/tasks/{{taskPrivateAssigned}}/comments" },
+  // 跨组织访问私密任务同样是 404（这条由**贝塔管理者**发起，路径与上一条刻意一致、只有角色不同）
+  {
+    name: "comments.list.managerB.private-assigned.cross-org",
+    role: "managerB",
+    method: "GET",
+    path: "/api/tasks/{{taskPrivateAssigned}}/comments",
+  },
   {
     name: "comments.create.memberA.empty",
     role: "memberA",
@@ -771,7 +854,7 @@ export const CASES: ContractCase[] = [
   { name: "inbox.import.noOrg", role: "noOrg", method: "POST", path: "/api/inbox/import", body: { drafts: [] } },
   { name: "inbox.import.anon", role: "anon", method: "POST", path: "/api/inbox/import", body: { drafts: [] } },
 
-  // ---------- 待办（按组织隔离，没有归属字段） ----------
+  // ---------- 待办（D-54：**本人数据**，组织只决定写在哪，管理员也只看得到自己的） ----------
   { name: "todos.list.anon", role: "anon", method: "GET", path: "/api/todos" },
   { name: "todos.list.admin", role: "admin", method: "GET", path: "/api/todos" },
   { name: "todos.list.managerA", role: "managerA", method: "GET", path: "/api/todos" },
@@ -794,8 +877,25 @@ export const CASES: ContractCase[] = [
     body: { content: "契约待办-成员甲" },
     capture: { todoIdByMember: "data.id" },
   },
+  // 请求体里的 ownerId 一律忽略：归属人恒为当前账号（写别人的待办没有入口）
+  {
+    name: "todos.create.memberA.owner-ignored",
+    role: "memberA",
+    method: "POST",
+    path: "/api/todos",
+    body: { content: "想让别人当归属人", ownerId: IDS.userMemberA2 },
+  },
   { name: "todos.create.empty", role: "managerA", method: "POST", path: "/api/todos", body: {} },
   { name: "todos.patch.managerA", role: "managerA", method: "PATCH", path: "/api/todos/{{todoId}}", body: { isCompleted: true } },
+  // 同组织但不是本人：403（跨组织才是 404，见下一条）
+  {
+    name: "todos.patch.memberA2.others-todo",
+    role: "memberA2",
+    method: "PATCH",
+    path: "/api/todos/{{todoOpen}}",
+    body: { isCompleted: true },
+  },
+  { name: "todos.patch.managerA.others-todo", role: "managerA", method: "PATCH", path: "/api/todos/{{todoOpen}}", body: { content: "x" } },
   {
     name: "todos.patch.managerB.cross-org",
     role: "managerB",
@@ -805,11 +905,12 @@ export const CASES: ContractCase[] = [
   },
   { name: "todos.patch.missing", role: "managerA", method: "PATCH", path: "/api/todos/no-such-todo", body: { isCompleted: true } },
   { name: "todos.delete.memberA", role: "memberA", method: "DELETE", path: "/api/todos/{{todoIdByMember}}" },
+  { name: "todos.delete.memberA.others-todo", role: "memberA", method: "DELETE", path: "/api/todos/{{todoId}}" },
   { name: "todos.delete.managerA", role: "managerA", method: "DELETE", path: "/api/todos/{{todoId}}" },
   { name: "todos.delete.managerA.cross-org", role: "managerA", method: "DELETE", path: "/api/todos/{{todoOfB}}" },
   { name: "todos.delete.missing", role: "managerA", method: "DELETE", path: "/api/todos/no-such-todo" },
 
-  // ---------- 随手记（按组织隔离） ----------
+  // ---------- 随手记（D-54：同样是本人数据） ----------
   { name: "notes.list.admin", role: "admin", method: "GET", path: "/api/notes" },
   { name: "notes.list.managerA", role: "managerA", method: "GET", path: "/api/notes" },
   { name: "notes.list.memberA", role: "memberA", method: "GET", path: "/api/notes" },
@@ -825,6 +926,8 @@ export const CASES: ContractCase[] = [
   },
   { name: "notes.create.empty", role: "managerA", method: "POST", path: "/api/notes", body: {} },
   { name: "notes.patch.managerA", role: "managerA", method: "PATCH", path: "/api/notes/{{noteId}}", body: { content: "改过的随手记" } },
+  // 同组织但不是本人：403
+  { name: "notes.patch.memberA2.others-note", role: "memberA2", method: "PATCH", path: "/api/notes/{{noteOne}}", body: { content: "x" } },
   {
     name: "notes.patch.managerB.cross-org",
     role: "managerB",
@@ -833,11 +936,12 @@ export const CASES: ContractCase[] = [
     body: { content: "跨组织改随手记" },
   },
   { name: "notes.patch.missing", role: "managerA", method: "PATCH", path: "/api/notes/no-such-note", body: { content: "x" } },
+  { name: "notes.delete.memberA.others-note", role: "memberA", method: "DELETE", path: "/api/notes/{{noteId}}" },
   { name: "notes.delete.managerB.cross-org", role: "managerB", method: "DELETE", path: "/api/notes/{{noteOne}}" },
   { name: "notes.delete.managerA", role: "managerA", method: "DELETE", path: "/api/notes/{{noteId}}" },
   { name: "notes.delete.missing", role: "managerA", method: "DELETE", path: "/api/notes/no-such-note" },
 
-  // ---------- 重要文件（按组织隔离，文件库限管理员与组织管理者） ----------
+  // ---------- 重要文件（D-54：组织内**所有人**可见、可增、可改；D-55：可见范围逐条自选） ----------
   { name: "files.list.admin", role: "admin", method: "GET", path: "/api/files" },
   { name: "files.list.managerA", role: "managerA", method: "GET", path: "/api/files" },
   { name: "files.list.memberA", role: "memberA", method: "GET", path: "/api/files" },
@@ -853,20 +957,100 @@ export const CASES: ContractCase[] = [
     capture: { fileId: "data.id" },
   },
   { name: "files.create.empty", role: "managerA", method: "POST", path: "/api/files", body: { name: "", filePath: "" } },
+  // 可见范围（D-55）：不传 `visibility` = 「给组织看」（默认档，老客户端行为不变）
+  {
+    name: "files.create.memberA.default-visibility",
+    role: "memberA",
+    method: "POST",
+    path: "/api/files",
+    body: { name: "成员甲建的默认文件", filePath: "C:\\fixture\\member-default.xlsx" },
+  },
+  // `visibility='private'`：只有**创建人**与**本组织的全局管理员**看得到
+  {
+    name: "files.create.memberA.private",
+    role: "memberA",
+    method: "POST",
+    path: "/api/files",
+    body: { name: "成员甲的个人文件", filePath: "C:\\fixture\\member-private.xlsx", visibility: "private" },
+    capture: { filePrivateByMember: "data.id" },
+  },
+  // 普通成员可以新增与编辑（组织归属由服务端按会话取，不接受请求里的 orgId）
+  {
+    name: "files.create.memberA",
+    role: "memberA",
+    method: "POST",
+    path: "/api/files",
+    body: { name: "契约文件-成员甲", filePath: "C:\\fixture\\contract-member.xlsx", category: "报价" },
+    capture: { fileByMember: "data.id" },
+  },
+  {
+    name: "files.edit.memberA.others-file",
+    role: "memberA",
+    method: "PATCH",
+    path: "/api/files/{{fileId}}",
+    body: { name: "成员甲改管理者的文件" },
+  },
+  // 夹具里 `filePrivate`（「我的报价底稿」）归管理者甲、可见范围是 private：
+  // 用搜索定位到它这一条，直接比对「谁看得到」——比看整个列表更好读
+  { name: "files.list.memberA.private-hidden", role: "memberA", method: "GET", path: "/api/files?search=我的报价底稿" },
+  { name: "files.list.managerA.private-visible", role: "managerA", method: "GET", path: "/api/files?search=我的报价底稿" },
+  { name: "files.list.admin.private-visible", role: "admin", method: "GET", path: "/api/files?search=我的报价底稿" },
+  // 跨组织改别人的个人文件 → 404（组织隔离优先于可见性）
+  {
+    name: "files.edit.managerB.others-private.cross-org",
+    role: "managerB",
+    method: "PATCH",
+    path: "/api/files/{{filePrivate}}",
+    body: { name: "跨组织改个人文件" },
+  },
+  // 创建人能把组织文件改成个人文件，改完别人就看不到了；再改回来
+  {
+    name: "files.edit.managerA.org-to-private",
+    role: "managerA",
+    method: "PATCH",
+    path: "/api/files/{{fileRemote}}",
+    body: { visibility: "private" },
+  },
+  { name: "files.use.memberA.after-private", role: "memberA", method: "POST", path: "/api/files/{{fileRemote}}/use" },
+  {
+    name: "files.edit.managerA.back-to-org",
+    role: "managerA",
+    method: "PATCH",
+    path: "/api/files/{{fileRemote}}",
+    body: { visibility: "org" },
+  },
   { name: "files.use.managerA", role: "managerA", method: "POST", path: "/api/files/{{fileId}}/use" },
+  { name: "files.use.memberA", role: "memberA", method: "POST", path: "/api/files/{{fileId}}/use" },
   { name: "files.use.managerB.cross-org", role: "managerB", method: "POST", path: "/api/files/{{fileOne}}/use" },
   { name: "files.use.missing", role: "managerA", method: "POST", path: "/api/files/no-such-file/use" },
+  // 删除是**逐条**判的（D-54 + D-55）：
+  // 成员删**自己的**（含个人文件）→ 200；删别人的组织文件 → 403；
+  // 组织管理者删本组织的组织文件 → 200、删**别人的个人文件** → 403；跨组织一律 404。
+  { name: "files.delete.memberA", role: "memberA", method: "DELETE", path: "/api/files/{{fileByMember}}" },
+  { name: "files.delete.memberA.others-org-file", role: "memberA", method: "DELETE", path: "/api/files/{{fileOne}}" },
+  // 组织管理者删**自己的**个人文件 → 200（夹具里 `filePrivate` 就是管理者甲登记的）
+  { name: "files.delete.managerA.own-private", role: "managerA", method: "DELETE", path: "/api/files/{{filePrivate}}" },
+  // 组织管理者删**别人的**个人文件 → 403（`filePrivateByMember` 是成员甲建的，这条要排在成员甲自删之前）
+  { name: "files.delete.managerA.others-private", role: "managerA", method: "DELETE", path: "/api/files/{{filePrivateByMember}}" },
+  { name: "files.delete.memberA.own-private", role: "memberA", method: "DELETE", path: "/api/files/{{filePrivateByMember}}" },
   { name: "files.delete.managerB.cross-org", role: "managerB", method: "DELETE", path: "/api/files/{{fileOne}}" },
   { name: "files.delete.managerA", role: "managerA", method: "DELETE", path: "/api/files/{{fileId}}" },
+  { name: "files.delete.managerA.member-file", role: "managerA", method: "DELETE", path: "/api/files/{{fileByMember}}" },
 
   // ---------- 重要文件下载（D-49） ----------
   // 远端文件经服务端**流式代理**下载（GET /api/files/:id/download），边界与文件库一致：
-  // 401 / 403 权限门槛、400 本机路径不可下载、503 本账号未配置 WebDAV、404 跨组织或不存在。
+  // 401 未登录、400 本机路径不可下载、404 跨组织或不存在、503 本账号未配置 WebDAV。
+  // D-54 起**没有 403 这一档了**（组织内所有人都能取，只有删除限管理者）。
   // 夹具里管理者 / 成员账号没有 `webdav_settings`（D-52 之后只有管理员那份是「周报上传共用连接」），
   // 所以这里录的是**确定**的失败面；「上传 → 登记 → 下载」的闭环由 smoke:ui 用假 WebDAV 覆盖
   // （同 reports.download 的口径）。
   { name: "files.download.anon", role: "anon", method: "GET", path: "/api/files/{{fileOne}}/download" },
+  // D-54：普通成员也能下载（他不一定配了 WebDAV，所以这里录的是 503 那一侧；
+  // 「上传 → 登记 → 下载」的成功链路由 smoke:ui 用假 WebDAV 覆盖）
   { name: "files.download.memberA", role: "memberA", method: "GET", path: "/api/files/{{fileOne}}/download" },
+  { name: "files.download.memberA.cross-org", role: "memberA", method: "GET", path: "/api/files/{{fileOfB}}/download" },
+  // 别人的个人文件：403（与「跨组织 404」刻意不同）
+  { name: "files.download.memberA.others-private", role: "memberA", method: "GET", path: "/api/files/{{filePrivate}}/download" },
   { name: "files.download.local-path", role: "managerA", method: "GET", path: "/api/files/{{fileOne}}/download" },
   { name: "files.download.webdav.disabled", role: "managerA", method: "GET", path: "/api/files/{{fileRemote}}/download" },
   { name: "files.download.managerB.cross-org", role: "managerB", method: "GET", path: "/api/files/{{fileOne}}/download" },
@@ -874,7 +1058,8 @@ export const CASES: ContractCase[] = [
 
   // ---------- WebDAV 网关（可选接入）----------
   // 契约夹具里只有**管理员**配了 WebDAV（D-52：周报上传共用他那份连接），
-  // 所以这组用例录的是「权限门槛 + 管理者/成员未配置时的 503 + 管理员已配置时的空目录」；
+  // 所以这组用例录的是「管理者/成员未配置时的 503 + 管理员已配置时的空目录」；
+  // ⚠️ D-54 起「未配置」是**账号维度**的 503，不再代表角色不够（普通成员同样能进这个网关）。
   // 协议细节（PROPFIND 解析、路径越界、上传补建目录）由 test/webdav/client.test.ts 用本地假服务器覆盖。
   { name: "webdav.list.anon", role: "anon", method: "GET", path: "/api/webdav" },
   { name: "webdav.list.memberA", role: "memberA", method: "GET", path: "/api/webdav" },
@@ -896,7 +1081,7 @@ export const CASES: ContractCase[] = [
     upload: { fields: { dir: "", register: "0" }, filename: "contract.txt", content: "hello" },
   },
 
-  // ---------- 周报：读与隔离 ----------
+  // ---------- 周报：读与隔离（D-54：**组织内全可见**，只有「改」还分角色） ----------
   { name: "reports.list.admin", role: "admin", method: "GET", path: "/api/reports" },
   { name: "reports.list.managerA", role: "managerA", method: "GET", path: "/api/reports" },
   { name: "reports.list.memberA", role: "memberA", method: "GET", path: "/api/reports" },
@@ -904,12 +1089,25 @@ export const CASES: ContractCase[] = [
   { name: "reports.list.noOrg", role: "noOrg", method: "GET", path: "/api/reports" },
   { name: "reports.detail.managerA", role: "managerA", method: "GET", path: "/api/reports/{{reportSubmitted}}" },
   { name: "reports.detail.memberA", role: "memberA", method: "GET", path: "/api/reports/{{reportSubmitted}}" },
+  // 成员乙看得到同组织成员甲的周报（D-54 之前这里也是 200，但列表里根本没有这条——
+  // 所以真正钉住新口径的是上面的 reports.list.memberA2）
   { name: "reports.detail.memberA2.others-report", role: "memberA2", method: "GET", path: "/api/reports/{{reportSubmitted}}" },
+  { name: "reports.list.memberA2", role: "memberA2", method: "GET", path: "/api/reports" },
   { name: "reports.detail.managerB.cross-org", role: "managerB", method: "GET", path: "/api/reports/{{reportSubmitted}}" },
   { name: "reports.detail.missing", role: "managerA", method: "GET", path: "/api/reports/no-such-report" },
   { name: "reports.download.memberA", role: "memberA", method: "GET", path: "/api/reports/{{reportSubmitted}}/file/1" },
+  // 成员乙能下载同组织别人的周报正文（组织内公开）
+  { name: "reports.download.memberA2.others-report", role: "memberA2", method: "GET", path: "/api/reports/{{reportSubmitted}}/file/1" },
   { name: "reports.download.managerB.cross-org", role: "managerB", method: "GET", path: "/api/reports/{{reportSubmitted}}/file/1" },
   { name: "reports.download.missing-version", role: "managerA", method: "GET", path: "/api/reports/{{reportSubmitted}}/file/9" },
+  // 「改」仍然只给本人：成员乙重传成员甲的周报 → 404（与「没这条周报」同一响应）
+  {
+    name: "reports.reupload.memberA2.others-report",
+    role: "memberA2",
+    method: "POST",
+    path: "/api/reports/{{reportSubmitted}}/file",
+    upload: { fields: {}, filename: "contract-robbed.xlsx", content: "fake-xlsx" },
+  },
 
   // ---------- 周报：审批（managerA 不能碰贝塔组的周报） ----------
   { name: "reports.return.no-note.managerA", role: "managerA", method: "POST", path: "/api/reports/{{reportSubmitted}}/return", body: {} },

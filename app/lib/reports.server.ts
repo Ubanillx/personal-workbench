@@ -25,7 +25,9 @@ import { assertOrgAccess, assertOrgManage, orgScope } from "./session.server";
  * 组织隔离（docs/harness/ACCOUNTS_AND_ORGS.md §4、§14.2）全部收敛在本文件：
  * - 读列表：`reportVisibilityClauses(user)` 产出组织条件，绝不散落在各个查询里；
  * - 读单条：`findReportWithOrg` 先取出周报与它的 `org_id`，再用 `assertOrgAccess` 判定，
- *   「不存在 / 跨组织 / 看不到」返回同样的 404（§4 不变式 1，不泄露资源是否存在）；
+ *   「不存在 / 跨组织」返回同样的 404（§4 不变式 1，不泄露资源是否存在）；
+ * - **可见范围是「组织内全可见」**（D-54）：同一组织的成员互相看得到彼此交的周报，
+ *   普通成员只是**不能改别人的**（重传与审批各自另有门槛）；
  * - 写入：`INSERT` 显式写 `weekly_reports.org_id`（迁移 009 起是 NOT NULL）；
  * - `report_files` 没有 `org_id`，一律经 `report_id` 先过周报的组织边界（§14.2 的间接表规则）。
  *
@@ -110,11 +112,11 @@ function addReportFile(input: ReportFile): void {
 /* ------------------------------------------------------------------ 读：组织范围 */
 
 /**
- * 可见性 SQL 条件（§14.3）。调用方把 clauses 用 AND 拼进自己的 WHERE，参数按顺序拼进 params，
+ * 可见性 SQL 条件（§14.3 + D-54）。调用方把 clauses 用 AND 拼进自己的 WHERE，参数按顺序拼进 params，
  * 这样"漏加组织过滤"只可能发生在这一处，而不是散落在每个查询里。
  * - admin：全部组织（D-28 的合并视图）；
- * - manager：本组织全部；
- * - member：本组织内**只有自己提交的**（原实现是「助理只看自己的」）；
+ * - manager / member：**本组织全部**周报——周报是组织内的汇报材料，同一组织的人互相看得见；
+ *   编辑入口另有限制：普通成员只能重新上传**自己的**那份（见 `reuploadTarget` 与周报页的 `canResubmit`）；
  * - 未加入组织的账号（orgId 为 NULL，D-24）：不落在任何组织范围内，一条都看不到。
  */
 export function reportVisibilityClauses(user: User): { clauses: string[]; params: string[] } {
@@ -126,10 +128,6 @@ export function reportVisibilityClauses(user: User): { clauses: string[]; params
     params.push(scope);
   } else if (user.role !== "admin") {
     clauses.push("1=0");
-  }
-  if (user.role === "member") {
-    clauses.push("r.owner_id=?");
-    params.push(user.id);
   }
   return { clauses, params };
 }
@@ -149,27 +147,21 @@ export function findReportWithOrg(id: string): ScopedReport | null {
 }
 
 /**
- * 单条周报对某人是否可见（组织边界由调用方先用 assertOrgAccess 判定，§14.2）：
- * - admin 全可见；manager 本组织全部；member 只看自己提交的。
- */
-export function canViewReport(report: ReportView, user: User): boolean {
-  if (user.role === "admin" || user.role === "manager") return true;
-  return report.ownerId === user.id;
-}
-
-/**
- * 存在性 + 组织边界 + 可见性：不存在、跨组织、未加入组织、以及「本组织里看不到的周报」
- * 都返回 null，调用方一律回 404（§14.2 / §4 不变式 1）。
+ * 存在性 + 组织边界：不存在与跨组织都返回 null，调用方一律回 404（§14.2 / §4 不变式 1）。
+ *
+ * D-54 起**没有第四道「可见性」判断了**：周报是组织内的汇报材料，跨过组织边界的都是本组织的人，
+ * 一律可见。刻意不再保留一个恒真的 `canViewReport`——那只会让下一个人以为这里还有一层权限。
+ * 「能不能改」由各自的写入口判：重传走 `reuploadTarget`（本人或本组织管理者），
+ * 审批走路由的 `requireManager`。
  */
 function locateReport(user: User, id: string): ScopedReport | null {
   const found = findReportWithOrg(id);
   if (!found) return null;
   if (assertOrgAccess(user, found.orgId)) return null;
-  if (!canViewReport(found.report, user)) return null;
   return found;
 }
 
-/** GET /api/reports/:id：跨组织与本人看不到的周报一律 404 */
+/** GET /api/reports/:id：跨组织一律 404 */
 export function getReport(user: User, id: string): ServiceResult<ReportView> {
   const found = locateReport(user, id);
   return found ? done(found.report) : notFoundResult();
@@ -396,9 +388,10 @@ export function returnReport(user: User, id: string, body: Record<string, unknow
 }
 
 /**
- * POST /api/reports/:id/file 的前置校验：可见性 → 权限 → 状态。
+ * POST /api/reports/:id/file 的前置校验：组织边界 → 权限 → 状态。
  * 刻意与落盘分开：旧实现"状态不符时不解析 multipart"，所以这三步必须在读上传体之前跑完。
- * 上传新版本的权限是「管理员 / 本组织管理者 / 这份周报的归属人本人」（§4 权限矩阵）。
+ * 上传新版本的权限是「管理员 / 本组织管理者 / 这份周报的归属人本人」（§4 权限矩阵）——
+ * 普通成员看得到别人的周报，但**只能重传自己的**（D-54）。
  */
 export function reuploadTarget(user: User, id: string): ServiceResult<ScopedReport> {
   const found = locateReport(user, id);

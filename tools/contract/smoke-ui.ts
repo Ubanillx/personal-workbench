@@ -88,8 +88,11 @@ const PAGE_MARKERS: Record<string, string[]> = {
   // 「最近更新」列与「更新时间范围」筛选器一一对应（D-47）：筛选字段必须在列表里看得见。
   // 企微导入（粘贴解析 → 批量导入）已并入本页页头的抽屉，因此这里盯着它的入口按钮
   "/tasks": ["逾期任务", "待验收任务", "新建任务", "从企微导入", "搜索任务标题或负责人", "完成率", "全部时间", "最近更新", "所属组织"],
-  "/todos": ["跟进报价", "新建待办", "搜索待办内容", "所属组织"],
-  "/notes": ["会议要点", "新建记录", "搜索记录内容", "所属组织"],
+  // 待办 / 随手记自 D-54 起是**本人数据**：这一轮用的是**管理员**会话，而夹具里的待办归成员甲、
+  // 随手记也归成员甲，所以管理员页面上一条都看不到。这里只钉页面骨架，
+  // 「本人的能看到、别人的看不到」由上面的第 4f 段用成员甲 / 成员乙的会话专门断言。
+  "/todos": ["新建待办", "搜索待办内容", "所属组织"],
+  "/notes": ["新建记录", "搜索记录内容", "所属组织"],
   // 这一轮用的是**管理员**会话：D-46 起管理员不提交周报，页面上不该有「上传周报」入口，
   // 「上传入口按身份出现/隐藏」由后面的专项断言盯着
   "/reports": ["第八周", "全部类型", "全部状态", "归属人"],
@@ -474,6 +477,89 @@ async function main(): Promise<void> {
       `status=${settingsByMember.status} location=${settingsByMember.headers.get("location") ?? ""}`,
     );
 
+    /* ------------------------------------------------ 4f) D-54 的页面侧权限（普通成员） */
+
+    // 标记串自带时间戳：本段在下面 `const stamp` 之前，不能借用那个变量（TDZ）
+    const stamp = Date.now();
+
+    // 「重要文件」自 D-54 起对组织内**所有人**开放：普通成员进得去、加得了、改得了，
+    // 但**界面上没有删除入口**（服务端也会 403，接口侧由契约的 files.delete.memberA 盯）
+    const memberFiles = await fetch(`${base}/files`, { headers: { cookie: member.cookie }, redirect: "manual" });
+    const memberFilesHtml = memberFiles.status === 200 ? await memberFiles.text() : "";
+    check("普通成员能打开 /files（D-54）", memberFiles.status === 200, `status=${memberFiles.status}`);
+    check(
+      "/files 对普通成员渲染出文件列表与「添加文件」入口",
+      memberFilesHtml.includes("重要文件") && memberFilesHtml.includes("添加文件") && memberFilesHtml.includes("报价单模板"),
+    );
+    // 删除是**逐条**判的（D-55）：成员对自己登记的文件有删除入口，对管理者的 `fileOne` 没有。
+    // 夹具里成员甲此时一条都没登记，所以整页不该出现「删除索引」。
+    check(
+      "/files 对普通成员**不显示**别人文件的「删除索引」入口",
+      !memberFilesHtml.includes("删除索引"),
+      memberFilesHtml.includes("删除索引") ? "HTML 里出现了「删除索引」" : undefined,
+    );
+    // 组织管理者的列表（稍后几处断言还要用，这里取一次；必须在本段之前取，否则成员的私密文件
+    // 也会被断言「看不到」而实际上此时还没建）
+    const managerFilesHtml = await pageHtml("/files", manager.cookie);
+    // 成员乙的会话在本段与后面几处断言都要用，提前登录一次
+    const memberA2 = await loginAs(base, ACCOUNTS.memberA2);
+    const memberFileMarker = `冒烟成员文件-${stamp}`;
+    const memberFileAdd = await pagePost(
+      "/files",
+      { name: memberFileMarker, filePath: "C:\\fixture\\member.txt", category: "临时" },
+      member.cookie,
+    );
+    check("普通成员新增文件索引成功（组织归属按会话取）", memberFileAdd !== "" && !memberFileAdd.includes("只有组织管理者"));
+    check("新增后普通成员能看到自己登记的文件", (await pageHtml("/files", member.cookie)).includes(memberFileMarker));
+    check("自己的文件在页面上有「删除索引」入口（D-55：创建人可删自己的）", (await pageHtml("/files", member.cookie)).includes("删除索引"));
+
+    /* ------------------------------------------------ 4g) 重要文件的可见范围（D-55） */
+
+    // ⚠️ 「可见范围」字段在**新建 / 编辑抽屉**里，而抽屉是打开才挂载的（`FormDrawer` 的 children
+    // 在 `open=false` 时不渲染），所以 SSR 页面里抓不到那两个选项——这里不写那种必然失败的断言，
+    // 改为直接验证**行为**：建一条个人文件，看谁能看到它。
+    const privateMarker = `冒烟个人文件-${stamp}`;
+    const privateAdd = await pagePost(
+      "/files",
+      { name: privateMarker, filePath: "C:\\fixture\\member-private.txt", visibility: "private" },
+      member.cookie,
+    );
+    check("普通成员可以登记「给自己看」的文件", privateAdd !== "");
+    const memberOwnList = await pageHtml("/files", member.cookie);
+    check("自己的个人文件在列表里带「仅自己」标识", memberOwnList.includes(privateMarker) && memberOwnList.includes("仅自己"));
+    check("同组织的其他成员看不到这条个人文件", !(await pageHtml("/files", memberA2.cookie)).includes(privateMarker));
+    check("组织管理者看不到别人的个人文件", !(await pageHtml("/files", manager.cookie)).includes(privateMarker));
+    check("组织管理者的列表里看得到自己的「我的报价底稿」（夹具里的个人文件）", managerFilesHtml.includes("我的报价底稿"));
+    check("/files 对组织管理者显示「删除索引」入口（自己的文件与组织文件都能删）", managerFilesHtml.includes("删除索引"));
+
+    // 待办 / 随手记自 D-54 起是**本人数据**：夹具里那条待办归成员甲，成员乙看不到
+    check("待办页只显示本人的待办（成员甲看得到夹具那条）", (await pageHtml("/todos", member.cookie)).includes("跟进报价"));
+    check("待办页不显示别人的待办（成员乙看不到成员甲那条）", !(await pageHtml("/todos", memberA2.cookie)).includes("跟进报价"));
+    check("随手记页只显示本人的记录（成员甲看得到会议要点）", (await pageHtml("/notes", member.cookie)).includes("会议要点"));
+    check("随手记页不显示别人的记录（成员乙看不到会议要点）", !(await pageHtml("/notes", memberA2.cookie)).includes("会议要点"));
+
+    // 私密任务：管理者甲发布并派给成员乙 → 成员甲看不到、成员乙看得到
+    const privateTitle = `冒烟私密任务-${stamp}`;
+    const privateCreated = await pagePost(
+      "/tasks",
+      { intent: "create", title: privateTitle, isPrivate: "true", ownerId: IDS.userMemberA2, priority: "P1" },
+      manager.cookie,
+      true,
+    );
+    check("组织管理者可以把私密任务派给本组织成员（发布人 ≠ 负责人）", privateCreated !== "");
+    check("负责人（成员乙）在任务列表里看得到派给自己的私密任务", (await pageHtml("/tasks", memberA2.cookie)).includes(privateTitle));
+    check("同组织的其他成员（成员甲）看不到这条私密任务", !(await pageHtml("/tasks", member.cookie)).includes(privateTitle));
+    check("发布人（管理者甲）看得到自己发布的私密任务", (await pageHtml("/tasks", manager.cookie)).includes(privateTitle));
+
+    // 周报自 D-54 起组织内全可见：成员乙不是提交人，但看得到组织里的周报
+    const memberA2ReportsHtml = await pageHtml("/reports", memberA2.cookie);
+    const memberA2SeesOthersReport = memberA2ReportsHtml.includes("第八周");
+    check(
+      "周报页对普通成员展示本组织全部周报（含别人的）",
+      memberA2SeesOthersReport,
+      memberA2SeesOthersReport ? undefined : "没渲染出夹具里成员甲的那份周报",
+    );
+
     // 周报上传入口按身份出现/隐藏，且上传表单里不再有「归属人」（D-46）
     const adminReportsHtml = await pageHtml("/reports", cookie);
     check("/reports 管理员看不到「上传周报」入口", !adminReportsHtml.includes("上传周报"));
@@ -495,8 +581,8 @@ async function main(): Promise<void> {
     // 否则写入被拒（页面 action 会把它渲染成提示文案）。四页口径必须一致，因此逐页验证两遍：
     // 不带 orgId → 拒绝；带 orgId → 写成功并能在列表里看到。
     // 索引路由的表单必须带 ?index（RR8 的 <Form> 会自动补，裸 fetch 要自己加），否则 405。
+    // `stamp` 已经在上面第 4f 段声明过，这一段复用同一个时间戳（本次运行内的两个标记互不干扰）。
     const noOrgHint = "管理员必须指定记录所属组织";
-    const stamp = Date.now();
 
     // 概览页（D-40）：改成只读展板，新增待办的 action 已移除 —— POST / 必须写不进去。
     // 展板内容本身由上面第 4 步的首页标记与下面的文案检查覆盖。

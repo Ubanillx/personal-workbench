@@ -83,6 +83,8 @@ export const IDS = {
   fileOne: "file-1",
   /** 指向 `webdav:` 远端的索引（D-49 起给「下载」用例当未配置 503 的靶子） */
   fileRemote: "file-remote",
+  /** 个人文件（`visibility='private'`，管理者甲登记的）：钉住 D-55 的可见范围 */
+  filePrivate: "file-private",
   reportSubmitted: "report-submitted",
   // 贝塔组的业务数据（最小一批，用来验证隔离）
   taskOfB: "t-of-b",
@@ -435,22 +437,54 @@ export function createFixture(): Fixture {
     insertNotification.run(id, recipientId, actorId, taskId, "收到新任务", "有一项新任务指派给你", STAMP);
   }
 
+  // 待办 / 随手记自 D-54 起是**本人数据**（迁移 017 的 `owner_id`）：夹具必须给出归属人，
+  // 否则（owner_id 为 NULL）按「归属字段为空 = 谁都不属于」的口径一条都读不到，用例会全红。
+  // 刻意让 `todoOpen` 归**成员甲**、`noteOne` 归**成员甲**：同组织的管理者既看也改不动它们，
+  // 这正是「本人数据」最容易写错的一侧（跨组织 404 由另一批用例覆盖）。
   const insertTodo = db.prepare(
-    "INSERT INTO todos(id,org_id,content,todo_date,is_completed,completed_at,created_at,updated_at) VALUES(?,?,?,?,0,NULL,?,?)",
+    "INSERT INTO todos(id,org_id,owner_id,content,todo_date,is_completed,completed_at,created_at,updated_at) VALUES(?,?,?,?,?,0,NULL,?,?)",
   );
-  insertTodo.run(IDS.todoOpen, IDS.orgAlpha, "跟进报价", "2026-09-01", STAMP, STAMP);
-  insertTodo.run(IDS.todoOfB, IDS.orgBeta, "贝塔跟进", "2026-09-01", STAMP, STAMP);
+  insertTodo.run(IDS.todoOpen, IDS.orgAlpha, IDS.userMemberA, "跟进报价", "2026-09-01", STAMP, STAMP);
+  insertTodo.run(IDS.todoOfB, IDS.orgBeta, IDS.userMemberB, "贝塔跟进", "2026-09-01", STAMP, STAMP);
 
-  const insertNote = db.prepare("INSERT INTO notes(id,org_id,content,is_pinned,created_at,updated_at) VALUES(?,?,?,0,?,?)");
-  insertNote.run(IDS.noteOne, IDS.orgAlpha, "会议要点", STAMP, STAMP);
-  insertNote.run(IDS.noteOfB, IDS.orgBeta, "贝塔会议要点", STAMP, STAMP);
+  const insertNote = db.prepare("INSERT INTO notes(id,org_id,owner_id,content,is_pinned,created_at,updated_at) VALUES(?,?,?,?,0,?,?)");
+  insertNote.run(IDS.noteOne, IDS.orgAlpha, IDS.userMemberA, "会议要点", STAMP, STAMP);
+  insertNote.run(IDS.noteOfB, IDS.orgBeta, IDS.userMemberB, "贝塔会议要点", STAMP, STAMP);
 
+  /**
+   * 重要文件（D-55）：每行显式给 `owner_id` 与 `visibility`。
+   * 夹具里刻意两种可见范围都有：
+   * - `fileOne` / `fileOfB` 是**组织可见**（默认档，普通成员看得到也改得动）；
+   * - `filePrivate` 是**个人文件**（管理者甲登记的），用来钉住「成员看不到 / 组织管理者看不到别人的
+   *   个人文件 / 全局管理员看得到但只在**本组织**内 / 创建人自己可改可删」这四件事。
+   */
   const insertFile = db.prepare(
-    "INSERT INTO important_files(id,org_id,name,file_path,category,last_used_at,created_at,updated_at) VALUES(?,?,?,?,?,NULL,?,?)",
+    "INSERT INTO important_files(id,org_id,owner_id,visibility,name,file_path,category,last_used_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,NULL,?,?)",
   );
-  insertFile.run(IDS.fileOne, IDS.orgAlpha, "报价单模板", "C:\\fixture\\quote-template.xlsx", "报价", STAMP, STAMP);
-  insertFile.run(IDS.fileRemote, IDS.orgAlpha, "2026 报价单", "webdav:报价/2026报价单.xlsx", "报价", STAMP, STAMP);
-  insertFile.run(IDS.fileOfB, IDS.orgBeta, "贝塔报价单", "C:\\fixture\\beta-quote.xlsx", "报价", STAMP, STAMP);
+  insertFile.run(
+    IDS.fileOne,
+    IDS.orgAlpha,
+    IDS.userManagerA,
+    "org",
+    "报价单模板",
+    "C:\\fixture\\quote-template.xlsx",
+    "报价",
+    STAMP,
+    STAMP,
+  );
+  insertFile.run(IDS.fileRemote, IDS.orgAlpha, IDS.userManagerA, "org", "2026 报价单", "webdav:报价/2026报价单.xlsx", "报价", STAMP, STAMP);
+  insertFile.run(
+    IDS.filePrivate,
+    IDS.orgAlpha,
+    IDS.userManagerA,
+    "private",
+    "我的报价底稿",
+    "C:\\fixture\\private-draft.xlsx",
+    "报价",
+    STAMP,
+    STAMP,
+  );
+  insertFile.run(IDS.fileOfB, IDS.orgBeta, IDS.userManagerB, "org", "贝塔报价单", "C:\\fixture\\beta-quote.xlsx", "报价", STAMP, STAMP);
 
   const insertReport = db.prepare(
     "INSERT INTO weekly_reports(id,org_id,owner_id,period_start,period_end,doc_type,note,status,current_version,uploaded_by,review_note,created_at,updated_at,submitted_at,reviewed_at,returned_at) VALUES(?,?,?,?,?,?,?,?,?,?,NULL,?,?,?,NULL,NULL)",

@@ -47,11 +47,17 @@
 
 ### 个人（3）
 
-| 表                | 关键字段                                                         | 说明                                       |
-| ----------------- | ---------------------------------------------------------------- | ------------------------------------------ |
-| `todos`           | `org_id`, `content`, `todo_date`, `is_completed`, `completed_at` | 待办（改造前是全局共享，现在按组织隔离）   |
-| `notes`           | `org_id`, `content`, `is_pinned`                                 | 随手记（同上）                             |
-| `important_files` | `org_id`, `name`, `file_path`, `category`, `last_used_at`        | 重要文件收藏（只存路径，不复制文件；同上） |
+| 表                | 关键字段                                                     | 说明                                                                 |
+| ----------------- | ------------------------------------------------------------ | -------------------------------------------------------------------- |
+| `todos`           | `org_id`, `owner_id`, `content`, `todo_date`, `is_completed` | 待办：**本人数据**（`owner_id` 由迁移 017 加入，管理员也只看自己的） |
+| `notes`           | `org_id`, `owner_id`, `content`, `is_pinned`                 | 随手记：同上                                                         |
+| `important_files` | `org_id`, `name`, `file_path`, `category`, `last_used_at`    | 重要文件收藏：**组织公共数据**（组织内都能看/加/改，只有删限管理者） |
+
+> `todos` / `notes` 的 `owner_id` 是 D-54 加的：改造前这两张表只有 `org_id`（同组织互相可见），
+> 而「随手记」本来就该是私人的。迁移 017 把历史行认领给本组织**最早的启用组织管理者**
+> （没有 manager 就回落到最早的启用管理员）；`owner_id` 允许为 NULL 只服务于
+> 「老数据 + 当时没有可认领账号」这一种情况，那种行按「不存在」处理（谁都读不到）。
+> 刻意**不加外键**：`ALTER TABLE ADD COLUMN` 加不了，归属人账号消失后记录不再属于任何人。
 
 > `important_files.file_path` 有两种取值，**没有加列、没有迁移**（D-41）：
 > 本机绝对路径 / 共享盘路径（`C:\work\x.xlsx`、`\\server\share\...`）原样存；
@@ -94,6 +100,11 @@
 | 直接有 `org_id`（NOT NULL） | `tasks`、`todos`、`notes`、`important_files`、`weekly_reports`                                                                                     |
 | 经父级关联（无 `org_id`）   | `task_progress_logs`/`task_comments`/`task_events` → `tasks`；`report_files` → `weekly_reports`；`notifications` → `recipient_id` → `users.org_id` |
 
+**归属与可见性不是一回事**（D-54）：`org_id` 决定「这条数据属于哪个组织」，
+而**谁能看见**还要看另一层判据——`tasks.is_private`（私密任务三个可见方）、
+`todos.owner_id` / `notes.owner_id`（本人数据）、`important_files`（组织公共数据）。
+三者的差别见 `ACCOUNTS_AND_ORGS.md` §4 权限矩阵与 §23。
+
 ## 状态机与枚举
 
 | 字段                                | 取值                                                                                                                                         | 约束位置                                                                                                                                                                                                                   |
@@ -102,7 +113,7 @@
 | `tasks.priority`                    | `P0` / `P1` / `P2`                                                                                                                           | CHECK                                                                                                                                                                                                                      |
 | `tasks.progress`                    | 0–100 整数                                                                                                                                   | CHECK                                                                                                                                                                                                                      |
 | `tasks.source`                      | `manual` / `wecom` / `api` / `assistant`                                                                                                     | CHECK                                                                                                                                                                                                                      |
-| `tasks.is_private`                  | 0/1；为 1 时只有管理员、以及创建它的本组织管理者可见                                                                                         | 应用层校验                                                                                                                                                                                                                 |
+| `tasks.is_private`                  | 0/1；为 1 时只有**发布人（`created_by`）、负责人（`owner_id`）、全局管理员**可见                                                             | 应用层校验；写操作与读操作共用同一个 `canView`（D-54，见 `ACCOUNTS_AND_ORGS.md` §23.1）                                                                                                                                    |
 | `tasks.archived_at`                 | 非空表示已归档（归档任务不可 `PATCH`，需先 `restore`）                                                                                       | 应用层                                                                                                                                                                                                                     |
 | `task_events.event_type`            | `task_created` / `task_reassigned` / `task_submitted` / `task_approved` / `task_returned` / `task_archived` / `task_restored` / `task_moved` | CHECK（`task_moved` 由迁移 013 放开，D-47）                                                                                                                                                                                |
 | `notifications.event_type`          | 共 15 种：11 种任务/周报事件 + `org_invited` / `org_join_approved` / `org_join_rejected` / `org_removed`                                     | CHECK（008、009 两次重建后生效）                                                                                                                                                                                           |
