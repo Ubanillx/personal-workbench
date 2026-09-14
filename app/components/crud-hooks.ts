@@ -93,7 +93,7 @@ export function useServerTable<T>(list: Paged<T>): {
   sortOrderOf: (key: string) => SortArrow;
 } {
   const { patch } = useListParams();
-  const onTableChange: NonNullable<TableProps<T>["onChange"]> = (next, _filters, sorter) => {
+  const onTableChange: NonNullable<TableProps<T>["onChange"]> = (next, _filters, sorter, extra) => {
     const changes: Record<string, string | null> = {};
     const nextSize = next.pageSize ?? list.size;
     if (nextSize !== list.size) {
@@ -103,14 +103,18 @@ export function useServerTable<T>(list: Paged<T>): {
     } else {
       changes[LIST_PARAMS.page] = String(next.current ?? list.page);
     }
-    const single = Array.isArray(sorter) ? sorter[0] : sorter;
-    // 表头点击：箭头清空（第三次点击）等于回到服务端默认排序，所以把参数删掉而不是写个空值
-    const key = single?.columnKey ?? single?.field;
-    if (key !== undefined && key !== null) {
-      const order = single?.order;
-      changes[LIST_PARAMS.sort] = order ? String(key) : null;
-      changes[LIST_PARAMS.order] = order === "descend" ? "desc" : order ? "asc" : null;
-      changes[LIST_PARAMS.page] = "1";
+    // 翻页事件也会携带当前已生效的 sorter；只有明确是 sort 动作时才更新排序，
+    // 否则每次翻页都会把当前页误重置成 1（antd Table 的 onChange extra.action）。
+    if (extra.action === "sort") {
+      const single = Array.isArray(sorter) ? sorter[0] : sorter;
+      // 表头点击：箭头清空（第三次点击）等于回到服务端默认排序，所以把参数删掉而不是写个空值
+      const key = single?.columnKey ?? single?.field;
+      if (key !== undefined && key !== null) {
+        const order = single?.order;
+        changes[LIST_PARAMS.sort] = order ? String(key) : null;
+        changes[LIST_PARAMS.order] = order === "descend" ? "desc" : order ? "asc" : null;
+        changes[LIST_PARAMS.page] = "1";
+      }
     }
     patch(changes);
   };
