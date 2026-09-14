@@ -1,0 +1,34 @@
+---
+alwaysApply: false
+description: 当编写或修改 app/ 下的 React/antd 界面、页面、组件或表单抽屉时使用。规定 antd v6 先查再写、上下文反馈组件、列表页骨架与表格排版。
+---
+
+# 前端规范（antd v6）
+
+UI 统一 **antd v6** + `@ant-design/icons` v6。**写 antd 代码前必须先用官方 CLI 查 API，禁止凭记忆写**（v6 与 v5 差异很大）：
+
+```bash
+npx antd info <组件>          # props / 类型 / 默认值
+npx antd demo <组件> <示例>   # 可直接改用的官方示例
+npx antd doc <组件>           # 完整文档
+npx antd lint app             # 提交前必跑
+```
+
+写法要点：
+
+- 反馈组件一律用 `App.useApp()`：`const { message, modal, notification } = AntdApp.useApp();`，**禁止** `message.success()` 静态方法（拿不到主题与 locale）。
+- v6 常见差异：Button 用 `color="primary" variant="solid"`（`size` 无 `middle`）；`List` 已废弃改用 `Listy`；Card 用 `variant` / `styles.body`；Tabs/Timeline 用 `items`；Modal 用 `destroyOnHidden`；Alert/notification 用 `title`。
+- 布局优先 `Flex` / `Space` / `Row`+`Col` / `Layout`，不为新页面写 CSS；结构性辅助类在 [app/styles/layout.css](mdc:app/styles/layout.css)。
+
+## 列表页 / CRUD 交互
+
+统一骨架：`PageHeader` → `Card`(`TableToolbar` + `Table`) → 右侧 `FormDrawer` / `Drawer`（共享组件在 [app/components/](mdc:app/components)）。
+
+- 同一时刻只挂一个右侧抽屉；嵌套浮层必须挂在抽屉内容里（`FormDrawer` 的 `afterForm`）。
+- 筛选/搜索条件写进 URL（`useListParams`）；行操作平铺用 `RowActions`；批量用 `rowSelection` + `SelectionAlert`。
+- 失败**必须**渲染常驻 `Alert`（页面顶部与抽屉顶部各一处），不能只弹 toast（冒烟靠 HTML 错误文案断言）。
+- 表格排版一律走 `dataTable()`（[app/components/table-layout.ts](mdc:app/components/table-layout.ts)），不手写 `scroll.x`；行内动作列给 `ellipsis: false`。
+- 页面 `action` 只做 `intent → 服务函数` 映射与文案包装，业务规则留在 [app/lib/](mdc:app/lib) 的 `*.server.ts`，不得改变既有表单字段名。
+- **列表每一列都要在新建/编辑抽屉里有对应字段或入口**，同一字段在列头/筛选/表单/Tag 里只用一个说法（D-47）。
+
+文案规范与完整细则见 [docs/harness/CODE_STYLE.md](mdc:docs/harness/CODE_STYLE.md) §10；antd skill 见 [.agents/skills/antd/SKILL.md](mdc:.agents/skills/antd/SKILL.md)。

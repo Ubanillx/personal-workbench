@@ -1,0 +1,27 @@
+---
+alwaysApply: false
+description: 当需要理解或修改请求链路、路由、API 端点、认证/授权与组织隔离时使用。涵盖 app/lib 共享服务层、RR8 资源路由约定与权限不变式。
+---
+
+# 架构与请求链路
+
+页面 `loader`/`action` 与 `/api/*` 资源路由**共用同一份共享服务**（[app/lib/](mdc:app/lib) 下的 `*.server.ts`），服务再落到 [server/src/db](mdc:server/src/db) 与内联 SQL。
+
+**硬规则**：页面 loader/action **不允许**去 fetch 自己的 `/api`。API 路由只是同一份实现的薄包装。
+
+- 响应信封由 [app/lib/http.server.ts](mdc:app/lib/http.server.ts) 产出：成功 `{ ok: true, data }`，失败 `{ ok: false, error: { code, message } }`。
+- 路由表在 [app/routes.ts](mdc:app/routes.ts)，按域拆到 `routes.{orgs,people,reports,tasks}.ts`。**只有 loader/action、没有默认导出的资源路由即 API 端点**；带组件的是页面。
+- RR8 里一个 `action` 负责该路径的**所有非 GET 方法**，所以 `PATCH` 与 `DELETE /api/todos/:id` 写在同一个 `api.todos.$id.ts`，在 action 内按 `request.method` 分派。
+- 新增页面路径必须登记进 [app/root.tsx](mdc:app/root.tsx) 的 `MIGRATED_PATHS`，否则不进导航。
+
+## 认证与权限
+
+- 会话：HttpOnly cookie `workbench_session`，命中 `access_sessions`（sha256 存储、可撤销、可过期）。
+- 授权：`requireAuth`（未登录 401）/ `requireManager` / `requireAdmin`（权限不足 403）。
+- 角色：**admin**（全局，不隶属组织）/ **manager**（组织管理者）/ **member**。业务数据带 `org_id`。
+- **跨组织按 id 访问一律 404**；同组织但无可见权（别人的私密任务、别人的待办）才 403。
+- **能看见才改得动**：读写共用同一个可见性判据。
+- 任务状态**不能**通过 `PATCH /api/tasks/:id` 修改（返回 `FIELD_FORBIDDEN`），必须走 `progress` / `submit-review` / `approve` / `return`。
+- **任务验收（`approve` / `return`）只允许任务的发布人**（`created_by`，全局管理员兜底）：执行者（负责人）永远不能验收自己负责的任务。判据是 [app/lib/task-permissions.ts](mdc:app/lib/task-permissions.ts) 的 `canReviewTask()`，服务端与页面共用，不要两边各写一份（D-57）。
+
+修改认证/权限前先读 [docs/harness/ACCOUNTS_AND_ORGS.md](mdc:docs/harness/ACCOUNTS_AND_ORGS.md) §4 / §23；端点清单见 [docs/harness/ARCHITECTURE.md](mdc:docs/harness/ARCHITECTURE.md)。

@@ -1,0 +1,34 @@
+---
+alwaysApply: false
+description: 交付前或改动端点/数据层时使用。列出 lint、typecheck、测试、契约回放与 SSR 冒烟的门禁命令及连带更新要求。
+---
+
+# 验证与测试门禁
+
+提交前四项都要过：
+
+```bash
+npm run lint          # oxlint，必须 0 warning / 0 error
+npm run typecheck     # server + tools + app + test 四个 tsconfig
+npm test              # test:db → test:webdav → test:api → test:auth → test:ui
+npm run build         # 客户端 + SSR 产物
+npx antd lint app     # antd 官方检查，必须 No issues found
+npm run format:check  # Prettier 漂移检查
+```
+
+`test:api` / `test:auth` / `test:ui` 依赖 `npm run build`（`pretest` 已自动执行）。测试用临时数据库与临时上传目录，不碰正式数据。
+
+**跑单个测试文件**：`node --import tsx --test test/db/password.test.ts`。冒烟可限定页面：`npm run smoke:ui -- --paths /tasks --require-migrated`。
+
+## 契约（改端点/数据层必看）
+
+- [tools/contract/cases.ts](mdc:tools/contract/cases.ts) 是契约用例来源，golden 在 `test/contract/golden/`。
+- 行为变更流程：改代码 → `npm run contract:compare` 看差异 → 确认是预期变更后 `npm run contract:capture` 重录 → 提交信息注明变更点。
+- 契约不一致**不允许提交**（除非有意变更并已重录）。
+
+## 改动的连带更新（只改代码不改文档 = 未完成）
+
+- 改 API：同步 [docs/harness/ARCHITECTURE.md](mdc:docs/harness/ARCHITECTURE.md) 端点清单 + 契约用例。
+- 改配置/命令：同步 [docs/harness/README.md](mdc:docs/harness/README.md) 命令速查与 [README.md](mdc:README.md)。
+- 改 UI 文案：SSR 冒烟用字符串断言界面，改完 grep [tools/contract/smoke-ui.ts](mdc:tools/contract/smoke-ui.ts) 里的原句一起更新。
+- 改数据库：[数据与迁移](mdc:.codebuddy/rules/data-and-migrations.mdc)。

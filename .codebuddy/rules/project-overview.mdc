@@ -1,0 +1,15 @@
+---
+alwaysApply: true
+---
+
+# 个人工作台 · 项目概览
+
+单进程本地 Web 应用：**React Router 8 framework mode**（SSR 页面 + `/api/*` 资源路由）+ **SQLite**（`node:sqlite`）。所有数据默认留在本机，不存在独立后端进程。
+
+- 完整操作手册在 [AGENTS.md](mdc:AGENTS.md)，深度文档在 [docs/harness/README.md](mdc:docs/harness/README.md)。
+- Node 必须 `>= 22.9.0`（本机 `nvm use 22.22.2`）。
+- 启动：`npm run dev`（热更新，5173）/ `npm start`（正式，17500）/ `npm run start:lan`（局域网）。
+- **不要**直接调用 `react-router-serve`，也**不要**手工删除 `build/`（`tools/build/prebuild.ts` 已处理）。
+- 源码只写 TypeScript，禁止新增 `.js` / `.jsx` / `.cjs`。
+
+相关规则：[架构与请求链路](mdc:.codebuddy/rules/architecture.mdc)、[代码规范与门禁](mdc:.codebuddy/rules/code-style.mdc)、[验证与测试](mdc:.codebuddy/rules/verification.mdc)。

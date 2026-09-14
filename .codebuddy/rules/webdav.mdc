@@ -1,0 +1,22 @@
+---
+alwaysApply: false
+description: 当改动「重要文件」远端文件、周报/总结正文存储与下载、或 WebDAV 客户端与配置时使用。
+---
+
+# WebDAV（可选接入）
+
+两个用途，**连接口径不同**：
+
+- **重要文件**：每个账号在 `/settings → WebDAV` 存自己的连接（`webdav_settings`）；只存 `webdav:<路径>` 索引，文件不复制到本机。
+- **周报/总结正文**：只写 NAS，本机不留副本；**共用管理员那份连接**（D-52），**上传根目录按组织配**（D-53，`report_upload_settings`）。
+  - 落点：`<本组织上传根>/<用户名>/<起止日期>/<文件名>`；退回重传加 `_v2`，同人同期同名加 `_2`，**远端已有文件绝不覆盖**。
+  - 归属人恒为登录账号本人，管理员不提交周报（D-46）。
+
+要点：
+
+- 部署级地址是 `.env` 的 `WEBDAV_URL`（改完需重启）；**不要**去找第二份凭据表。
+- 下载走服务端流式代理，NAS 凭据不出服务器。
+- 客户端在 [server/src/webdav/client.ts](mdc:server/src/webdav/client.ts)；配置服务在 [app/lib/webdav-settings.server.ts](mdc:app/lib/webdav-settings.server.ts)。
+- 契约与冒烟的「远端」是 [tools/webdav/fake-server.ts](mdc:tools/webdav/fake-server.ts)，由 `contract:*` / `smoke:ui` 自动拉起并按 `WEBDAV_URL` 注入，**不要**给夹具开本地落盘后门。
+
+细节见 [docs/harness/WEBDAV.md](mdc:docs/harness/WEBDAV.md) 与 [docs/harness/REPORTS_WEBDAV.md](mdc:docs/harness/REPORTS_WEBDAV.md)。

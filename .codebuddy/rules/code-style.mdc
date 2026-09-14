@@ -1,0 +1,22 @@
+---
+alwaysApply: true
+description: 编写或修改任何源码时应用。规定 TypeScript-only、oxlint 0 warning 门禁、Prettier、严格类型与 PowerShell 编码陷阱。
+---
+
+# 代码规范
+
+规范细则见 [docs/harness/CODE_STYLE.md](mdc:docs/harness/CODE_STYLE.md)。
+
+- 源码只允许 `.ts` / `.tsx` / `.mts`，禁止新增 `.js` / `.jsx` / `.cjs`。
+- 四个 tsconfig 均开启 `strict`、`noUncheckedIndexedAccess`、`exactOptionalPropertyTypes`；**不要**为过编译放宽开关。
+- `exactOptionalPropertyTypes: true` 下可选 prop 不能显式传 `undefined`，条件传参要用条件展开：`{...(cond ? { type: "secondary" as const } : {})}`。
+- 命名：页面/组件 `PascalCase.tsx`，其余 `kebab-case.ts`；数据库 `snake_case`，API/TS `camelCase`，SQL 用 `AS` 别名转换。**API 客户端函数不得用 `use*` 前缀**（会被当作 Hook）。
+- 抑制注释只允许 `next-line` 级且必须写明原因（原因放在抑制注释上一行），禁止文件级 disable。
+
+## 硬规则
+
+- **不要用 PowerShell 文本命令改写仓库文件**：本机 `pwsh` 解析到 Windows PowerShell 5.1，`Get-Content` 默认按 GBK 解码，会把 UTF-8 中文写坏。一律用编辑工具读写；只读命令不受影响。
+- TypeScript 是 7.0.2 原生编译器，经典 compiler API 已不存在，`typescript-eslint` / `knip` / `ts-prune` **不可用**；lint 用 oxlint，格式化用 Prettier。
+- 改动**先把文档改到位再算完成**；文档统一放 `docs/`，不在仓库根目录新增散装 `.md`。
+
+门禁命令见 [验证与测试](mdc:.codebuddy/rules/verification.mdc)。

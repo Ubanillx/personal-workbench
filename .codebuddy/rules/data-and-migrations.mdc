@@ -1,0 +1,17 @@
+---
+alwaysApply: false
+description: 当需要改数据库结构、新增字段表、或处理 SQLite 迁移与备份时使用。规定迁移不可变、自动备份与空库自举规则。
+---
+
+# 数据与迁移
+
+正式库：`data/workbench.sqlite`。迁移文件在 [server/src/db/migrations](mdc:server/src/db/migrations)，命名 `00N_*.sql`，由 [server/src/db/migration-runner.ts](mdc:server/src/db/migration-runner.ts) 按文件名顺序执行，`schema_migrations` 记录已应用版本。
+
+- **绝不修改已应用的迁移**，只新增下一个编号文件。
+- 迁移前会自动在 `data/backups/` 生成快照（见 [server/src/db/client.ts](mdc:server/src/db/client.ts)）。
+- 连接在单进程内复用（[app/lib/context.server.ts](mdc:app/lib/context.server.ts)）；空库启动时幂等自举「默认管理员 `admin` + 默认组织」（[server/src/db/bootstrap.ts](mdc:server/src/db/bootstrap.ts)）。
+- 初始密码：`.env` 的 `WORKBENCH_ADMIN_PASSWORD` 或 `npm run user:init -- --confirm`。
+
+改动的连带更新：**新增迁移 = 同步更新 [docs/harness/DATA_MODEL.md](mdc:docs/harness/DATA_MODEL.md)**。迁移演练用 `npm run db:rehearse`，手动备份用 `npm run db:backup`。
+
+相关规则：[验证与测试](mdc:.codebuddy/rules/verification.mdc)。
