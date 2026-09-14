@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { date, db, now, rows, run, type User } from "./db.server";
+import type { Paged, Paging, SortSpec } from "./paging";
+import { likeTerm, orderOf, pageOf, type SortableColumns } from "./paging.server";
 import {
   denialFailure,
   done,
@@ -10,6 +12,7 @@ import {
   RECORD_FORBIDDEN_MESSAGE,
   resolveRecordOrg,
   TODO_SELECT,
+  TODO_SOURCE,
   toTodoView,
   type LocatedRecord,
   type RecordResult,
@@ -29,15 +32,91 @@ function denied(located: LocatedRecord): RecordResult<never> | null {
   return located.deny ? denialFailure(located.deny, RECORD_FORBIDDEN_MESSAGE).failure : null;
 }
 
-export function listTodos(user: User, orgFilter?: string | null): Record<string, unknown>[] {
+/**
+ * `/todos` 的列表筛选条件（与 URL 参数一一对应）。
+ *
+ * 关键词、完成状态、计划日期三个筛选原来都在浏览器里做（`useMemo` 里 filter），
+ * 服务端分页之后必须落到 SQL：否则「每页 10 条」先被服务端切好、又被前端筛掉一半，
+ * 页面上看起来就是「一页只有 3 条，但分页条说共 40 条」。
+ */
+export type TodoFilters = {
+  orgFilter?: string | null | undefined;
+  /** 关键词：待办内容（纯字面匹配，与原来的 `includes()` 一致） */
+  keyword?: string | undefined;
+  /** 全部 `all` / 未完成 `open` / 已完成 `done` */
+  status?: string | undefined;
+  /** 全部 `all` / 今天 `today` / 已逾期 `overdue` */
+  date?: string | undefined;
+  /** 服务端当天（`YYYY-MM-DD`）：`today` / `overdue` 两个口径都按它算，页面不再各自取一次 */
+  today?: string | undefined;
+};
+
+/**
+ * 筛选条件 → WHERE。`listTodos()`（`/api/todos` 要的全量）与 `todosPage()`（页面的一页）
+ * **共用这一份**，接口与列表的筛选口径不可能不一致。
+ */
+function todoWhere(user: User, filters: TodoFilters): { where: string; params: string[] } {
   const { clauses, params } = personalClauses(user);
   // 管理员的组织筛选器（D-28）。非管理员带上别人的组织也只会得到空列表，不会越权。
-  if (orgFilter) {
+  if (filters.orgFilter) {
     clauses.push("org_id=?");
-    params.push(orgFilter);
+    params.push(filters.orgFilter);
   }
-  const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+  const keyword = (filters.keyword ?? "").trim();
+  if (keyword) {
+    clauses.push(`content LIKE ? ESCAPE '\\'`);
+    params.push(likeTerm(keyword));
+  }
+  if (filters.status === "open") clauses.push("is_completed=0");
+  if (filters.status === "done") clauses.push("is_completed=1");
+  if (filters.today) {
+    if (filters.date === "today") {
+      clauses.push("todo_date=?");
+      params.push(filters.today);
+    }
+    // 已逾期 = 未完成 + 有日期 + 日期在今天之前（没有日期的待办不算逾期）
+    if (filters.date === "overdue") {
+      clauses.push("is_completed=0 AND todo_date IS NOT NULL AND todo_date<?");
+      params.push(filters.today);
+    }
+  }
+  return { where: clauses.length ? `WHERE ${clauses.join(" AND ")}` : "", params };
+}
+
+export function listTodos(user: User, orgFilter?: string | null): Record<string, unknown>[] {
+  const { where, params } = todoWhere(user, { orgFilter });
   return rows(db(), `${TODO_SELECT} ${where} ORDER BY created_at DESC`, ...params).map(toTodoView);
+}
+
+/**
+ * 待办的排序白名单：列 key 与 `/todos` 列的 `key` 对应（`{dir}` 由方向替换，见 `orderOf`）。
+ * `todoDate` 直接用列名排即可：SQLite 把 NULL 当最小值，与原来 `String(x ?? "")` 的次序完全一致。
+ */
+export const TODO_SORTABLE: SortableColumns = {
+  content: { column: "content" },
+  todoDate: { by: "todo_date {dir}" },
+  updatedAt: { by: "updated_at {dir}" },
+  // 默认序（创建时间倒序）没有对应的列，但必须在白名单里：它是 `orderOf` 的兜底方向
+  createdAt: { by: "created_at {dir}" },
+};
+
+/** 默认排序：最近创建在前（与改动前列表的数据序一致） */
+export const DEFAULT_TODO_SORT: SortSpec = { key: "createdAt", direction: "desc" };
+
+/** 待办列表的一页（服务端筛选 + 排序 + 分页） */
+export function todosPage(user: User, filters: TodoFilters, paging: Paging, sort: SortSpec): Paged<Record<string, unknown>> {
+  const { where, params } = todoWhere(user, filters);
+  return pageOf<Record<string, unknown>>({
+    database: db(),
+    select: TODO_SELECT,
+    source: TODO_SOURCE,
+    where,
+    params,
+    paging,
+    sort,
+    order: orderOf({ sortable: TODO_SORTABLE, sort, tieBreak: "id", id: "id" }),
+    map: toTodoView,
+  });
 }
 
 /**

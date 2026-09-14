@@ -1,5 +1,6 @@
 import type React from "react";
-import type { TableProps } from "antd";
+import type { TablePaginationConfig, TableProps } from "antd";
+import { DEFAULT_PAGE_SIZE, PAGE_SIZES } from "../lib/paging";
 
 /**
  * 表格排版基线（自动省略 + 自动排版）：**所有列表页的 `Table` 都经过 `dataTable()` 生成 props**。
@@ -148,3 +149,32 @@ export function dataTable<T>({
     className: "data-table",
   };
 }
+
+/**
+ * 分页条的**展示基线**（受控与非受控共用）：可切换条数 + 「第 x-y 条 / 共 n 条」。
+ *
+ * 条数选项直接取 `PAGE_SIZES`：它同时是服务端解析 `?size=` 的白名单，页面上能选的与服务端认的
+ * 必须是同一个集合（见 `app/lib/paging.ts`）。这里只管**长什么样**；
+ * 服务端分页的数据接线（`current` / `pageSize` / `total` / 翻页与排序回写 URL）在
+ * `useServerTable`（`app/components/crud-hooks.ts`）。
+ */
+export const paginationBase = {
+  showSizeChanger: true,
+  pageSizeOptions: [...PAGE_SIZES],
+  showTotal: (total: number, range: [number, number]) => `第 ${range[0]}-${range[1]} 条 / 共 ${total} 条`,
+} satisfies TablePaginationConfig;
+
+/**
+ * **纯前端**表格的分页（目前只有企微导入抽屉里的校对表：数据是还没入库的草稿，服务端没有可翻的页）。
+ *
+ * 这里必须是 `defaultPageSize` 而不是 `pageSize`：`Table` 把 `pageSize` 当**受控值**
+ * （内部 `mergeProps(innerPagination, paginationObj)`——props 覆盖内部 state，再透给 `Pagination`
+ * 的 `useControlledState`）。只传 `pageSize` 而不接管 `onChange` 自己更新它，用户切换「多少条/页」
+ * 时内部 setState 会被 props 覆盖回去，表现就是**点了没反应**；
+ * 受控分页只在服务端分页那一侧（`useServerTable`）成立，因为那里有 `total` 与 URL 兜着。
+ */
+export const clientPagination = {
+  ...paginationBase,
+  defaultPageSize: DEFAULT_PAGE_SIZE,
+  showSizeChanger: false,
+} satisfies TablePaginationConfig;

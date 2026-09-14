@@ -21,7 +21,7 @@ import { ClearOutlined, ImportOutlined, RollbackOutlined, ThunderboltOutlined } 
 import dayjs from "dayjs";
 import type { UserRole } from "../../shared/types/domain";
 import { TableToolbar } from "./crud-toolbar";
-import { dataTable } from "./table-layout";
+import { clientPagination, dataTable } from "./table-layout";
 
 /**
  * 「从企微导入任务」抽屉：把**粘贴聊天记录 → 解析 → 逐条校对 → 批量导入**整条录入链路
@@ -385,11 +385,8 @@ export function WecomImportDrawer({
               size="small"
               dataSource={drafts}
               loading={busy}
-              pagination={{
-                pageSize: 10,
-                showSizeChanger: false,
-                showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条 / 共 ${total} 条`,
-              }}
+              // 校对表的数据是**还没入库的草稿**（服务端没有可翻的页），所以走纯前端分页
+              pagination={clientPagination}
               locale={{
                 emptyText: (
                   <Empty

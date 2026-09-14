@@ -1,11 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { db, now, rows, run, type User } from "./db.server";
+import { compareZh, type Paged, type Paging, type SortSpec } from "./paging";
+import { orderOf, pageOf, type SortableColumns } from "./paging.server";
 import {
   denialFailure,
   done,
   failed,
   FILE_FORBIDDEN_MESSAGE,
   FILE_SELECT,
+  FILE_SOURCE,
   locateFile,
   notFoundResult,
   recordClauses,
@@ -14,7 +17,6 @@ import {
   toFileView,
   type LocatedRecord,
   type RecordResult,
-  type RowAccess,
 } from "./records.server";
 
 /**
@@ -42,59 +44,109 @@ export function readVisibility(value: unknown): FileVisibility {
   return value === "private" ? "private" : "org";
 }
 
-export function listFiles(user: User, search: string, category: string, orgFilter?: string | null): Record<string, unknown>[] {
+/**
+ * `/files` 的列表筛选条件（与 URL 参数一一对应）。
+ *
+ * `search` / `category` 原来就在服务端；`visibility` 原来是**列上的筛选下拉**（只作用于当前页），
+ * 服务端分页后它必须落到 SQL，入口也搬到工具栏（同一字段只留一套说法）。
+ */
+export type FileFilters = {
+  search?: string | undefined;
+  category?: string | undefined;
+  /** 可见范围：全部 `all` / 组织 `org` / 仅自己 `private` */
+  visibility?: string | undefined;
+  orgFilter?: string | null | undefined;
+};
+
+/**
+ * 筛选条件 → WHERE。`listFiles()`（`/api/files` 要的全量）、`fileCategories()` 与 `filesPage()` 共用这一份。
+ */
+function fileWhere(user: User, filters: FileFilters): { where: string; params: string[] } {
   const { clauses, params } = recordClauses(user);
   // 管理员的组织筛选器（D-28）。非管理员带上别人的组织也只会得到空列表，不会越权。
-  if (orgFilter) {
+  if (filters.orgFilter) {
     clauses.push("org_id=?");
-    params.push(orgFilter);
+    params.push(filters.orgFilter);
   }
+  const search = (filters.search ?? "").trim();
   if (search) {
     clauses.push("(name LIKE ? OR file_path LIKE ?)");
     params.push(`%${search}%`, `%${search}%`);
   }
-  if (category) {
+  if (filters.category) {
     clauses.push("category=?");
-    params.push(category);
+    params.push(filters.category);
   }
-  const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+  if (filters.visibility === "org" || filters.visibility === "private") {
+    // 老数据的 `visibility` 是 NULL，按 org 处理（与 recordClauses / toFileView 的兜底口径一致）
+    clauses.push(filters.visibility === "private" ? "visibility='private'" : "(visibility IS NULL OR visibility<>'private')");
+  }
+  return { where: clauses.length ? `WHERE ${clauses.join(" AND ")}` : "", params };
+}
+
+export function listFiles(user: User, search: string, category: string, orgFilter?: string | null): Record<string, unknown>[] {
+  const { where, params } = fileWhere(user, { search, category, orgFilter });
   // ⚠️ `FILE_SELECT` 的 `owned` 占位符在最前，所以当前用户 id 必须打头
   return rows(db(), `${FILE_SELECT} ${where} ORDER BY COALESCE(last_used_at,updated_at) DESC`, user.id, ...params).map(toFileView);
 }
 
 /**
- * 列表 + 每行的判权字段（页面专用）。
+ * 分类候选：**不过滤**搜索与分类条件的全量分类（否则选了「报价」之后，下拉里其余分类会一起消失）。
  *
- * 页面要按**逐条**规则渲染删除入口（D-55：创建人能删自己的个人文件），而 `listFiles()` 的载荷
- * 刻意不带 `owner_id`（那会变成页面可以拿来判权的输入）。这里把两者并一次返回，避免页面
- * 拿 `owned` 布尔值反推归属——那种写法只对「当前用户自己」成立，迟早被人复制到别处。
+ * 原来它是「拉全量列表再在内存里去重」，服务端分页后没必要把整张表读进来——用 `DISTINCT` 只取这一列。
+ * 排序沿用原来的 `localeCompare(..., "zh-Hans-CN")`（拼音序）。
  */
-export function listFilesWithAccess(
+export function fileCategories(user: User, orgFilter?: string | null): string[] {
+  const { where, params } = fileWhere(user, { orgFilter });
+  return rows<{ category: unknown }>(db(), `SELECT DISTINCT category FROM important_files ${where}`, ...params)
+    .map((row) => String(row.category ?? ""))
+    .filter(Boolean)
+    .toSorted(compareZh);
+}
+
+/** 重要文件的排序白名单（列 key 与 `/files` 列对应，`{dir}` 由方向替换，见 `orderOf`） */
+export const FILE_SORTABLE: SortableColumns = {
+  name: { column: "name" },
+  category: { by: "category {dir}" },
+  // 与默认次序一致：没有 last_used_at 的老行退回 updated_at（原 ORDER BY 就是这么写的）
+  lastUsedAt: { by: "COALESCE(last_used_at,updated_at) {dir}" },
+};
+
+/** 默认排序：最近使用/更新在前（与改动前列表的数据序一致） */
+export const DEFAULT_FILE_SORT: SortSpec = { key: "lastUsedAt", direction: "desc" };
+
+/**
+ * 文件列表的一页 + **当页**的可删除行。
+ *
+ * 逐条判权仍旧只有 `canDeleteFile()` 一处：这里把每行的判权字段（`rowAccess`）喂给它，
+ * 结论跟着当页一起回给页面（页面不自己判角色，也不拿 `owned` 反推归属）。
+ * `deletableIds` 只覆盖当页，是因为勾选与批量删除本来就只作用于当页。
+ */
+export function filesPage(
   user: User,
-  search: string,
-  category: string,
-  orgFilter?: string | null,
-): Array<{ view: Record<string, unknown>; access: RowAccess }> {
-  const { clauses, params } = recordClauses(user);
-  if (orgFilter) {
-    clauses.push("org_id=?");
-    params.push(orgFilter);
-  }
-  if (search) {
-    clauses.push("(name LIKE ? OR file_path LIKE ?)");
-    params.push(`%${search}%`, `%${search}%`);
-  }
-  if (category) {
-    clauses.push("category=?");
-    params.push(category);
-  }
-  const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
-  return rows<Record<string, unknown>>(
-    db(),
-    `${FILE_SELECT} ${where} ORDER BY COALESCE(last_used_at,updated_at) DESC`,
-    user.id,
-    ...params,
-  ).map((row) => ({ view: toFileView(row), access: rowAccess(row) }));
+  filters: FileFilters,
+  paging: Paging,
+  sort: SortSpec,
+): { page: Paged<Record<string, unknown>>; deletableIds: string[] } {
+  const { where, params } = fileWhere(user, filters);
+  const deletableIds: string[] = [];
+  const page = pageOf<Record<string, unknown>>({
+    database: db(),
+    select: FILE_SELECT,
+    source: FILE_SOURCE,
+    // `FILE_SELECT` 的 `owned` 占位符只属于列清单：COUNT 查询不带它
+    selectParams: [user.id],
+    where,
+    params,
+    paging,
+    sort,
+    order: orderOf({ sortable: FILE_SORTABLE, sort, tieBreak: "id", id: "id" }),
+    map: (row) => {
+      if (canDeleteFile(user, rowAccess(row))) deletableIds.push(String(row.id));
+      return toFileView(row);
+    },
+  });
+  return { page, deletableIds };
 }
 
 /**

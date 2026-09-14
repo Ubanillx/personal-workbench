@@ -34,7 +34,7 @@ import {
 import dayjs from "dayjs";
 import type { WebDavBrowseEntry, WebDavFileStatus } from "../../shared/types/domain";
 import { confirmDanger, RowActions } from "../components/crud-actions";
-import { useCrudFeedback, useListParams } from "../components/crud-hooks";
+import { useCrudFeedback, useListParams, useServerTable } from "../components/crud-hooks";
 import { FormDrawer } from "../components/crud-drawer";
 import { SelectionAlert, TableToolbar } from "../components/crud-toolbar";
 import { PageHeader } from "../components/page-header";
@@ -42,17 +42,21 @@ import { dataTable } from "../components/table-layout";
 import { displayPath, formatBytes, remoteParentPath } from "../components/webdav-browser";
 import { WebDavFilePicker } from "../components/webdav-file-picker";
 import { WebDavUploadPicker } from "../components/webdav-upload-picker";
-import { readPayload } from "../lib/form.server";
 import {
-  canDeleteFile,
   createFileRecord,
+  DEFAULT_FILE_SORT,
   deleteFileRecord,
-  listFiles,
-  listFilesWithAccess,
+  FILE_SORTABLE,
+  fileCategories,
+  filesPage,
   markFileUsedRecord,
   updateFileRecord,
+  type FileFilters,
 } from "../lib/files.server";
+import { readPayload } from "../lib/form.server";
 import { listOrganizations } from "../lib/organization.server";
+import { pagingOf, sortOf, type Paged } from "../lib/paging";
+import { sortableKeys } from "../lib/paging.server";
 import { requireUserOrRedirect } from "../lib/ui.server";
 import { isWebDavPath, remoteStatuses, toRemotePath, webDavStatus } from "../lib/webdav.server";
 
@@ -108,40 +112,40 @@ export async function loader({ request }: { request: Request }) {
   const query = new URL(request.url).searchParams;
   // 组织筛选器只对管理员有意义（D-28），与 /tasks 页的写法一致
   const orgFilter = user.role === "admin" ? query.get("org") : null;
-  const files = listFiles(
-    user,
-    (query.get("search") ?? "").trim(),
-    (query.get("category") ?? "").trim(),
+  const filters: FileFilters = {
+    search: (query.get("search") ?? "").trim(),
+    category: (query.get("category") ?? "").trim(),
+    visibility: query.get("visibility") ?? undefined,
     orgFilter,
-  ) as unknown as FileRow[];
-  // 分类候选取自未过滤的全量列表，避免选中某个分类后其余分类从下拉里消失
-  const all = listFiles(user, "", "", orgFilter) as unknown as FileRow[];
+  };
+  // 筛选、排序、分页都在服务端（口径见 app/lib/paging.ts）：URL 是唯一真相，loader 只回一页
+  const paging = pagingOf(query);
+  const sort = sortOf(query, sortableKeys(FILE_SORTABLE), DEFAULT_FILE_SORT);
+  /**
+   * `deletableIds` 由服务端用同一个 `canDeleteFile()` 算好（D-55），只覆盖当页：
+   * 勾选与批量删除本来就只作用于当页；真正删除时服务端还会再判一次。
+   */
+  const { page, deletableIds } = filesPage(user, filters, paging, sort);
+  const files = page as unknown as Paged<FileRow>;
   const isAdmin = user.role === "admin";
   const organizations = isAdmin
     ? listOrganizations(user).map((org) => ({ id: org.id, name: org.name, status: String(org.status) }) as OrgOption)
     : [];
-  /**
-   * 可以删的行（逐条判，D-55）。判据与 `deleteFileRecord` 完全一样（同一个 `canDeleteFile`、
-   * 同一份 `access`），只是这里提前算好给页面渲染入口用；真正删除时服务端还会再判一次。
-   */
-  const deletableIds = listFilesWithAccess(user, "", "", orgFilter)
-    .filter((row) => canDeleteFile(user, row.access))
-    .map((row) => String(row.view.id));
 
   const status = webDavStatus(user.id);
-  const remotePaths = files.filter((file) => isWebDavPath(file.filePath)).map((file) => toRemotePath(file.filePath));
+  const remotePaths = files.rows.filter((file) => isWebDavPath(file.filePath)).map((file) => toRemotePath(file.filePath));
   const probe =
     status.enabled && remotePaths.length
       ? await remoteStatuses(user.id, remotePaths)
       : { reachable: true, message: null, statuses: new Map<string, WebDavFileStatus>() };
   const remote: Record<string, WebDavFileStatus | null> = {};
-  for (const file of files) {
+  for (const file of files.rows) {
     if (isWebDavPath(file.filePath)) remote[file.id] = probe.statuses.get(toRemotePath(file.filePath)) ?? null;
   }
 
   return {
     files,
-    categories: [...new Set(all.map((file) => file.category).filter(Boolean))].toSorted((a, b) => a.localeCompare(b, "zh-Hans-CN")),
+    categories: fileCategories(user, orgFilter),
     organizations,
     isAdmin,
     deletableIds,
@@ -248,15 +252,25 @@ export default function FilesRoute(): React.ReactElement {
   const isAdmin = data.isAdmin;
   /** 删除是**逐条**判的（D-55）：创建人能删自己的，组织管理者能删本组织的公开文件 */
   const deletable = new Set(data.deletableIds);
-  /** 只要有任何一行可删，就保留勾选框与批量删除入口 */
+  /** 当页只要有一行可删，就保留勾选框与批量删除入口（勾选只作用于当页，服务端只回当页的判权结论） */
   const canDeleteAny = data.deletableIds.length > 0;
   const selectedDeletable = selectedKeys.filter((key) => deletable.has(String(key)));
 
   const search = list.get("search");
   const category = list.get("category");
+  const visibility = list.get("visibility");
   const orgFilter = list.get("org");
   const [draftSearch, setDraftSearch] = useState(search);
   useEffect(() => setDraftSearch(search), [search]);
+  // 搜索 / 分类 / 可见范围都在服务端过滤；这里只渲染 loader 给的那一页
+  const rows = data.files.rows;
+  const paging = useServerTable<FileRow>(data.files);
+  /**
+   * 勾选只作用于**当前这一页**（见 /tasks 的同名处理）：列表参数一变就清空，
+   * 否则「批量删除选中的 5 条」会把看不见的行也算进去。
+   */
+  const listSignature = ["search", "category", "visibility", "org", "page", "size", "sort", "order"].map((key) => list.get(key)).join("|");
+  useEffect(() => setSelectedKeys([]), [listSignature]);
 
   const post = (payload: Record<string, unknown>): void => {
     submit(payload as Parameters<typeof submit>[0], { method: "post", encType: "application/json" });
@@ -316,7 +330,7 @@ export default function FilesRoute(): React.ReactElement {
       onOk: () => post({ intent: "delete", id: file.id }),
     });
 
-  const filtered = Boolean(search || category || orgFilter);
+  const filtered = Boolean(search || category || visibility || orgFilter);
   /** 该行是不是 WebDAV 远端条目：loader 对每个远端行都会写 remote[file.id]（未检查时为 null） */
   const isRemote = (file: FileRow): boolean => data.webdav.remote[file.id] !== undefined;
 
@@ -326,7 +340,9 @@ export default function FilesRoute(): React.ReactElement {
       dataIndex: "name",
       key: "name",
       width: 240,
-      sorter: (a, b) => a.name.localeCompare(b.name, "zh-Hans-CN"),
+      // 表头排序由服务端做（客户端比较器只能排当前这一页）
+      sorter: true,
+      sortOrder: paging.sortOrderOf("name"),
       render: (_value, file) => <Typography.Text strong>{file.name}</Typography.Text>,
     },
     {
@@ -351,12 +367,8 @@ export default function FilesRoute(): React.ReactElement {
       dataIndex: "visibility",
       key: "visibility",
       width: 150,
+      // 可见范围的筛选搬到工具栏（原来在列头的筛选下拉里，只作用于当前页）：
       // 两个取值都是用户自己选的可见范围（D-55），列头与表单字段用同一套说法
-      filters: [
-        { text: VISIBILITY_LABEL.org, value: "org" },
-        { text: VISIBILITY_LABEL.private, value: "private" },
-      ],
-      onFilter: (value, file) => file.visibility === value,
       render: (_value, file) => (
         <Space size={4} align="center">
           <Tag color={file.visibility === "private" ? "purple" : "blue"} variant="filled">
@@ -371,8 +383,7 @@ export default function FilesRoute(): React.ReactElement {
       dataIndex: "category",
       key: "category",
       width: 140,
-      filters: data.categories.map((item) => ({ text: item, value: item })),
-      onFilter: (value, file) => file.category === value,
+      // 分类筛选由工具栏的分类下拉负责（同一字段只留一套说法；列筛选只作用于当前页）
       render: (_value, file) =>
         file.category ? (
           <Tag color="blue" variant="filled">
@@ -387,7 +398,8 @@ export default function FilesRoute(): React.ReactElement {
       dataIndex: "lastUsedAt",
       key: "lastUsedAt",
       width: 170,
-      sorter: (a, b) => String(a.lastUsedAt ?? "").localeCompare(String(b.lastUsedAt ?? "")),
+      sorter: true,
+      sortOrder: paging.sortOrderOf("lastUsedAt"),
       render: (_value, file) =>
         file.lastUsedAt ? (
           <Tooltip title={dayjs(file.lastUsedAt).format("YYYY-MM-DD HH:mm:ss")}>
@@ -535,7 +547,7 @@ export default function FilesRoute(): React.ReactElement {
           <TableToolbar
             extra={
               <Typography.Text type="secondary">
-                共 {data.files.length} 条{filtered ? "（已筛选）" : ""}
+                共 {data.files.total} 条{filtered ? "（已筛选）" : ""}
               </Typography.Text>
             }
           >
@@ -553,6 +565,17 @@ export default function FilesRoute(): React.ReactElement {
               style={{ width: 160 }}
               options={[{ value: "all", label: "全部分类" }, ...data.categories.map((item) => ({ value: item, label: item }))]}
               onChange={(value: string) => list.patch({ category: value === "all" ? null : value })}
+            />
+            <Select
+              aria-label="按可见范围筛选"
+              value={visibility || "all"}
+              style={{ width: 150 }}
+              options={[
+                { value: "all", label: "全部可见范围" },
+                { value: "org", label: VISIBILITY_LABEL.org },
+                { value: "private", label: VISIBILITY_LABEL.private },
+              ]}
+              onChange={(value: string) => list.patch({ visibility: value === "all" ? null : value })}
             />
             {isAdmin ? (
               <Select
@@ -599,24 +622,20 @@ export default function FilesRoute(): React.ReactElement {
             {...table}
             rowKey="id"
             size="middle"
-            dataSource={data.files}
+            dataSource={rows}
             loading={busy}
             {...(canDeleteAny
               ? {
                   rowSelection: {
                     selectedRowKeys: selectedKeys,
-                    preserveSelectedRowKeys: true,
                     // 删不动的行不给勾：勾了也只能失败
                     getCheckboxProps: (file: FileRow) => ({ disabled: !deletable.has(file.id) }),
                     onChange: (keys: React.Key[]) => setSelectedKeys(keys),
                   },
                 }
               : {})}
-            pagination={{
-              pageSize: 10,
-              showSizeChanger: true,
-              showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条 / 共 ${total} 条`,
-            }}
+            pagination={paging.pagination}
+            onChange={paging.onTableChange}
             locale={{
               emptyText: (
                 <Empty

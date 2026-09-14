@@ -45,7 +45,7 @@ import {
 import dayjs from "dayjs";
 import type { UserRole } from "../../shared/types/domain";
 import { confirmAction, confirmDanger, RowActions, type RowAction } from "../components/crud-actions";
-import { useCrudFeedback, useListParams } from "../components/crud-hooks";
+import { useCrudFeedback, useListParams, useServerTable } from "../components/crud-hooks";
 import { FormDrawer } from "../components/crud-drawer";
 import { SelectionAlert, TableToolbar } from "../components/crud-toolbar";
 import { PageHeader } from "../components/page-header";
@@ -54,6 +54,8 @@ import { WecomImportDrawer } from "../components/wecom-import-drawer";
 import { db, type User } from "../lib/db.server";
 import { readPayload } from "../lib/form.server";
 import { listAllAccounts, listMembers, listOrganizations } from "../lib/organization.server";
+import { pagingOf, sortOf, type Paged } from "../lib/paging";
+import { sortableKeys } from "../lib/paging.server";
 import { assertOrgAccess } from "../lib/session.server";
 import {
   addComment,
@@ -70,7 +72,17 @@ import {
   updateTask,
   type ServiceResult,
 } from "../lib/task-service.server";
-import { canManageTasks, canView, findTaskWithOrg, notifyOverdueTasks, visible } from "../lib/tasks.server";
+import {
+  canManageTasks,
+  canView,
+  DEFAULT_TASK_SORT,
+  findTaskWithOrg,
+  notifyOverdueTasks,
+  TASK_SORTABLE,
+  taskStats,
+  visiblePage,
+  type TaskFilters,
+} from "../lib/tasks.server";
 import { requireUserOrRedirect } from "../lib/ui.server";
 
 /* ------------------------------------------------------------------ 视图类型与字典 */
@@ -218,7 +230,6 @@ export async function loader({ request }: { request: Request }) {
   const assignee = url.searchParams.get("assignee") ?? undefined;
   // 组织筛选器只给管理员（D-28）；其他人的组织范围由可见性条件锁死
   const org = user.role === "admin" ? (url.searchParams.get("org") ?? null) : null;
-  const tasks = visible(database, user, includeArchived, status, assignee, org) as unknown as TaskRow[];
   const requestedRange = url.searchParams.get("range") ?? "all";
   const range = canManage && ["week", "month", "custom"].includes(requestedRange) ? requestedRange : "all";
   const today = dayjs().format("YYYY-MM-DD");
@@ -233,6 +244,22 @@ export async function loader({ request }: { request: Request }) {
             .subtract(range === "week" ? 7 : 30, "day")
             .format("YYYY-MM-DD");
   const to = range === "custom" ? validDate(url.searchParams.get("to")) : range === "all" ? "" : today;
+  /**
+   * 筛选、排序、分页**都在服务端**（口径见 app/lib/paging.ts）：URL 是唯一真相，loader 只回一页。
+   * 同一份筛选条件也喂给 `taskStats()`——列表与统计必须是同一批数据的两个视图，
+   * 否则「任务总数 / 完成率 / 已逾期」会随翻页变化。
+   */
+  const filters: TaskFilters = {
+    includeArchived,
+    status,
+    assignee,
+    orgFilter: org,
+    keyword: url.searchParams.get("q") ?? undefined,
+    from,
+    to,
+  };
+  const paging = pagingOf(url.searchParams);
+  const sort = sortOf(url.searchParams, sortableKeys(TASK_SORTABLE), DEFAULT_TASK_SORT);
   const taskId = url.searchParams.get("task");
   let selected: TaskRow | null = null;
   let selectedOrgId: string | null = null;
@@ -252,7 +279,8 @@ export async function loader({ request }: { request: Request }) {
   return {
     user: user as Me,
     canManage,
-    tasks: tasks.filter((task) => (!from || task.updatedAt.slice(0, 10) >= from) && (!to || task.updatedAt.slice(0, 10) <= to)),
+    tasks: visiblePage(database, user, filters, paging, sort) as Paged<TaskRow>,
+    stats: taskStats(database, user, filters, today),
     range,
     from,
     to,
@@ -369,10 +397,18 @@ export default function TasksRoute(): React.ReactElement {
   const [draftKeyword, setDraftKeyword] = useState(keyword);
   useEffect(() => setDraftKeyword(keyword), [keyword]);
 
-  const rows = useMemo(
-    () => (keyword ? data.tasks.filter((task) => task.title.includes(keyword) || (task.ownerName ?? "").includes(keyword)) : data.tasks),
-    [data.tasks, keyword],
-  );
+  // 搜索、筛选、排序、分页都在服务端：这里只渲染 loader 给的那一页，**不再在浏览器里过滤或排序**
+  const rows = data.tasks.rows;
+  const paging = useServerTable<TaskRow>(data.tasks);
+  /**
+   * 勾选只作用于**当前这一页**：分页之后客户端手里没有别的页的行，跨页勾选会让
+   * 「批量归档选中的 3 个任务」这类动作失去判断依据（哪些已归档、哪些还在当前视图里）。
+   * 于是列表参数一变就清空勾选；打开详情抽屉的 `?task=` 不是列表参数，不参与这个签名。
+   */
+  const listSignature = ["q", "status", "assignee", "org", "archived", "range", "from", "to", "page", "size", "sort", "order"]
+    .map((key) => list.get(key))
+    .join("|");
+  useEffect(() => setSelectedKeys([]), [listSignature]);
   const selectedRows = useMemo(() => rows.filter((task) => selectedKeys.includes(task.id)), [rows, selectedKeys]);
   const archivedSelection = selectedRows.length > 0 && selectedRows.every((task) => Boolean(task.archivedAt));
   const activeSelection = selectedRows.filter((task) => !task.archivedAt);
@@ -395,7 +431,6 @@ export default function TasksRoute(): React.ReactElement {
   const filtered = Boolean(
     keyword || data.status !== "all" || data.assignee !== "all" || data.org || data.includeArchived || data.range !== "all",
   );
-  const completed = rows.filter((task) => task.status === "completed").length;
   const activeOrganizations = data.organizations.filter((org) => org.status === "active");
   /**
    * 编辑抽屉「所属组织」的候选：启用中的组织都可选，但**任务当前所属的组织**无论状态都要列进去——
@@ -445,7 +480,10 @@ export default function TasksRoute(): React.ReactElement {
       title: "任务",
       dataIndex: "title",
       key: "title",
-      sorter: (a, b) => a.title.localeCompare(b.title, "zh-Hans-CN"),
+      // 表头排序交给服务端（客户端比较器只能排当前这一页）：`sorter: true` 只负责画箭头，
+      // 箭头状态与「点了排序」都由 useServerTable 受控（唯一真相是 URL 上的 ?sort=）
+      sorter: true,
+      sortOrder: paging.sortOrderOf("title"),
       render: (_value, task) => (
         // 这一列是表格里的「主内容列」：不写 width，吃掉剩余宽度（定宽布局会按比例分给它）。
         // 标题单行省略、说明两行省略，两者都带悬停全文——否则一条长说明会把整行撑高、把右边的列挤歪。
@@ -507,7 +545,8 @@ export default function TasksRoute(): React.ReactElement {
       dataIndex: "progress",
       key: "progress",
       width: 180,
-      sorter: (a, b) => a.progress - b.progress,
+      sorter: true,
+      sortOrder: paging.sortOrderOf("progress"),
       render: (_value, task) => <Progress percent={task.progress} size="small" />,
     },
     {
@@ -515,7 +554,8 @@ export default function TasksRoute(): React.ReactElement {
       dataIndex: "dueDate",
       key: "dueDate",
       width: 130,
-      sorter: (a, b) => String(a.dueDate ?? "9999").localeCompare(String(b.dueDate ?? "9999")),
+      sorter: true,
+      sortOrder: paging.sortOrderOf("dueDate"),
       render: (_value, task) =>
         task.dueDate ? (
           <Typography.Text {...(isOverdue(task, today) ? { type: "danger" as const } : {})}>{task.dueDate}</Typography.Text>
@@ -530,8 +570,8 @@ export default function TasksRoute(): React.ReactElement {
       dataIndex: "updatedAt",
       key: "updatedAt",
       width: 160,
-      sorter: (a, b) => a.updatedAt.localeCompare(b.updatedAt),
-      defaultSortOrder: "descend",
+      sorter: true,
+      sortOrder: paging.sortOrderOf("updatedAt"),
       render: (_value, task) => (
         <Typography.Text type="secondary" title={dayjs(task.updatedAt).format("YYYY-MM-DD HH:mm")}>
           {dayjs(task.updatedAt).format("MM-DD HH:mm")}
@@ -703,7 +743,7 @@ export default function TasksRoute(): React.ReactElement {
         <TableToolbar
           extra={
             <Typography.Text type="secondary">
-              共 {rows.length} 个任务{filtered ? "（已筛选）" : ""}
+              共 {data.tasks.total} 个任务{filtered ? "（已筛选）" : ""}
             </Typography.Text>
           }
         >
@@ -786,15 +826,15 @@ export default function TasksRoute(): React.ReactElement {
 
         {canManage ? (
           <div className="task-summary" aria-label="任务统计">
-            <Statistic title="任务总数" value={rows.length} suffix="个" />
-            <Statistic title="完成率" value={rows.length ? Math.round((completed / rows.length) * 100) : 0} suffix="%" />
-            <Statistic title="待验收" value={rows.filter((task) => task.status === "pending_review").length} suffix="个" />
+            {/* 统计由服务端按同一套筛选条件算（页面手里只有一页，数 rows 会随翻页变化） */}
+            <Statistic title="任务总数" value={data.stats.total} suffix="个" />
             <Statistic
-              title="已逾期"
-              value={rows.filter((task) => isOverdue(task, today)).length}
-              suffix="个"
-              styles={{ content: { color: "#cf1322" } }}
+              title="完成率"
+              value={data.stats.total ? Math.round((data.stats.completed / data.stats.total) * 100) : 0}
+              suffix="%"
             />
+            <Statistic title="待验收" value={data.stats.pendingReview} suffix="个" />
+            <Statistic title="已逾期" value={data.stats.overdue} suffix="个" styles={{ content: { color: "#cf1322" } }} />
           </div>
         ) : null}
 
@@ -850,16 +890,12 @@ export default function TasksRoute(): React.ReactElement {
             ? {
                 rowSelection: {
                   selectedRowKeys: selectedKeys,
-                  preserveSelectedRowKeys: true,
                   onChange: (keys: React.Key[]) => setSelectedKeys(keys),
                 },
               }
             : {})}
-          pagination={{
-            pageSize: 10,
-            showSizeChanger: true,
-            showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条 / 共 ${total} 条`,
-          }}
+          pagination={paging.pagination}
+          onChange={paging.onTableChange}
           locale={{
             emptyText: (
               <Empty

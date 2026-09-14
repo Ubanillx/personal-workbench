@@ -31,9 +31,11 @@ import {
 import dayjs from "dayjs";
 import type { JoinRequest, Organization } from "../../../shared/types/domain";
 import { confirmAction, confirmDanger, RowActions, type RowAction } from "../crud-actions";
+import { useListParams, useServerTable } from "../crud-hooks";
 import { FormDrawer } from "../crud-drawer";
 import { dataTable } from "../table-layout";
 import { TableToolbar } from "../crud-toolbar";
+import type { Paged } from "../../lib/paging";
 import {
   KIND_LABEL,
   ORG_STATUS_COLOR,
@@ -62,7 +64,8 @@ type Props = {
   isAdmin: boolean;
   organizations: Organization[];
   current: Organization | null;
-  members: MemberRow[];
+  /** 成员列表：服务端筛选 + 排序 + 分页的结果（页面只渲染当页） */
+  members: Paged<MemberRow>;
   candidates: MemberRow[];
   pending: JoinRequest[];
   history: JoinRequest[];
@@ -94,9 +97,20 @@ export function OrgMembersTab({
   const [inviteForm] = AntdForm.useForm<{ accountId?: string }>();
   const [editOpen, setEditOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
-  const [keyword, setKeyword] = useState("");
-  const [roleFilter, setRoleFilter] = useState("all");
-  const [stateFilter, setStateFilter] = useState("all");
+  /**
+   * 筛选条件放在 URL 上（与其它列表页同一套）：关键词 / 角色 / 状态都在**服务端**过滤，
+   * 这样分页才对得上（原来它们在浏览器里过滤当前页）。
+   */
+  const list = useListParams();
+  const keyword = list.get("q");
+  const roleFilter = list.get("role", "all");
+  const stateFilter = list.get("state", "all");
+  const [draftKeyword, setDraftKeyword] = useState(keyword);
+  useEffect(() => setDraftKeyword(keyword), [keyword]);
+  const filtered = Boolean(keyword || roleFilter !== "all" || stateFilter !== "all");
+  /** 服务端分页：翻页、改条数与表头排序都只写回 URL，由 loader 决定这一页是谁 */
+  const rows = members.rows;
+  const paging = useServerTable<MemberRow>(members);
 
   const archived = current?.status === "archived";
 
@@ -106,18 +120,6 @@ export function OrgMembersTab({
       setInviteOpen(false);
     }
   }, [successTick]);
-
-  const filtered = useMemo(
-    () =>
-      members.filter((member) => {
-        if (keyword && !`${member.name}${member.username}${member.email}`.includes(keyword)) return false;
-        if (roleFilter !== "all" && member.role !== roleFilter) return false;
-        if (stateFilter === "active" && member.isActive !== 1) return false;
-        if (stateFilter === "inactive" && member.isActive === 1) return false;
-        return true;
-      }),
-    [members, keyword, roleFilter, stateFilter],
-  );
 
   const decide = (row: JoinRequest, accepted: boolean, note = ""): void => {
     post({ intent: "decide", requestId: row.id, approve: accepted, note });
@@ -147,7 +149,9 @@ export function OrgMembersTab({
       title: "姓名",
       dataIndex: "name",
       key: "name",
-      sorter: (a, b) => a.name.localeCompare(b.name, "zh-Hans-CN"),
+      // 表头排序由服务端做（客户端比较器只能排当前这一页）
+      sorter: true,
+      sortOrder: paging.sortOrderOf("name"),
       render: (_value, member) => (
         <Space size={4}>
           <Typography.Text strong>{member.name}</Typography.Text>
@@ -167,11 +171,8 @@ export function OrgMembersTab({
       dataIndex: "role",
       key: "role",
       width: 130,
-      filters: [
-        { text: "组织管理者", value: "manager" },
-        { text: "普通用户", value: "member" },
-      ],
-      onFilter: (value, member) => member.role === value,
+      // 列上的筛选下拉已删除：角色由工具栏的筛选器负责（同一字段只留一套说法；
+      // 列筛选只作用于当前页，服务端分页下必然给出错误结果）
       render: (_value, member) => (
         <Tag color={ROLE_COLOR[member.role]} variant="filled">
           {ROLE_LABEL[member.role]}
@@ -340,7 +341,7 @@ export function OrgMembersTab({
   const orgItems: DescriptionsProps["items"] = current
     ? [
         { key: "name", label: "组织名称", children: current.name },
-        { key: "count", label: "成员人数", children: `${members.length} 人` },
+        { key: "count", label: "成员人数", children: `${members.total} 人` },
         {
           key: "status",
           label: "状态",
@@ -422,7 +423,7 @@ export function OrgMembersTab({
 
           <Card
             variant="outlined"
-            title={`成员列表（${members.length} 人）`}
+            title={`成员列表（${members.total} 人）`}
             extra={
               <Space size="small">
                 <Button href="/join">查看我的申请</Button>
@@ -442,7 +443,7 @@ export function OrgMembersTab({
               <TableToolbar
                 extra={
                   <Typography.Text type="secondary">
-                    显示 {filtered.length} / {members.length} 个
+                    共 {members.total} 个{filtered ? "（已筛选）" : ""}
                   </Typography.Text>
                 }
               >
@@ -450,22 +451,25 @@ export function OrgMembersTab({
                   allowClear
                   placeholder="搜索姓名 / 用户名 / 邮箱"
                   style={{ width: 260 }}
-                  value={keyword}
-                  onChange={(event) => setKeyword(event.target.value)}
-                  onSearch={(value) => setKeyword(value.trim())}
+                  value={draftKeyword}
+                  loading={busy}
+                  onChange={(event) => setDraftKeyword(event.target.value)}
+                  onSearch={(value) => list.patch({ q: value.trim() })}
                 />
-                <Select value={roleFilter} options={ROLE_FILTER_OPTIONS} style={{ width: 140 }} onChange={setRoleFilter} />
-                <Select value={stateFilter} options={STATE_FILTER_OPTIONS} style={{ width: 140 }} onChange={setStateFilter} />
-                {keyword || roleFilter !== "all" || stateFilter !== "all" ? (
-                  <Button
-                    color="default"
-                    variant="text"
-                    onClick={() => {
-                      setKeyword("");
-                      setRoleFilter("all");
-                      setStateFilter("all");
-                    }}
-                  >
+                <Select
+                  value={roleFilter}
+                  options={ROLE_FILTER_OPTIONS}
+                  style={{ width: 140 }}
+                  onChange={(value: string) => list.patch({ role: value === "all" ? null : value })}
+                />
+                <Select
+                  value={stateFilter}
+                  options={STATE_FILTER_OPTIONS}
+                  style={{ width: 140 }}
+                  onChange={(value: string) => list.patch({ state: value === "all" ? null : value })}
+                />
+                {filtered ? (
+                  <Button color="default" variant="text" onClick={() => list.patch({ q: null, role: null, state: null })}>
                     重置
                   </Button>
                 ) : null}
@@ -474,17 +478,14 @@ export function OrgMembersTab({
                 {...memberTable}
                 rowKey="id"
                 size="middle"
-                dataSource={filtered}
+                dataSource={rows}
                 loading={busy}
-                pagination={{
-                  pageSize: 10,
-                  showSizeChanger: true,
-                  showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条 / 共 ${total} 条`,
-                }}
+                pagination={paging.pagination}
+                onChange={paging.onTableChange}
                 locale={{
                   emptyText: (
-                    <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={members.length ? "没有符合条件的成员" : "本组织还没有成员"}>
-                      {members.length === 0 && !archived && candidates.length ? (
+                    <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={filtered ? "没有符合条件的成员" : "本组织还没有成员"}>
+                      {!filtered && members.total === 0 && !archived && candidates.length ? (
                         <Button onClick={() => setInviteOpen(true)} icon={<UserAddOutlined />}>
                           添加成员
                         </Button>

@@ -46,14 +46,25 @@ export function failureResponse(failure: RecordFailure): Response {
  * - `important_files` 由**每一行自己的 `visibility`** 决定：`org` = 组织内公开，
  *   `private` = 创建人 + 本组织管理员（D-55）。
  */
-export const TODO_SELECT = `SELECT id,content,todo_date AS todoDate,is_completed AS isCompleted,completed_at AS completedAt,created_at AS createdAt,updated_at AS updatedAt,org_id AS orgId,owner_id AS ownerId FROM todos`;
-export const NOTE_SELECT = `SELECT id,content,is_pinned AS isPinned,created_at AS createdAt,updated_at AS updatedAt,org_id AS orgId,owner_id AS ownerId FROM notes`;
+/**
+ * 三张表的 FROM：服务端分页的 `COUNT(*)` 用它。
+ *
+ * 必须与列清单分开：`SELECT` 里可能有**自己的占位符**（文件的 `owned`），
+ * COUNT 查询用不上它、更不能替它占位（见 app/lib/paging.server.ts 的 `ListSource.source`）。
+ */
+export const TODO_SOURCE = "FROM todos";
+export const NOTE_SOURCE = "FROM notes";
+export const FILE_SOURCE = "FROM important_files";
+
+export const TODO_SELECT = `SELECT id,content,todo_date AS todoDate,is_completed AS isCompleted,completed_at AS completedAt,created_at AS createdAt,updated_at AS updatedAt,org_id AS orgId,owner_id AS ownerId ${TODO_SOURCE}`;
+export const NOTE_SELECT = `SELECT id,content,is_pinned AS isPinned,created_at AS createdAt,updated_at AS updatedAt,org_id AS orgId,owner_id AS ownerId ${NOTE_SOURCE}`;
 /**
  * 文件行：最后三列（`org_id` / `visibility` / `owner_id`）只给服务端判权；
  * 最前面的 `owned` 是「这条是不是当前账号登记的」，供页面显示「我登记的」标识。
- * ⚠️ `owned` 的占位符在最前，因此**查询参数必须以当前用户 id 打头**（见 `listFiles` / `locateFile`）。
+ * ⚠️ `owned` 的占位符在最前，因此**查询参数必须以当前用户 id 打头**（见 `listFiles` / `locateFile`）；
+ * 服务端分页时它走 `pageOf` 的 `selectParams`（只属于 SELECT、COUNT 不带）。
  */
-export const FILE_SELECT = `SELECT id,name,file_path AS filePath,category,last_used_at AS lastUsedAt,created_at AS createdAt,updated_at AS updatedAt,(owner_id=? AND owner_id IS NOT NULL) AS owned,org_id AS orgId,visibility,owner_id AS ownerId FROM important_files`;
+export const FILE_SELECT = `SELECT id,name,file_path AS filePath,category,last_used_at AS lastUsedAt,created_at AS createdAt,updated_at AS updatedAt,(owner_id=? AND owner_id IS NOT NULL) AS owned,org_id AS orgId,visibility,owner_id AS ownerId ${FILE_SOURCE}`;
 
 /* ------------------------------------------------------------------ 载荷 */
 

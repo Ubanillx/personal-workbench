@@ -632,6 +632,71 @@ async function main(): Promise<void> {
     check("/files 新增带 orgId → 不报错", fileAdd !== "" && !fileAdd.includes(noOrgHint));
     check("新增后 /files 出现该文件", (await pageHtml("/files", cookie)).includes(fileMarker));
 
+    /* ------------------------------------------------ 5b) 服务端分页（8 个列表共用一套口径） */
+
+    /**
+     * 分页对不对，只有「跨页不重不漏」能证明，所以先把数据造到多于一页：
+     * 待办是**本人数据**，用管理员会话再造 11 条（加前面那条共 12 条），每页 10 条正好两页。
+     *
+     * 断言只依赖两个**服务端渲染出来**的钩子，不碰客户端 state：
+     * - `data-row-key`：rc-table 给每个表体行的行标识 → 「这一页渲染了几行 / 是哪些行」；
+     * - 分页条的「第 x-y 条 / 共 n 条」：`total` 与页码都是从服务端分页结果来的。
+     */
+    const pageMarker = `冒烟分页-${stamp}`;
+    for (let index = 1; index <= 11; index += 1) {
+      await pagePost(
+        "/todos",
+        { intent: "create", content: `${pageMarker}-${index}`, todoDate: "2026-09-01", orgId: IDS.orgAlpha },
+        cookie,
+        true,
+      );
+    }
+    const rowKeysOf = (html: string): string[] => [...html.matchAll(/data-row-key="([^"]+)"/gu)].map((item) => item[1] ?? "");
+    const pagingTextOf = (html: string): string => /第 \d+-\d+ 条 \/ 共 \d+ 条/u.exec(html)?.[0] ?? "";
+    const totalOf = (html: string): number => Number(/共 (\d+) 条/u.exec(pagingTextOf(html))?.[1] ?? 0);
+
+    const firstPage = await pageHtml("/todos?size=10", cookie);
+    const allRows = await pageHtml("/todos?size=100", cookie);
+    const total = totalOf(firstPage);
+    check(
+      "/todos 每页条数由服务端决定（只渲染当页的行）",
+      rowKeysOf(firstPage).length === 10 && pagingTextOf(firstPage).startsWith("第 1-10 条"),
+      `rows=${rowKeysOf(firstPage).length} ${pagingTextOf(firstPage)}`,
+    );
+    check("/todos 造出了多于一页的数据（下面的断言才有意义）", total > 10 && rowKeysOf(allRows).length === total, `total=${total}`);
+
+    const lastPage = await pageHtml(`/todos?page=${Math.ceil(total / 10)}&size=10`, cookie);
+    const firstKeys = rowKeysOf(firstPage);
+    const lastKeys = rowKeysOf(lastPage);
+    check(
+      "/todos 最后一页取的是剩下的行",
+      lastKeys.length === total - 10 && pagingTextOf(lastPage) === `第 11-${total} 条 / 共 ${total} 条`,
+      `rows=${lastKeys.length} ${pagingTextOf(lastPage)}`,
+    );
+    check(
+      "两页之间不重复（并列行的次序也必须稳定）",
+      firstKeys.every((key) => !lastKeys.includes(key)),
+    );
+    check("两页合起来正好是全部行（不重不漏）", [...firstKeys, ...lastKeys].toSorted().join() === rowKeysOf(allRows).toSorted().join());
+    check("页码越界钳到末页（不返回空表）", rowKeysOf(await pageHtml("/todos?page=999&size=10", cookie)).length === lastKeys.length);
+    check("每页条数只认白名单（?size=5 回退到默认 10）", rowKeysOf(await pageHtml("/todos?size=5", cookie)).length === 10);
+    check(
+      "表头排序由服务端执行（同一列升降序的首行不同）",
+      rowKeysOf(await pageHtml("/todos?size=100&sort=content&order=asc", cookie))[0] !==
+        rowKeysOf(await pageHtml("/todos?size=100&sort=content&order=desc", cookie))[0],
+    );
+    check(
+      "关键词筛选在服务端生效（命中行会从别的页被捞出来）",
+      rowKeysOf(await pageHtml(`/todos?q=${encodeURIComponent(`${pageMarker}-11`)}`, cookie)).length === 1,
+    );
+    // 中文列的排序走「服务端算排序键」那条路（SQLite 没有 ICU collation）；
+    // 组织名升/降序的首行必须是不同的组织，才能证明它真的排了而不是按原序返回
+    check(
+      "中文列（组织名称）的排序也由服务端执行",
+      rowKeysOf(await pageHtml("/settings?tab=orgs&sort=name&order=asc", cookie))[0] !==
+        rowKeysOf(await pageHtml("/settings?tab=orgs&sort=name&order=desc", cookie))[0],
+    );
+
     // 6) 逐页检查：状态码 + 是否仍为占位页 + 是否渲染出夹具数据
     for (const pagePath of pagePaths) {
       const response = await fetch(`${base}${pagePath}`, { headers: { cookie }, redirect: "manual" });

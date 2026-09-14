@@ -22,14 +22,24 @@ import {
 import { DeleteOutlined, EditOutlined, PlusOutlined, PushpinFilled, PushpinOutlined, ReloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { confirmDanger, RowActions } from "../components/crud-actions";
-import { useCrudFeedback, useListParams } from "../components/crud-hooks";
+import { useCrudFeedback, useListParams, useServerTable } from "../components/crud-hooks";
 import { FormDrawer } from "../components/crud-drawer";
 import { SelectionAlert, TableToolbar } from "../components/crud-toolbar";
 import { PageHeader } from "../components/page-header";
 import { dataTable } from "../components/table-layout";
 import { readPayload } from "../lib/form.server";
+import {
+  createNoteRecord,
+  DEFAULT_NOTE_SORT,
+  deleteNoteRecord,
+  NOTE_SORTABLE,
+  notesPage,
+  updateNoteRecord,
+  type NoteFilters,
+} from "../lib/notes.server";
 import { listOrganizations } from "../lib/organization.server";
-import { createNoteRecord, deleteNoteRecord, listNotes, updateNoteRecord } from "../lib/notes.server";
+import { pagingOf, sortOf, type Paged } from "../lib/paging";
+import { sortableKeys } from "../lib/paging.server";
 import { requireUserOrRedirect } from "../lib/ui.server";
 
 type NoteRow = {
@@ -80,13 +90,26 @@ const PIN_FORM_OPTIONS = [
  */
 export async function loader({ request }: { request: Request }) {
   const user = requireUserOrRedirect(request);
+  const url = new URL(request.url);
   // 组织筛选器只对管理员有意义（D-28），与 /tasks 页的写法一致
-  const orgFilter = user.role === "admin" ? new URL(request.url).searchParams.get("org") : null;
+  const orgFilter = user.role === "admin" ? url.searchParams.get("org") : null;
   const organizations =
     user.role === "admin"
       ? listOrganizations(user).map((org) => ({ id: org.id, name: org.name, status: String(org.status) }) as OrgOption)
       : [];
-  return { items: listNotes(user, orgFilter) as unknown as NoteRow[], organizations, orgFilter: orgFilter ?? "" };
+  const filters: NoteFilters = {
+    orgFilter,
+    keyword: url.searchParams.get("q") ?? undefined,
+    pin: url.searchParams.get("pin") ?? undefined,
+  };
+  // 筛选、排序、分页都在服务端（口径见 app/lib/paging.ts）：URL 是唯一真相，loader 只回一页
+  const paging = pagingOf(url.searchParams);
+  const sort = sortOf(url.searchParams, sortableKeys(NOTE_SORTABLE), DEFAULT_NOTE_SORT);
+  return {
+    items: notesPage(user, filters, paging, sort) as unknown as Paged<NoteRow>,
+    organizations,
+    orgFilter: orgFilter ?? "",
+  };
 }
 
 /**
@@ -170,19 +193,15 @@ export default function NotesRoute(): React.ReactElement {
   const [draftKeyword, setDraftKeyword] = useState(keyword);
   useEffect(() => setDraftKeyword(keyword), [keyword]);
 
-  const rows = useMemo(
-    () =>
-      data.items
-        .filter((item) => {
-          if (keyword && !item.content.includes(keyword)) return false;
-          if (pin === "pinned" && !item.isPinned) return false;
-          if (pin === "normal" && item.isPinned) return false;
-          return true;
-        })
-        // 重点（置顶）优先，其次按最近更新：与随手记的使用习惯一致
-        .toSorted((a, b) => Number(b.isPinned) - Number(a.isPinned) || b.updatedAt.localeCompare(a.updatedAt)),
-    [data.items, keyword, pin],
-  );
+  // 关键词 / 灵感等级在服务端过滤；「重点优先，其次最近更新」的次序也由服务端的默认排序负责
+  const rows = data.items.rows;
+  const paging = useServerTable<NoteRow>(data.items);
+  /**
+   * 勾选只作用于**当前这一页**（见 /tasks 的同名处理）：列表参数一变就清空，
+   * 否则「批量删除选中的 5 条」里会混进看不见的行。
+   */
+  const listSignature = ["q", "pin", "org", "page", "size", "sort", "order"].map((key) => list.get(key)).join("|");
+  useEffect(() => setSelectedKeys([]), [listSignature]);
 
   const post = (payload: Record<string, unknown>): void => {
     submit(payload as Parameters<typeof submit>[0], { method: "post", encType: "application/json" });
@@ -213,11 +232,8 @@ export default function NotesRoute(): React.ReactElement {
       title: "灵感等级",
       key: "level",
       width: 120,
-      filters: [
-        { text: "重点", value: "pinned" },
-        { text: "普通", value: "normal" },
-      ],
-      onFilter: (value, row) => (value === "pinned" ? Boolean(row.isPinned) : !row.isPinned),
+      // 列上的筛选下拉已删除：灵感等级由工具栏的 Segmented 负责（同一字段只留一套说法；
+      // 列筛选只作用于当前页，服务端分页下必然给出错误结果）
       render: (_value, row) => (
         <Tag color={row.isPinned ? "gold" : "default"} variant="filled">
           {row.isPinned ? "重点" : "普通"}
@@ -229,8 +245,8 @@ export default function NotesRoute(): React.ReactElement {
       dataIndex: "updatedAt",
       key: "updatedAt",
       width: 170,
-      sorter: (a, b) => a.updatedAt.localeCompare(b.updatedAt),
-      defaultSortOrder: "descend",
+      sorter: true,
+      sortOrder: paging.sortOrderOf("updatedAt"),
       render: (_value, row) => (
         <Space orientation="vertical" size={0}>
           <Typography.Text>{dayjs(row.updatedAt).format("YYYY-MM-DD HH:mm")}</Typography.Text>
@@ -321,7 +337,7 @@ export default function NotesRoute(): React.ReactElement {
           <TableToolbar
             extra={
               <Typography.Text type="secondary">
-                共 {rows.length} 条{filtered ? `（总计 ${data.items.length} 条）` : ""}
+                共 {data.items.total} 条{filtered ? "（已筛选）" : ""}
               </Typography.Text>
             }
           >
@@ -387,14 +403,10 @@ export default function NotesRoute(): React.ReactElement {
             loading={busy}
             rowSelection={{
               selectedRowKeys: selectedKeys,
-              preserveSelectedRowKeys: true,
               onChange: (keys) => setSelectedKeys(keys),
             }}
-            pagination={{
-              pageSize: 10,
-              showSizeChanger: true,
-              showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条 / 共 ${total} 条`,
-            }}
+            pagination={paging.pagination}
+            onChange={paging.onTableChange}
             locale={{
               emptyText: (
                 <Empty

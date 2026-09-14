@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { db, now, rows, run, type User } from "./db.server";
+import type { Paged, Paging, SortSpec } from "./paging";
+import { likeTerm, orderOf, pageOf, type SortableColumns } from "./paging.server";
 import {
   denialFailure,
   done,
@@ -10,6 +12,7 @@ import {
   RECORD_FORBIDDEN_MESSAGE,
   resolveRecordOrg,
   NOTE_SELECT,
+  NOTE_SOURCE,
   toNoteView,
   type LocatedRecord,
   type RecordResult,
@@ -29,15 +32,75 @@ function denied(located: LocatedRecord): RecordResult<never> | null {
   return located.deny ? denialFailure(located.deny, RECORD_FORBIDDEN_MESSAGE).failure : null;
 }
 
-export function listNotes(user: User, orgFilter?: string | null): Record<string, unknown>[] {
+/** `/notes` 的列表筛选条件（与 URL 参数一一对应） */
+export type NoteFilters = {
+  orgFilter?: string | null | undefined;
+  /** 关键词：记录内容（纯字面匹配，与原来的 `includes()` 一致） */
+  keyword?: string | undefined;
+  /** 全部 `all` / 重点 `pinned` / 普通 `normal` */
+  pin?: string | undefined;
+};
+
+/**
+ * 筛选条件 → WHERE。`listNotes()`（`/api/notes` 要的全量）与 `notesPage()`（页面的一页）共用这一份。
+ */
+function noteWhere(user: User, filters: NoteFilters): { where: string; params: string[] } {
   const { clauses, params } = personalClauses(user);
   // 管理员的组织筛选器（D-28）。非管理员带上别人的组织也只会得到空列表，不会越权。
-  if (orgFilter) {
+  if (filters.orgFilter) {
     clauses.push("org_id=?");
-    params.push(orgFilter);
+    params.push(filters.orgFilter);
   }
-  const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+  const keyword = (filters.keyword ?? "").trim();
+  if (keyword) {
+    clauses.push(`content LIKE ? ESCAPE '\\'`);
+    params.push(likeTerm(keyword));
+  }
+  if (filters.pin === "pinned") clauses.push("is_pinned=1");
+  if (filters.pin === "normal") clauses.push("is_pinned=0");
+  return { where: clauses.length ? `WHERE ${clauses.join(" AND ")}` : "", params };
+}
+
+/**
+ * 随手记列表（`/api/notes` 与概览页的「最近随手记」共用）。
+ *
+ * ⚠️ 这里的 `ORDER BY updated_at DESC` 是**接口冻结的次序**，契约 golden 盯着它：不要为了迁就页面
+ * 的「置顶优先」（那是 `/notes` 页的默认排序，见 `notesPage()` 的 `NOTE_SORTABLE.pinned`）而改它。
+ */
+export function listNotes(user: User, orgFilter?: string | null): Record<string, unknown>[] {
+  const { where, params } = noteWhere(user, { orgFilter });
   return rows(db(), `${NOTE_SELECT} ${where} ORDER BY updated_at DESC`, ...params).map(toNoteView);
+}
+
+/**
+ * 随手记的排序白名单。
+ *
+ * `pinned` 不是某一列、而是**列表的默认次序**（重点置顶优先，其次最近更新）：
+ * 原来它是页面上那次 `toSorted`，服务端分页后必须变成 SQL 的默认 ORDER BY，
+ * 所以单独占一个 key 放进白名单——页面上没有这一列，也就永远不会亮出排序箭头。
+ */
+export const NOTE_SORTABLE: SortableColumns = {
+  updatedAt: { by: "updated_at {dir}" },
+  pinned: { by: "is_pinned {dir}, updated_at DESC" },
+};
+
+/** 默认排序：重点优先、其次最近更新（与改动前 `toSorted` 的次序一致） */
+export const DEFAULT_NOTE_SORT: SortSpec = { key: "pinned", direction: "desc" };
+
+/** 随手记列表的一页（服务端筛选 + 排序 + 分页） */
+export function notesPage(user: User, filters: NoteFilters, paging: Paging, sort: SortSpec): Paged<Record<string, unknown>> {
+  const { where, params } = noteWhere(user, filters);
+  return pageOf<Record<string, unknown>>({
+    database: db(),
+    select: NOTE_SELECT,
+    source: NOTE_SOURCE,
+    where,
+    params,
+    paging,
+    sort,
+    order: orderOf({ sortable: NOTE_SORTABLE, sort, tieBreak: "id", id: "id" }),
+    map: toNoteView,
+  });
 }
 
 /**

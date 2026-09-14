@@ -3,6 +3,8 @@ import type { JoinRequest, JoinRequestKind, Organization } from "../../shared/ty
 import { db, one, rows, run, now, type User } from "./db.server";
 import { fail } from "./http.server";
 import { createNotification } from "./notifications.server";
+import type { Paged, Paging, SortSpec } from "./paging";
+import { likeTerm, orderOf, pageOf, type SortableColumns } from "./paging.server";
 import { notFound } from "./session.server";
 
 /**
@@ -20,9 +22,19 @@ import { notFound } from "./session.server";
 export type OrgFailure = { ok: false; response: Response };
 export type OrgSuccess<T> = { ok: true; data: T };
 
-const ORG_SELECT = `SELECT id, name, description, status, created_by AS createdBy, created_at AS createdAt,
-                           updated_at AS updatedAt, archived_at AS archivedAt
-                      FROM organizations`;
+/**
+ * 组织列清单与 FROM 分开写：服务端分页的 `COUNT(*)` 只能用 FROM
+ * （见 app/lib/paging.server.ts 的 `ListSource.source`），两者共用同一份列清单不会漂移。
+ */
+const ORG_COLUMNS = `id, name, description, status, created_by AS createdBy, created_at AS createdAt,
+                           updated_at AS updatedAt, archived_at AS archivedAt`;
+const ORG_SOURCE = `FROM organizations`;
+const ORG_SELECT = `SELECT ${ORG_COLUMNS} ${ORG_SOURCE}`;
+
+/** 组织的成员数：列表页用它做「成员数」列与排序键（子查询一次算完，不再逐行 countMembers） */
+const MEMBER_COUNT_SQL = `(SELECT COUNT(*) FROM users m WHERE m.org_id = organizations.id) AS memberCount`;
+/** 组织总览页专用：多带一列 memberCount。接口与单条查询的 `ORG_SELECT` 保持原样（契约冻结） */
+const ORG_PAGE_SELECT = `SELECT ${ORG_COLUMNS}, ${MEMBER_COUNT_SQL} ${ORG_SOURCE}`;
 
 const REQUEST_SELECT = `SELECT r.id AS id, r.kind AS kind, r.user_id AS userId, u.name AS userName, u.username AS username,
                                r.org_id AS orgId, o.name AS orgName, r.status AS status, r.message AS message,
@@ -33,11 +45,12 @@ const REQUEST_SELECT = `SELECT r.id AS id, r.kind AS kind, r.user_id AS userId, 
                      LEFT JOIN organizations o ON o.id = r.org_id
                      LEFT JOIN users d ON d.id = r.decided_by`;
 
-const MEMBER_SELECT = `SELECT u.id AS id, u.username AS username, u.email AS email, u.name AS name, u.role AS role,
+const MEMBER_COLUMNS = `u.id AS id, u.username AS username, u.email AS email, u.name AS name, u.role AS role,
                               u.org_id AS orgId, o.name AS orgName, u.is_active AS isActive,
-                              u.must_change_password AS mustChangePassword, u.created_at AS createdAt
-                         FROM users u
+                              u.must_change_password AS mustChangePassword, u.created_at AS createdAt`;
+const MEMBER_SOURCE = `FROM users u
                     LEFT JOIN organizations o ON o.id = u.org_id`;
+const MEMBER_SELECT = `SELECT ${MEMBER_COLUMNS} ${MEMBER_SOURCE}`;
 
 function badRequest(message: string, code = "VALIDATION_ERROR"): OrgFailure {
   return { ok: false, response: fail(code, message, 400) };
@@ -63,6 +76,48 @@ export function listOrganizations(user: User): Organization[] {
   const result: Organization[] = [];
   for (const org of found) result.push({ ...org, memberCount: countMembers(org.id) });
   return result;
+}
+
+/** 组织总览的筛选条件（与 URL 参数一一对应）：状态筛选原来在列头的筛选下拉里（只作用于当前页） */
+export type OrgFilters = { status?: string | undefined };
+
+/** 组织的排序白名单（列 key 与「组织总览」列对应；`{dir}` 由方向替换，见 `orderOf`） */
+export const ORG_SORTABLE: SortableColumns = {
+  name: { column: "name" },
+  memberCount: { by: "memberCount {dir}" },
+  createdAt: { by: "created_at {dir}" },
+  // 默认次序（正常在前、其次创建时间）不是某一列的排序，单独占一个 key
+  status: { by: "status {dir}, created_at" },
+};
+
+/** 默认排序：正常组织在前、其次创建时间（与改动前列表的数据序一致） */
+export const DEFAULT_ORG_SORT: SortSpec = { key: "status", direction: "asc" };
+
+/**
+ * 组织总览的一页（服务端筛选 + 排序 + 分页）。
+ * 可见范围与 `listOrganizations()` 逐条一致：admin/manager 看全部（含已解散），member 只看 active。
+ */
+export function organizationsPage(user: User, filters: OrgFilters, paging: Paging, sort: SortSpec): Paged<Organization> {
+  const clauses: string[] = [];
+  const params: string[] = [];
+  if (!(user.role === "admin" || user.role === "manager")) clauses.push("status='active'");
+  if (filters.status === "active" || filters.status === "archived") {
+    clauses.push("status=?");
+    params.push(filters.status);
+  }
+  const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+  return pageOf<Organization>({
+    database: db(),
+    select: ORG_PAGE_SELECT,
+    source: ORG_SOURCE,
+    where,
+    params,
+    paging,
+    sort,
+    order: orderOf({ sortable: ORG_SORTABLE, sort, tieBreak: "id", id: "id" }),
+    // 组织只有这一张表，行本身就是页面要的形状（`memberCount` 由子查询带出来）
+    map: (row) => row as unknown as Organization,
+  });
 }
 
 export function findOrganization(orgId: string): Organization | null {
@@ -158,6 +213,130 @@ export function listMembers(orgId: string): Record<string, unknown>[] {
 
 export function listAllAccounts(): Record<string, unknown>[] {
   return rows(db(), `${MEMBER_SELECT} ORDER BY u.org_id IS NOT NULL, o.name, u.name`);
+}
+
+/* -------------------------------- 成员 / 账号列表的分页（设置页的两个 Tab 共用一套筛选条件） */
+
+/**
+ * 成员表（某个组织）与账号总览（全局）共用的筛选条件，与 URL 参数一一对应。
+ *
+ * 关键词、角色、启用状态原来都是**组件里的本地 state**（在浏览器里 filter 当前页），
+ * 服务端分页后必须落到 SQL：否则「共 40 个」而每页只剩筛完的两三个。
+ */
+export type AccountFilters = {
+  /** 关键词：姓名 / 用户名 / 邮箱（原实现是把三者拼起来做 `includes`，这里等价地 LIKE 三列） */
+  keyword?: string | undefined;
+  /** 全部 `all` / `admin` / `manager` / `member` */
+  role?: string | undefined;
+  /** 全部 `all` / 启用 `active` / 停用 `inactive` */
+  state?: string | undefined;
+  /** 账号总览的范围：全部 `all` / 未加入任何组织 `none` / 某个组织 id（成员列表用 `orgId` 参数，不看它） */
+  scope?: string | undefined;
+};
+
+/**
+ * 筛选条件 → WHERE。`orgId` 是成员列表的固定范围（本组织）；账号总览不传，
+ * 改由 `scope` 表达「全部 / 未加入 / 某个组织」。
+ */
+function accountWhere(filters: AccountFilters, orgId?: string): { where: string; params: string[] } {
+  const clauses: string[] = [];
+  const params: string[] = [];
+  if (orgId) {
+    clauses.push("u.org_id=?");
+    params.push(orgId);
+  } else if (filters.scope === "none") {
+    // 「未加入任何组织」：`org_id IS NULL`——管理员也落在这一类里（与改动前的 `account.orgId === null` 一致）
+    clauses.push("u.org_id IS NULL");
+  } else if (filters.scope && filters.scope !== "all") {
+    clauses.push("u.org_id=?");
+    params.push(filters.scope);
+  }
+  const keyword = (filters.keyword ?? "").trim();
+  if (keyword) {
+    const like = likeTerm(keyword);
+    clauses.push(`(u.name LIKE ? ESCAPE '\\' OR u.username LIKE ? ESCAPE '\\' OR u.email LIKE ? ESCAPE '\\')`);
+    params.push(like, like, like);
+  }
+  if (filters.role === "admin" || filters.role === "manager" || filters.role === "member") {
+    clauses.push("u.role=?");
+    params.push(filters.role);
+  }
+  if (filters.state === "active") clauses.push("u.is_active=1");
+  if (filters.state === "inactive") clauses.push("u.is_active=0");
+  return { where: clauses.length ? `WHERE ${clauses.join(" AND ")}` : "", params };
+}
+
+/** 成员表的排序白名单（列 key 与「成员列表」列对应，`{dir}` 由方向替换，见 `orderOf`） */
+export const MEMBER_SORTABLE: SortableColumns = {
+  name: { column: "u.name" },
+  // 默认次序（组织管理者在前、其次姓名）不是某一列的排序，单独占一个 key
+  role: { by: "CASE u.role WHEN 'manager' THEN 0 ELSE 1 END {dir}, u.name" },
+};
+
+/** 默认排序：组织管理者在前、其次姓名（与改动前的 `ORDER BY CASE ... , u.name` 一致） */
+export const DEFAULT_MEMBER_SORT: SortSpec = { key: "role", direction: "asc" };
+
+/** 成员列表的一页（本组织成员 + 服务端筛选/排序/分页） */
+export function membersPage(orgId: string, filters: AccountFilters, paging: Paging, sort: SortSpec): Paged<Record<string, unknown>> {
+  const { where, params } = accountWhere(filters, orgId);
+  return pageOf<Record<string, unknown>>({
+    database: db(),
+    select: MEMBER_SELECT,
+    source: MEMBER_SOURCE,
+    where,
+    params,
+    paging,
+    sort,
+    order: orderOf({ sortable: MEMBER_SORTABLE, sort, tieBreak: "u.id", id: "u.id" }),
+    map: (row) => row,
+  });
+}
+
+/** 账号总览的排序白名单（列 key 与「账号总览」列对应） */
+export const ACCOUNT_SORTABLE: SortableColumns = {
+  name: { column: "u.name" },
+  // 默认次序：先按「有没有组织」，再按组织名、姓名（与改动前的 ORDER BY 一致）
+  orgName: { by: "u.org_id IS NOT NULL {dir}, o.name, u.name" },
+  role: { by: "u.role {dir}, u.name" },
+};
+
+/** 默认排序：未加入组织的在前、其次组织名与姓名（与改动前一致） */
+export const DEFAULT_ACCOUNT_SORT: SortSpec = { key: "orgName", direction: "asc" };
+
+/** 账号总览的一页（全局账号 + 服务端筛选/排序/分页） */
+export function accountsPage(filters: AccountFilters, paging: Paging, sort: SortSpec): Paged<Record<string, unknown>> {
+  const { where, params } = accountWhere(filters);
+  return pageOf<Record<string, unknown>>({
+    database: db(),
+    select: MEMBER_SELECT,
+    source: MEMBER_SOURCE,
+    where,
+    params,
+    paging,
+    sort,
+    order: orderOf({ sortable: ACCOUNT_SORTABLE, sort, tieBreak: "u.id", id: "u.id" }),
+    map: (row) => row,
+  });
+}
+
+/**
+ * 账号总览的两个计数：分页之后页面手里没有全量账号，不能再去数数组长度。
+ * - `total`：「全部账号（n）」这个下拉项
+ * - `unassigned`：「未加入任何组织（n）」，口径与改动前一致（**不含管理员**）
+ */
+export function accountCounts(): { total: number; unassigned: number } {
+  const row = one<{ total: number; unassigned: number }>(
+    db(),
+    `SELECT COUNT(*) AS total,
+            IFNULL(SUM(CASE WHEN u.org_id IS NULL AND u.role<>'admin' THEN 1 ELSE 0 END),0) AS unassigned
+       FROM users u`,
+  );
+  return { total: Number(row?.total ?? 0), unassigned: Number(row?.unassigned ?? 0) };
+}
+
+/** 「添加成员」的候选：无组织、启用中、且不是管理员（管理员不隶属组织） */
+export function listMemberCandidates(): Record<string, unknown>[] {
+  return rows(db(), `${MEMBER_SELECT} WHERE u.org_id IS NULL AND u.role<>'admin' AND u.is_active=1 ORDER BY u.name`);
 }
 
 /** 本组织可用 manager 数量（用于「最后一名管理者」保护） */

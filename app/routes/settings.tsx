@@ -1,42 +1,47 @@
 import type React from "react";
 import { useState } from "react";
-import { useActionData, useLoaderData, useNavigation, useRevalidator, useSearchParams, useSubmit } from "react-router";
+import { useActionData, useLoaderData, useNavigation, useRevalidator, useSubmit } from "react-router";
 import { Alert, Button, Flex, Tabs, type TabsProps } from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
 import type { WebDavBrowseListing } from "../../shared/types/domain";
-import { useCrudFeedback } from "../components/crud-hooks";
+import { useCrudFeedback, useListParams } from "../components/crud-hooks";
 import { PageHeader } from "../components/page-header";
 import { AccountsTab } from "../components/settings/accounts-tab";
-import {
-  canOpenSettingsTab,
-  DEFAULT_SETTINGS_TAB,
-  FILTER_ALL,
-  FILTER_NONE,
-  isSettingsTab,
-  type SettingsTabKey,
-} from "../components/settings/constants";
+import { canOpenSettingsTab, DEFAULT_SETTINGS_TAB, FILTER_ALL, isSettingsTab, type SettingsTabKey } from "../components/settings/constants";
 import { OrgMembersTab } from "../components/settings/org-members-tab";
 import { OrgOverviewTab } from "../components/settings/org-overview-tab";
 import type { MemberRow } from "../components/settings/types";
 import { WebDavTab } from "../components/settings/webdav-tab";
 import { readPayload } from "../lib/form.server";
 import {
+  ACCOUNT_SORTABLE,
+  accountCounts,
+  accountsPage,
   archiveOrganization,
   createOrganization,
   decideJoinRequest,
+  DEFAULT_ACCOUNT_SORT,
+  DEFAULT_MEMBER_SORT,
+  DEFAULT_ORG_SORT,
   inviteMember,
-  listAllAccounts,
   listJoinRequests,
-  listMembers,
+  listMemberCandidates,
   listOrganizations,
+  MEMBER_SORTABLE,
+  membersPage,
+  ORG_SORTABLE,
+  organizationsPage,
   removeMember,
   restoreOrganization,
   setMemberActive,
   setMemberRole,
   updateOrganization,
+  type AccountFilters,
   type OrgFailure,
   type OrgSuccess,
 } from "../lib/organization.server";
+import { emptyPage, pagingOf, sortOf, type Paged } from "../lib/paging";
+import { sortableKeys } from "../lib/paging.server";
 import { requireManagerOrRedirect } from "../lib/ui.server";
 import { assertOrgManage } from "../lib/session.server";
 import {
@@ -95,44 +100,59 @@ export async function loader({ request }: { request: Request }) {
       null)
     : (organizations.find((org) => org.id === user.orgId) ?? null);
 
-  const allAccounts = listAllAccounts() as unknown as MemberRow[];
-  const members = current ? (listMembers(current.id) as unknown as MemberRow[]) : [];
-  const requests = current ? listJoinRequests(user, { orgId: current.id }) : [];
-  // 「添加成员」的候选：无组织、启用中、且不是管理员（管理员不隶属组织）
-  const candidates =
-    current && current.status === "active"
-      ? allAccounts.filter((account) => account.orgId === null && account.role !== "admin" && account.isActive === 1)
-      : [];
-
   // 「组织总览」「账号总览」只有 admin 能切；「组织与成员」「WebDAV」manager 也能开
   const requestedTab = url.searchParams.get("tab") ?? DEFAULT_SETTINGS_TAB;
   const tab: SettingsTabKey =
     isSettingsTab(requestedTab) && canOpenSettingsTab(requestedTab, isAdmin) ? requestedTab : DEFAULT_SETTINGS_TAB;
 
+  /**
+   * 三张表（成员 / 组织 / 账号）都是**服务端分页**，共用同一组 `?page/?size/?sort/?order`——
+   * 同一时刻只有一个 Tab 在渲染，所以没必要给每张表各带一套参数。
+   * 筛选条件（`?q=` 关键词、`?role=`、`?state=`、`?scope=`、`?status=`）同样都在服务端生效。
+   */
+  const paging = pagingOf(url.searchParams);
+  const filters: AccountFilters = {
+    keyword: url.searchParams.get("q") ?? undefined,
+    role: url.searchParams.get("role") ?? undefined,
+    state: url.searchParams.get("state") ?? undefined,
+  };
   // 账号总览（仅 admin）：`?scope=` 决定看全部 / 仅未加入 / 某个组织
   const scope = url.searchParams.get("scope") ?? FILTER_ALL;
-  const accounts = !isAdmin
-    ? []
-    : scope === FILTER_ALL
-      ? allAccounts
-      : scope === FILTER_NONE
-        ? allAccounts.filter((account) => account.orgId === null)
-        : allAccounts.filter((account) => account.orgId === scope);
+
+  const members = current
+    ? membersPage(current.id, filters, paging, sortOf(url.searchParams, sortableKeys(MEMBER_SORTABLE), DEFAULT_MEMBER_SORT))
+    : emptyPage<MemberRow>(paging, DEFAULT_MEMBER_SORT);
+  const orgRows = organizationsPage(
+    user,
+    { status: url.searchParams.get("status") ?? undefined },
+    paging,
+    sortOf(url.searchParams, sortableKeys(ORG_SORTABLE), DEFAULT_ORG_SORT),
+  );
+  const accounts = isAdmin
+    ? accountsPage({ ...filters, scope }, paging, sortOf(url.searchParams, sortableKeys(ACCOUNT_SORTABLE), DEFAULT_ACCOUNT_SORT))
+    : emptyPage<MemberRow>(paging, DEFAULT_ACCOUNT_SORT);
+  // 分页后不能再去数数组长度：两个计数由服务端算
+  const counts = isAdmin ? accountCounts() : { total: 0, unassigned: 0 };
+
+  const requests = current ? listJoinRequests(user, { orgId: current.id }) : [];
+  // 「添加成员」的候选：无组织、启用中、且不是管理员（管理员不隶属组织）
+  const candidates = current && current.status === "active" ? (listMemberCandidates() as unknown as MemberRow[]) : [];
 
   return {
     me: { id: user.id, name: user.name, username: user.username, role: user.role, orgId: user.orgId },
     isAdmin,
     tab,
     organizations,
+    orgRows,
     current,
-    members,
+    members: members as unknown as Paged<MemberRow>,
     candidates,
     pending: requests.filter((item) => item.status === "pending"),
     history: requests.filter((item) => item.status !== "pending").slice(0, 20),
-    accounts,
+    accounts: accounts as unknown as Paged<MemberRow>,
     scope,
-    accountTotal: allAccounts.length,
-    unassignedCount: allAccounts.filter((account) => account.orgId === null && account.role !== "admin").length,
+    accountTotal: counts.total,
+    unassignedCount: counts.unassigned,
     // WebDAV 连接配置是**按账号**的，管理员与组织管理者各自维护自己那份
     webdav: webDavSettingsView(user.id),
     // 「周报上传」的作用域是**当前组织**（D-53）：组织管理者配本组织，管理员可换组织；
@@ -277,7 +297,6 @@ export default function SettingsRoute(): React.ReactElement {
   const navigation = useNavigation();
   const revalidator = useRevalidator();
   const submit = useSubmit();
-  const [params, setParams] = useSearchParams();
   // 写操作成功时递增，通知各 Tab 收起自己打开的弹窗（Tab 组件的状态留在组件内部）
   const [successTick, setSuccessTick] = useState(0);
 
@@ -288,14 +307,11 @@ export default function SettingsRoute(): React.ReactElement {
     submit(payload as Parameters<typeof submit>[0], { method: "post", encType: "application/json" });
   };
 
-  const patchParams = (changes: Record<string, string | null>): void => {
-    const next = new URLSearchParams(params);
-    for (const [key, value] of Object.entries(changes)) {
-      if (value === null || value === "") next.delete(key);
-      else next.set(key, value);
-    }
-    setParams(next, { replace: true });
-  };
+  /**
+   * 参数写入统一走 `useListParams().patch`：与其它列表页同一套规则，
+   * 而且**动了筛选/切换 Tab 会自动回到第 1 页**（否则 `?page=3` 会在新列表上越界）。
+   */
+  const { patch: patchParams } = useListParams();
 
   /** 跳到「组织与成员」Tab；带 orgId 时同时切换当前管理的组织 */
   const openMembers = (orgId?: string): void => {
@@ -349,7 +365,7 @@ export default function SettingsRoute(): React.ReactElement {
         label: "组织总览",
         children: (
           <OrgOverviewTab
-            organizations={data.organizations}
+            organizations={data.orgRows}
             post={post}
             busy={busy}
             error={error}

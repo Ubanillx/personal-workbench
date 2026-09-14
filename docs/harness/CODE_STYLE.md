@@ -211,7 +211,22 @@ npx antd lint app         # 必须 No issues found（当前 96 文件全过）
 5. **批量**：表格启用 `rowSelection` + `SelectionAlert`，批量动作逐条调用**同一个**服务函数并汇总成功/失败数，不新写 SQL。
 6. **反馈**：成功用 `useCrudFeedback` 弹全局提示并关闭抽屉；失败**必须**渲染成常驻 `Alert`（页面顶部与抽屉顶部各一处），不要只弹 toast——SSR 冒烟测试也正是靠 HTML 里的错误文案做断言。
 7. **确认**：破坏性操作（删除 / 归档 / 解散 / 停用）用 `confirmDanger`，文案要写清影响范围；普通操作（通过、启用、恢复）用 `confirmAction`，不用原生 `window.confirm`。
-8. **表格**：稳定 `rowKey`、`size="middle"`、受控 `loading`、分页带 `showTotal`、`locale.emptyText` 用带引导动作的 `Empty`、需要时给 `sorter` 与列 `filters`。
+8. **表格**：稳定 `rowKey`、`size="middle"`、受控 `loading`、`locale.emptyText` 用带引导动作的 `Empty`。
+   - **分页、筛选、排序一律在服务端**（参数口径在 `app/lib/paging.ts`，`COUNT(*)` + `LIMIT/OFFSET` 在 `app/lib/paging.server.ts`）：loader 返回 `Paged<T>`（`rows/total/page/size/sort`），页面用 `useServerTable()` 接线——翻页、改条数、点表头**只写回 URL**（`?page=` / `?size=` / `?sort=` / `?order=`），由 loader 决定这一页是谁：
+
+     ```tsx
+     const columns: TableProps<TaskRow>["columns"] = [
+       { dataIndex: "title", key: "title", sorter: true, sortOrder: paging.sortOrderOf("title") },
+     ];
+     const table = useMemo(() => dataTable<TaskRow>({ columns, selectable: canManage }), [columns, canManage]);
+     const paging = useServerTable<TaskRow>(data.tasks);
+     <Table<TaskRow> {...table} rowKey="id" dataSource={data.tasks.rows} pagination={paging.pagination} onChange={paging.onTableChange} />;
+     ```
+
+   - **不要在分页表上写客户端排序 / 筛选**：`sorter: (a, b) => …`、列 `filters` / `onFilter` 只作用于**当前这一页**，结果必然是错的；也不要再在 `useMemo` 里 filter / sort loader 的数据（那等于把服务端分页又改回客户端）。筛选条件全部进 URL 并由 loader 落到 SQL；**列筛选与工具栏筛选重复时只留工具栏那一套**（同一个字段只留一套说法，见第 10 条）。
+   - **统计要按全量算**：列表上方的数字（任务总数 / 完成率 / 已逾期…）不能数 `rows.length`——那是「这一页有几条」。由服务端用**同一套筛选条件**算好给页面（例：`taskStats()`）。
+   - **勾选只作用于当页**：勾选的对象是本页可见的行，列表参数（筛选 / 页码 / 条数 / 排序）一变就清空，因此不要给分页表加 `preserveSelectedRowKeys`。
+   - **纯前端表格**（企微导入抽屉里的校对表草稿：数据还没入库）用 `clientPagination`，且不要传受控的 `pageSize`（会吞掉「切条数」，历史坑）。
    - **排版一律走 `dataTable()`**（`app/components/table-layout.ts` + `app/styles/table-layout.css`），不要自己写 `scroll={{ x: 数字 }}`：
 
      ```tsx

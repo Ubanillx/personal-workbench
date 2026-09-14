@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import type { TaskPriority, TaskStatus, UserRole } from "../../shared/types/domain";
 import { now, one, rows, run, toUser, type Db, type User } from "./db.server";
 import { createNotification } from "./notifications.server";
+import type { Paged, Paging, SortSpec } from "./paging";
+import { likeTerm, orderOf, pageOf, type SortableColumns } from "./paging.server";
 import { orgScope } from "./session.server";
 
 /**
@@ -16,10 +18,18 @@ import { orgScope } from "./session.server";
  */
 
 /**
+ * 任务的 JOIN 来源（负责人姓名/角色 + 组织名，见 D-28 的合并视图）。
+ *
+ * 单独抽出来是服务端分页的需要：`COUNT(*)` 只能用 FROM/JOIN，不能带列清单
+ * （`SELECT` 里可能有自己的占位符，见 app/lib/paging.server.ts 的 `ListSource.source`）。
+ */
+export const TASK_SOURCE = `FROM tasks t LEFT JOIN users u ON u.id=t.owner_id LEFT JOIN organizations o ON o.id=t.org_id`;
+
+/**
  * 与旧 server/src/routes/workbench.ts 第 11 行一致，补 `t.org_id AS orgId` 与组织名
  * （D-28 的合并视图要能看出每行属于哪个组织；组织名走 JOIN，不在 toTaskView 里逐行查库）。
  */
-export const SELECT_TASK = `SELECT t.id,t.title,t.description,t.priority,t.status,t.progress,t.due_date AS dueDate,t.owner_id AS ownerId,t.created_by AS createdBy,t.source,t.is_private AS isPrivate,t.created_at AS createdAt,t.updated_at AS updatedAt,t.completed_at AS completedAt,t.archived_at AS archivedAt,t.org_id AS orgId,o.name AS orgName,u.name AS ownerName,u.role AS ownerRole FROM tasks t LEFT JOIN users u ON u.id=t.owner_id LEFT JOIN organizations o ON o.id=t.org_id`;
+export const SELECT_TASK = `SELECT t.id,t.title,t.description,t.priority,t.status,t.progress,t.due_date AS dueDate,t.owner_id AS ownerId,t.created_by AS createdBy,t.source,t.is_private AS isPrivate,t.created_at AS createdAt,t.updated_at AS updatedAt,t.completed_at AS completedAt,t.archived_at AS archivedAt,t.org_id AS orgId,o.name AS orgName,u.name AS ownerName,u.role AS ownerRole ${TASK_SOURCE}`;
 
 /** 旧实现里 toTaskView 的返回类型就是 any（字段顺序与 undefined 行为都要保留），此处刻意保持 */
 export type TaskView = ReturnType<typeof toTaskView>;
@@ -82,6 +92,63 @@ export function visibilityClauses(user: User): { clauses: string[]; params: stri
   return { clauses, params };
 }
 
+/** `/tasks` 的列表筛选条件（与 URL 参数一一对应；服务端分页后筛选也必须在服务端） */
+export type TaskFilters = {
+  includeArchived: boolean;
+  status?: string | undefined;
+  assignee?: string | undefined;
+  orgFilter?: string | null | undefined;
+  /** 关键词：任务标题或负责人姓名（原来是浏览器里 filter，服务端分页后必须落到 SQL） */
+  keyword?: string | undefined;
+  /** 更新时间范围的两端（含当天）：原来也是在 loader 里内存过滤 */
+  from?: string | undefined;
+  to?: string | undefined;
+};
+
+/**
+ * 筛选条件 → WHERE。`visible()`（接口与概览页要的全量）与 `visiblePage()`（页面的一页）**共用这一份**：
+ * 分页之后「列表里看见的」和「统计里数出来的」必须是同一批数据，条件各写一份就必然对不上。
+ */
+function taskWhere(user: User, filters: TaskFilters): { where: string; params: string[] } {
+  const { clauses, params } = visibilityClauses(user);
+  if (!filters.includeArchived) clauses.push("t.archived_at IS NULL");
+  if (filters.status && filters.status !== "all") {
+    clauses.push("t.status=?");
+    params.push(filters.status);
+  }
+  if (filters.assignee === "mine") {
+    clauses.push("t.owner_id=?");
+    params.push(user.id);
+  } else if (filters.assignee === "unassigned") {
+    clauses.push("t.owner_id IS NULL");
+  } else if (filters.assignee && filters.assignee !== "all") {
+    clauses.push("t.owner_id=?");
+    params.push(filters.assignee);
+  }
+  // 管理员的组织筛选器（D-28）：合并视图下只看某个组织
+  if (filters.orgFilter) {
+    clauses.push("t.org_id=?");
+    params.push(filters.orgFilter);
+  }
+  const keyword = (filters.keyword ?? "").trim();
+  if (keyword) {
+    // 口径与原浏览器 filter 一致（标题或负责人姓名，含即命中）；LIKE 的关键词要转义，否则 `%` 会变成通配符
+    const like = likeTerm(keyword);
+    clauses.push(`(t.title LIKE ? ESCAPE '\\' OR IFNULL(u.name,'') LIKE ? ESCAPE '\\')`);
+    params.push(like, like);
+  }
+  // 更新时间范围：按「日期」比较（原实现是 updatedAt.slice(0,10) 的字符串比较，这里逐字对应）
+  if (filters.from) {
+    clauses.push("substr(t.updated_at,1,10)>=?");
+    params.push(filters.from);
+  }
+  if (filters.to) {
+    clauses.push("substr(t.updated_at,1,10)<=?");
+    params.push(filters.to);
+  }
+  return { where: clauses.length ? `WHERE ${clauses.join(" AND ")}` : "", params };
+}
+
 export function visible(
   database: Db,
   user: User,
@@ -90,28 +157,69 @@ export function visible(
   assignee?: string,
   orgFilter?: string | null,
 ): TaskView[] {
-  const { clauses, params } = visibilityClauses(user);
-  if (!includeArchived) clauses.push("t.archived_at IS NULL");
-  if (status && status !== "all") {
-    clauses.push("t.status=?");
-    params.push(status);
-  }
-  if (assignee === "mine") {
-    clauses.push("t.owner_id=?");
-    params.push(user.id);
-  } else if (assignee === "unassigned") {
-    clauses.push("t.owner_id IS NULL");
-  } else if (assignee && assignee !== "all") {
-    clauses.push("t.owner_id=?");
-    params.push(assignee);
-  }
-  // 管理员的组织筛选器（D-28）：合并视图下只看某个组织
-  if (orgFilter) {
-    clauses.push("t.org_id=?");
-    params.push(orgFilter);
-  }
-  const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+  const { where, params } = taskWhere(user, { includeArchived, status, assignee, orgFilter });
   return rows(database, `${SELECT_TASK} ${where} ORDER BY t.updated_at DESC`, ...params).map(toTaskView);
+}
+
+/**
+ * 任务列表的排序白名单：列 key 与 `/tasks` 列的 `key` 一一对应，`{dir}` 由方向替换
+ * （翻译规则见 app/lib/paging.server.ts 的 `orderOf`）。
+ *
+ * `dueDate` 用 `IFNULL(...,'9999-99-99')` 是**刻意**的：原来的比较器把空值当 `"9999"`（最大值），
+ * 于是升序时空值排最后、降序时排最前；SQLite 默认把 NULL 当最小值，两者正好相反，不能直接用列名排。
+ */
+export const TASK_SORTABLE: SortableColumns = {
+  title: { column: "t.title" },
+  progress: { by: "t.progress {dir}" },
+  dueDate: { by: "IFNULL(t.due_date,'9999-99-99') {dir}" },
+  updatedAt: { by: "t.updated_at {dir}" },
+};
+
+/** 默认排序：最近更新在前（与改动前表头的默认排序一致） */
+export const DEFAULT_TASK_SORT: SortSpec = { key: "updatedAt", direction: "desc" };
+
+/** 任务列表的一页（服务端筛选 + 排序 + 分页；页面只拿到当页的行） */
+export function visiblePage(database: Db, user: User, filters: TaskFilters, paging: Paging, sort: SortSpec): Paged<TaskView> {
+  const { where, params } = taskWhere(user, filters);
+  return pageOf<TaskView>({
+    database,
+    select: SELECT_TASK,
+    source: TASK_SOURCE,
+    where,
+    params,
+    paging,
+    sort,
+    order: orderOf({ sortable: TASK_SORTABLE, sort, tieBreak: "t.id", id: "t.id" }),
+    map: toTaskView,
+  });
+}
+
+/** 任务列表的统计（任务总数 / 已完成 / 待验收 / 已逾期） */
+export type TaskStats = { total: number; completed: number; pendingReview: number; overdue: number };
+
+/**
+ * 列表统计必须由服务端算：服务端分页后页面手里只有一页，
+ * 在浏览器里数 `rows.length` 会得到「这一页有几条」，而且随翻页变化。
+ * 口径与列表**共用 `taskWhere()`**，所以统计的永远是当前筛选条件下的全量。
+ */
+export function taskStats(database: Db, user: User, filters: TaskFilters, today: string): TaskStats {
+  const { where, params } = taskWhere(user, filters);
+  const row = one<{ total: number; completed: number; pendingReview: number; overdue: number }>(
+    database,
+    `SELECT COUNT(*) AS total,
+            IFNULL(SUM(CASE WHEN t.status='completed' THEN 1 ELSE 0 END),0) AS completed,
+            IFNULL(SUM(CASE WHEN t.status='pending_review' THEN 1 ELSE 0 END),0) AS pendingReview,
+            IFNULL(SUM(CASE WHEN t.due_date IS NOT NULL AND t.due_date<? AND t.status<>'completed' AND t.archived_at IS NULL THEN 1 ELSE 0 END),0) AS overdue
+     ${TASK_SOURCE} ${where}`,
+    today,
+    ...params,
+  );
+  return {
+    total: Number(row?.total ?? 0),
+    completed: Number(row?.completed ?? 0),
+    pendingReview: Number(row?.pendingReview ?? 0),
+    overdue: Number(row?.overdue ?? 0),
+  };
 }
 
 export function findTask(database: Db, id: string): TaskView | null {

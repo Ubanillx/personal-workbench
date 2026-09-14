@@ -1,10 +1,12 @@
 import type React from "react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button, Card, Empty, Flex, Input, Select, Space, Table, Tag, Typography, type TableProps } from "antd";
 import { UserAddOutlined } from "@ant-design/icons";
 import type { Organization } from "../../../shared/types/domain";
 import { TableToolbar } from "../crud-toolbar";
+import { useListParams, useServerTable } from "../crud-hooks";
 import { dataTable } from "../table-layout";
+import type { Paged } from "../../lib/paging";
 import { RowActions } from "../crud-actions";
 import { ACCOUNT_ROLE_FILTER_OPTIONS, FILTER_ALL, FILTER_NONE, ROLE_COLOR, ROLE_LABEL, STATE_FILTER_OPTIONS } from "./constants";
 import type { Me, MemberRow } from "./types";
@@ -17,7 +19,8 @@ import type { Me, MemberRow } from "./types";
  */
 type Props = {
   me: Me;
-  accounts: MemberRow[];
+  /** 账号列表：服务端筛选 + 排序 + 分页的结果（页面只渲染当页） */
+  accounts: Paged<MemberRow>;
   accountTotal: number;
   unassignedCount: number;
   scope: string;
@@ -39,21 +42,20 @@ export function AccountsTab({
   busy,
   onOpenMembers,
 }: Props): React.ReactElement {
-  const [keyword, setKeyword] = useState("");
-  const [roleFilter, setRoleFilter] = useState("all");
-  const [stateFilter, setStateFilter] = useState("all");
-
-  const filtered = useMemo(
-    () =>
-      accounts.filter((account) => {
-        if (keyword && !`${account.name}${account.username}${account.email}`.includes(keyword)) return false;
-        if (roleFilter !== "all" && account.role !== roleFilter) return false;
-        if (stateFilter === "active" && account.isActive !== 1) return false;
-        if (stateFilter === "inactive" && account.isActive === 1) return false;
-        return true;
-      }),
-    [accounts, keyword, roleFilter, stateFilter],
-  );
+  /**
+   * 筛选条件放在 URL 上（与其它列表页同一套）：关键词 / 角色 / 状态都在**服务端**过滤，
+   * 这样分页才对得上（原来它们在浏览器里过滤当前页）。`?scope=` 由外壳的 `onScopeChange` 写。
+   */
+  const list = useListParams();
+  const keyword = list.get("q");
+  const roleFilter = list.get("role", "all");
+  const stateFilter = list.get("state", "all");
+  const [draftKeyword, setDraftKeyword] = useState(keyword);
+  useEffect(() => setDraftKeyword(keyword), [keyword]);
+  const filtered = Boolean(keyword || roleFilter !== "all" || stateFilter !== "all" || scope !== FILTER_ALL);
+  /** 服务端分页：翻页、改条数与表头排序都只写回 URL，由 loader 决定这一页是谁 */
+  const rows = accounts.rows;
+  const paging = useServerTable<MemberRow>(accounts);
 
   const scopeOptions = [
     { value: FILTER_ALL, label: `全部账号（${accountTotal}）` },
@@ -66,7 +68,9 @@ export function AccountsTab({
       title: "姓名",
       dataIndex: "name",
       key: "name",
-      sorter: (a, b) => a.name.localeCompare(b.name, "zh-Hans-CN"),
+      // 表头排序由服务端做（客户端比较器只能排当前这一页）
+      sorter: true,
+      sortOrder: paging.sortOrderOf("name"),
       render: (_value, account) => (
         <Space size={4}>
           <Typography.Text strong>{account.name}</Typography.Text>
@@ -155,7 +159,7 @@ export function AccountsTab({
         <TableToolbar
           extra={
             <Typography.Text type="secondary">
-              显示 {filtered.length} / {accounts.length} 个
+              共 {accounts.total} 个{filtered ? "（已筛选）" : ""}
             </Typography.Text>
           }
         >
@@ -163,24 +167,26 @@ export function AccountsTab({
             allowClear
             placeholder="搜索姓名 / 用户名 / 邮箱"
             style={{ width: 260 }}
-            value={keyword}
-            onChange={(event) => setKeyword(event.target.value)}
-            onSearch={(value) => setKeyword(value.trim())}
+            value={draftKeyword}
+            loading={busy}
+            onChange={(event) => setDraftKeyword(event.target.value)}
+            onSearch={(value) => list.patch({ q: value.trim() })}
           />
           <Select value={scope} onChange={onScopeChange} style={{ width: 220 }} options={scopeOptions} />
-          <Select value={roleFilter} style={{ width: 140 }} onChange={setRoleFilter} options={ACCOUNT_ROLE_FILTER_OPTIONS} />
-          <Select value={stateFilter} style={{ width: 140 }} onChange={setStateFilter} options={STATE_FILTER_OPTIONS} />
-          {keyword || roleFilter !== "all" || stateFilter !== "all" || scope !== FILTER_ALL ? (
-            <Button
-              color="default"
-              variant="text"
-              onClick={() => {
-                setKeyword("");
-                setRoleFilter("all");
-                setStateFilter("all");
-                onScopeChange(FILTER_ALL);
-              }}
-            >
+          <Select
+            value={roleFilter}
+            style={{ width: 140 }}
+            onChange={(value: string) => list.patch({ role: value === "all" ? null : value })}
+            options={ACCOUNT_ROLE_FILTER_OPTIONS}
+          />
+          <Select
+            value={stateFilter}
+            style={{ width: 140 }}
+            onChange={(value: string) => list.patch({ state: value === "all" ? null : value })}
+            options={STATE_FILTER_OPTIONS}
+          />
+          {filtered ? (
+            <Button color="default" variant="text" onClick={() => list.patch({ q: null, role: null, state: null, scope: null })}>
               重置
             </Button>
           ) : null}
@@ -190,13 +196,10 @@ export function AccountsTab({
           {...table}
           rowKey="id"
           size="middle"
-          dataSource={filtered}
+          dataSource={rows}
           loading={busy}
-          pagination={{
-            pageSize: 10,
-            showSizeChanger: true,
-            showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条 / 共 ${total} 条`,
-          }}
+          pagination={paging.pagination}
+          onChange={paging.onTableChange}
           locale={{
             emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有符合条件的账号" />,
           }}

@@ -24,12 +24,14 @@ import { CheckOutlined, DownloadOutlined, ReloadOutlined, RollbackOutlined, Uplo
 import dayjs from "dayjs";
 import type { UserRole } from "../../shared/types/domain";
 import { confirmAction, IconActionButton, RowActions, type RowAction } from "../components/crud-actions";
-import { useListParams } from "../components/crud-hooks";
+import { useListParams, useServerTable } from "../components/crud-hooks";
 import { FormDrawer } from "../components/crud-drawer";
 import { TableToolbar } from "../components/crud-toolbar";
 import { PageHeader } from "../components/page-header";
 import { dataTable } from "../components/table-layout";
-import { listReportOwnersFor, listReportsFor } from "../lib/reports.server";
+import { pagingOf, sortOf, type Paged } from "../lib/paging";
+import { sortableKeys } from "../lib/paging.server";
+import { DEFAULT_REPORT_SORT, listReportOwnersFor, REPORT_SORTABLE, reportsPage, type ReportFilters } from "../lib/reports.server";
 import { requireUserOrRedirect } from "../lib/ui.server";
 
 type ReportDocTypeLike = "weekly_report" | "summary" | "other";
@@ -90,9 +92,18 @@ const UPLOAD_DOC_TYPE_OPTIONS = [
  */
 export async function loader({ request }: { request: Request }) {
   const user = requireUserOrRedirect(request);
+  const url = new URL(request.url);
+  const filters: ReportFilters = {
+    docType: url.searchParams.get("type") ?? undefined,
+    status: url.searchParams.get("status") ?? undefined,
+    ownerId: url.searchParams.get("owner") ?? undefined,
+  };
+  // 筛选、排序、分页都在服务端（口径见 app/lib/paging.ts）：URL 是唯一真相，loader 只回一页
+  const paging = pagingOf(url.searchParams);
+  const sort = sortOf(url.searchParams, sortableKeys(REPORT_SORTABLE), DEFAULT_REPORT_SORT);
   return {
     user: user as MeLike,
-    reports: listReportsFor(user) as unknown as ReportLike[],
+    reports: reportsPage(user, filters, paging, sort) as unknown as Paged<ReportLike>,
     owners: listReportOwnersFor(user),
   };
 }
@@ -149,16 +160,9 @@ export default function ReportsRoute(): React.ReactElement {
   const type = list.get("type", "all");
   const status = list.get("status", "all");
   const owner = list.get("owner", "all");
-  const rows = useMemo(
-    () =>
-      reports.filter(
-        (report) =>
-          (type === "all" || report.docType === type) &&
-          (status === "all" || report.status === status) &&
-          (owner === "all" || report.ownerId === owner),
-      ),
-    [reports, type, status, owner],
-  );
+  // 类型 / 状态 / 归属人都在服务端过滤（原来是浏览器 filter，服务端分页后会被切页吃掉）
+  const rows = reports.rows;
+  const paging = useServerTable<ReportLike>(reports);
   const ownerOptions = useMemo(
     () => [{ value: "all", label: "全部归属人" }, ...owners.map((item) => ({ value: item.id, label: ownerLabel(user, item) }))],
     [owners, user],
@@ -216,8 +220,8 @@ export default function ReportsRoute(): React.ReactElement {
       dataIndex: "docType",
       key: "docType",
       width: 100,
-      filters: UPLOAD_DOC_TYPE_OPTIONS.map((item) => ({ text: item.label, value: item.value })),
-      onFilter: (value, report) => report.docType === value,
+      // 列上的筛选下拉已删除：文档类型由工具栏的类型筛选器负责（同一字段只留一套说法；
+      // 列筛选只作用于当前页，服务端分页下必然给出错误结果）
       render: (_value, report) => (
         <Tag color="blue" variant="filled">
           {DOC_TYPE_LABEL[report.docType]}
@@ -228,7 +232,9 @@ export default function ReportsRoute(): React.ReactElement {
       title: "周期",
       key: "period",
       width: 200,
-      sorter: (a, b) => a.periodStart.localeCompare(b.periodStart),
+      // 表头排序由服务端做（客户端比较器只能排当前这一页）
+      sorter: true,
+      sortOrder: paging.sortOrderOf("period"),
       render: (_value, report) => `${report.periodStart} ~ ${report.periodEnd}`,
     },
     {
@@ -392,7 +398,7 @@ export default function ReportsRoute(): React.ReactElement {
           <TableToolbar
             extra={
               <Typography.Text type="secondary">
-                共 {reports.length} 份{filtered ? `，筛选出 ${rows.length} 份` : ""}
+                共 {reports.total} 份{filtered ? "（已筛选）" : ""}
               </Typography.Text>
             }
           >
@@ -429,11 +435,8 @@ export default function ReportsRoute(): React.ReactElement {
             size="middle"
             dataSource={rows}
             loading={busy && !uploading}
-            pagination={{
-              pageSize: 10,
-              showSizeChanger: true,
-              showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条 / 共 ${total} 条`,
-            }}
+            pagination={paging.pagination}
+            onChange={paging.onTableChange}
             locale={{
               emptyText: (
                 <Empty

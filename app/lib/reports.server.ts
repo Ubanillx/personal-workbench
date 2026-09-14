@@ -16,6 +16,8 @@ import {
   uploadReportFile,
 } from "./report-storage.server";
 import { assertOrgAccess, assertOrgManage, orgScope } from "./session.server";
+import type { Paged, Paging, SortSpec } from "./paging";
+import { orderOf, pageOf, type SortableColumns } from "./paging.server";
 
 /**
  * 周报域：列表 / 详情 / 建单 / 重传 / 审批 / 退回与文件下载的**唯一实现**，
@@ -55,8 +57,11 @@ export type ReportView = Report;
 /** 周报 + 它所属的组织（组织只用于隔离判定，不对外暴露） */
 export type ScopedReport = { report: ReportView; orgId: string };
 
+/** 周报的 JOIN 来源：服务端分页的 `COUNT(*)` 用它（不能带列清单，见 app/lib/paging.server.ts） */
+const REPORT_SOURCE = `FROM weekly_reports r LEFT JOIN users u ON u.id=r.owner_id`;
+
 /** 旧 report-repository 的列清单，仅补 `r.org_id AS orgId`（排在最后，不进载荷） */
-const SELECT_REPORT = `SELECT r.id,r.owner_id AS ownerId,u.name AS ownerName,r.period_start AS periodStart,r.period_end AS periodEnd,r.doc_type AS docType,r.note,r.status,r.current_version AS currentVersion,r.uploaded_by AS uploadedBy,r.review_note AS reviewNote,r.created_at AS createdAt,r.updated_at AS updatedAt,r.submitted_at AS submittedAt,r.reviewed_at AS reviewedAt,r.returned_at AS returnedAt,r.org_id AS orgId FROM weekly_reports r LEFT JOIN users u ON u.id=r.owner_id`;
+const SELECT_REPORT = `SELECT r.id,r.owner_id AS ownerId,u.name AS ownerName,r.period_start AS periodStart,r.period_end AS periodEnd,r.doc_type AS docType,r.note,r.status,r.current_version AS currentVersion,r.uploaded_by AS uploadedBy,r.review_note AS reviewNote,r.created_at AS createdAt,r.updated_at AS updatedAt,r.submitted_at AS submittedAt,r.reviewed_at AS reviewedAt,r.returned_at AS returnedAt,r.org_id AS orgId ${REPORT_SOURCE}`;
 
 const SELECT_REPORT_FILE = `SELECT id,report_id AS reportId,version,original_name AS originalName,stored_name AS storedName,size_bytes AS sizeBytes,ext,mime_type AS mimeType,uploaded_by AS uploadedBy,uploaded_at AS uploadedAt FROM report_files`;
 
@@ -132,11 +137,69 @@ export function reportVisibilityClauses(user: User): { clauses: string[]; params
   return { clauses, params };
 }
 
+/**
+ * `/reports` 的列表筛选条件（与 URL 参数一一对应）。
+ *
+ * 这三个筛选原来**完全在浏览器里做**（`useMemo` 里 filter）；周报列表改成服务端分页后，
+ * 它们必须落到 SQL，否则「共 12 份」而每页只显示筛完的两三份。
+ */
+export type ReportFilters = {
+  /** 全部 `all` / 具体文档类型 */
+  docType?: string | undefined;
+  /** 全部 `all` / 具体审核状态 */
+  status?: string | undefined;
+  /** 全部 `all` / 具体归属人 id */
+  ownerId?: string | undefined;
+};
+
+/** 筛选条件 → WHERE：`listReportsFor()`（`/api/reports` 要的全量）与 `reportsPage()` 共用这一份 */
+function reportWhere(user: User, filters: ReportFilters): { where: string; params: string[] } {
+  const { clauses, params } = reportVisibilityClauses(user);
+  if (filters.docType && filters.docType !== "all") {
+    clauses.push("r.doc_type=?");
+    params.push(filters.docType);
+  }
+  if (filters.status && filters.status !== "all") {
+    clauses.push("r.status=?");
+    params.push(filters.status);
+  }
+  if (filters.ownerId && filters.ownerId !== "all") {
+    clauses.push("r.owner_id=?");
+    params.push(filters.ownerId);
+  }
+  return { where: clauses.length ? `WHERE ${clauses.join(" AND ")}` : "", params };
+}
+
 /** 周报列表：页面 loader 与 GET /api/reports 共用 */
 export function listReportsFor(user: User): ReportView[] {
-  const { clauses, params } = reportVisibilityClauses(user);
-  const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+  const { where, params } = reportWhere(user, {});
   return rows(db(), `${SELECT_REPORT} ${where} ORDER BY r.updated_at DESC`, ...params).map(toReportView);
+}
+
+/** 周报的排序白名单：列 key 与 `/reports` 列的 `key` 对应（`{dir}` 由方向替换，见 `orderOf`） */
+export const REPORT_SORTABLE: SortableColumns = {
+  ownerName: { column: "u.name" },
+  period: { by: "r.period_start {dir}" },
+  updatedAt: { by: "r.updated_at {dir}" },
+};
+
+/** 默认排序：最近更新在前（与改动前列表的数据序一致） */
+export const DEFAULT_REPORT_SORT: SortSpec = { key: "updatedAt", direction: "desc" };
+
+/** 周报列表的一页（服务端筛选 + 排序 + 分页） */
+export function reportsPage(user: User, filters: ReportFilters, paging: Paging, sort: SortSpec): Paged<ReportView> {
+  const { where, params } = reportWhere(user, filters);
+  return pageOf<ReportView>({
+    database: db(),
+    select: SELECT_REPORT,
+    source: REPORT_SOURCE,
+    where,
+    params,
+    paging,
+    sort,
+    order: orderOf({ sortable: REPORT_SORTABLE, sort, tieBreak: "r.id", id: "r.id" }),
+    map: toReportView,
+  });
 }
 
 /** 取周报及其所属组织：跨组织判定必须先拿到 `org_id`（§14.2） */

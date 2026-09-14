@@ -22,14 +22,24 @@ import {
 import { CheckOutlined, DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined, UndoOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { confirmDanger, RowActions } from "../components/crud-actions";
-import { useCrudFeedback, useListParams } from "../components/crud-hooks";
+import { useCrudFeedback, useListParams, useServerTable } from "../components/crud-hooks";
 import { FormDrawer } from "../components/crud-drawer";
 import { SelectionAlert, TableToolbar } from "../components/crud-toolbar";
 import { PageHeader } from "../components/page-header";
 import { dataTable } from "../components/table-layout";
 import { readPayload } from "../lib/form.server";
 import { listOrganizations } from "../lib/organization.server";
-import { createTodoRecord, deleteTodoRecord, listTodos, updateTodoRecord } from "../lib/todos.server";
+import { pagingOf, sortOf, type Paged } from "../lib/paging";
+import { sortableKeys } from "../lib/paging.server";
+import {
+  createTodoRecord,
+  DEFAULT_TODO_SORT,
+  deleteTodoRecord,
+  TODO_SORTABLE,
+  todosPage,
+  updateTodoRecord,
+  type TodoFilters,
+} from "../lib/todos.server";
 import { requireUserOrRedirect } from "../lib/ui.server";
 
 type TodoRow = {
@@ -80,13 +90,31 @@ const DATE_OPTIONS = [
  */
 export async function loader({ request }: { request: Request }) {
   const user = requireUserOrRedirect(request);
+  const url = new URL(request.url);
   // 组织筛选器只对管理员有意义（D-28），与 /tasks 页的写法一致
-  const orgFilter = user.role === "admin" ? new URL(request.url).searchParams.get("org") : null;
+  const orgFilter = user.role === "admin" ? url.searchParams.get("org") : null;
   const organizations =
     user.role === "admin"
       ? listOrganizations(user).map((org) => ({ id: org.id, name: org.name, status: String(org.status) }) as OrgOption)
       : [];
-  return { items: listTodos(user, orgFilter) as unknown as TodoRow[], organizations, orgFilter: orgFilter ?? "" };
+  // 服务端当天：`?date=today|overdue` 的 SQL 条件与页面上的「逾期」标记共用同一个日期
+  const today = dayjs().format("YYYY-MM-DD");
+  const filters: TodoFilters = {
+    orgFilter,
+    keyword: url.searchParams.get("q") ?? undefined,
+    status: url.searchParams.get("status") ?? undefined,
+    date: url.searchParams.get("date") ?? undefined,
+    today,
+  };
+  // 筛选、排序、分页都在服务端（口径见 app/lib/paging.ts）：URL 是唯一真相，loader 只回一页
+  const paging = pagingOf(url.searchParams);
+  const sort = sortOf(url.searchParams, sortableKeys(TODO_SORTABLE), DEFAULT_TODO_SORT);
+  return {
+    items: todosPage(user, filters, paging, sort) as unknown as Paged<TodoRow>,
+    organizations,
+    orgFilter: orgFilter ?? "",
+    today,
+  };
 }
 
 /**
@@ -181,20 +209,16 @@ export default function TodosRoute(): React.ReactElement {
   // URL 是筛选条件的唯一来源：浏览器前进/后退时输入框跟着回到一致状态
   useEffect(() => setDraftKeyword(keyword), [keyword]);
 
-  const today = dayjs().format("YYYY-MM-DD");
-  const rows = useMemo(
-    () =>
-      data.items.filter((item) => {
-        if (keyword && !item.content.includes(keyword)) return false;
-        const done = Boolean(item.isCompleted);
-        if (status === "open" && done) return false;
-        if (status === "done" && !done) return false;
-        if (dateFilter === "today" && item.todoDate !== today) return false;
-        if (dateFilter === "overdue" && (done || !item.todoDate || item.todoDate >= today)) return false;
-        return true;
-      }),
-    [data.items, keyword, status, dateFilter, today],
-  );
+  const today = data.today;
+  // 关键词 / 完成状态 / 计划日期都在服务端过滤（原来这里是浏览器 filter，服务端分页后会被切页吃掉）
+  const rows = data.items.rows;
+  const paging = useServerTable<TodoRow>(data.items);
+  /**
+   * 勾选只作用于**当前这一页**（见 /tasks 的同名处理）：列表参数一变就清空，
+   * 否则「批量删除选中的 5 条」里会混进看不见的行。
+   */
+  const listSignature = ["q", "status", "date", "org", "page", "size", "sort", "order"].map((key) => list.get(key)).join("|");
+  useEffect(() => setSelectedKeys([]), [listSignature]);
 
   const post = (payload: Record<string, unknown>): void => {
     submit(payload as Parameters<typeof submit>[0], { method: "post", encType: "application/json" });
@@ -210,7 +234,9 @@ export default function TodosRoute(): React.ReactElement {
       title: "待办内容",
       dataIndex: "content",
       key: "content",
-      sorter: (a, b) => a.content.localeCompare(b.content, "zh-Hans-CN"),
+      // 表头排序由服务端做（客户端比较器只能排当前这一页）：`sorter: true` 只画箭头，状态受控于 URL
+      sorter: true,
+      sortOrder: paging.sortOrderOf("content"),
       render: (_value, row) => (
         <Typography.Text delete={Boolean(row.isCompleted)} {...(row.isCompleted ? { type: "secondary" as const } : {})}>
           {row.content}
@@ -222,7 +248,8 @@ export default function TodosRoute(): React.ReactElement {
       dataIndex: "todoDate",
       key: "todoDate",
       width: 150,
-      sorter: (a, b) => String(a.todoDate ?? "").localeCompare(String(b.todoDate ?? "")),
+      sorter: true,
+      sortOrder: paging.sortOrderOf("todoDate"),
       render: (_value, row) => {
         if (!row.todoDate) return <Typography.Text type="secondary">未设置</Typography.Text>;
         const overdue = !row.isCompleted && row.todoDate < today;
@@ -243,11 +270,8 @@ export default function TodosRoute(): React.ReactElement {
       dataIndex: "isCompleted",
       key: "status",
       width: 110,
-      filters: [
-        { text: "未完成", value: "open" },
-        { text: "已完成", value: "done" },
-      ],
-      onFilter: (value, row) => (value === "done" ? Boolean(row.isCompleted) : !row.isCompleted),
+      // 列上的筛选下拉已删除：完成状态由工具栏的 Segmented 负责（同一个字段只留一套说法，
+      // 且列筛选只作用于当前页；服务端分页下它必然给出错误结果）
       render: (_value, row) => (
         <Tag color={row.isCompleted ? "green" : "blue"} variant="filled">
           {/* 状态词与筛选器、编辑表单逐字一致（D-46 的用词约定：同一个字段只有一套说法） */}
@@ -260,7 +284,8 @@ export default function TodosRoute(): React.ReactElement {
       dataIndex: "updatedAt",
       key: "updatedAt",
       width: 170,
-      sorter: (a, b) => a.updatedAt.localeCompare(b.updatedAt),
+      sorter: true,
+      sortOrder: paging.sortOrderOf("updatedAt"),
       render: (_value, row) => <Typography.Text type="secondary">{dayjs(row.updatedAt).format("MM-DD HH:mm")}</Typography.Text>,
     },
     // 「所属组织」列只对管理员渲染：新建表单里就有这个字段（管理员必须选），列表里也就必须看得见（D-47）
@@ -346,7 +371,7 @@ export default function TodosRoute(): React.ReactElement {
           <TableToolbar
             extra={
               <Typography.Text type="secondary">
-                共 {rows.length} 条{filtered ? `（总计 ${data.items.length} 条）` : ""}
+                共 {data.items.total} 条{filtered ? "（已筛选）" : ""}
               </Typography.Text>
             }
           >
@@ -419,14 +444,10 @@ export default function TodosRoute(): React.ReactElement {
             loading={busy}
             rowSelection={{
               selectedRowKeys: selectedKeys,
-              preserveSelectedRowKeys: true,
               onChange: (keys) => setSelectedKeys(keys),
             }}
-            pagination={{
-              pageSize: 10,
-              showSizeChanger: true,
-              showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条 / 共 ${total} 条`,
-            }}
+            pagination={paging.pagination}
+            onChange={paging.onTableChange}
             locale={{
               emptyText: (
                 <Empty
