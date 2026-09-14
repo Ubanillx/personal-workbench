@@ -10,7 +10,7 @@
 | `app/`                      | **应用主体**：路由、页面、SSR 外壳、`/api` 资源路由、共享服务（`lib/`）         | 唯一的 UI + API 层                       |
 | `server/src/`               | 框架无关的服务端层：SQLite 客户端/迁移/备份、账号密码与会话安全、配置、CLI      | 不依赖 React Router，可被独立测试        |
 | `shared/`                   | 前后端共享的领域类型（仅类型，无运行时逻辑）                                    | 迁移后只剩 `types/domain.ts`             |
-| `tools/contract/`           | 契约工具与验收工具：夹具库（3 组织 / 8 账号）、311 条用例、录制、回放、SSR 冒烟 | `npm test` 的主要执行体                  |
+| `tools/contract/`           | 契约工具与验收工具：夹具库（3 组织 / 8 账号）、378 条用例、录制、回放、SSR 冒烟 | `npm test` 的主要执行体                  |
 | `test/`                     | 数据层测试（密码/账号/迁移/备份/自举）+ WebDAV 客户端 + 注册登录改密端到端      | 8 个测试文件                             |
 | `build/`                    | 生产构建产物（客户端 + SSR）                                                    | 构建生成，可安全删除                     |
 | `.react-router/`            | RR8 生成的类型（`+types/*`）                                                    | 构建生成，可安全删除                     |
@@ -82,7 +82,7 @@ React Router 8（单进程，react-router-serve 监听 17500）
 ## 权限模型（三角色 + 组织隔离）
 
 角色在 `users.role` 上：**admin**（全局管理员，不隶属组织）、**manager**（组织管理者）、**member**（组织成员）。
-业务数据带 `org_id`，可见范围先按组织切、再按角色切。完整矩阵与八条不变式见
+业务数据带 `org_id`，可见范围先按组织切、再按角色切。完整矩阵与不变式清单见
 [`ACCOUNTS_AND_ORGS.md`](ACCOUNTS_AND_ORGS.md) §4，这里只留速查：
 
 | 能力                           | `admin`                       | `manager`                         | `member`                     |
@@ -94,7 +94,8 @@ React Router 8（单进程，react-router-serve 监听 17500）
 | 启用停用成员、改成员角色       | ✅（不能动 admin）            | ✅ 仅本组织                       | ❌                           |
 | 任务：查看                     | 全部组织（带筛选器）          | 本组织全部                        | 本组织全部非私密任务         |
 | 任务：创建并指派负责人         | ✅ 任意组织任意人             | ✅ 本组织                         | 只能建给自己的               |
-| 任务：改元信息/审批/退回/归档  | ✅                            | ✅ 本组织（看不见的私密任务除外） | ❌                           |
+| 任务：改元信息/归档/删除       | ✅                            | ✅ 本组织（看不见的私密任务除外） | ❌                           |
+| 任务：**验收（通过 / 退回）**  | 发布人（其余情况兜底）        | **仅自己发布的**（D-57）          | ❌                           |
 | 私密任务（`is_private=1`）     | ✅ 全部                       | **发布人或负责人才可见**          | **发布人或负责人才可见**     |
 | 待办 / 随手记                  | 仅自己的                      | 仅自己的                          | 仅自己的                     |
 | 周报：查看                     | ✅ 全部                       | ✅ 本组织全部                     | ✅ 本组织全部                |
@@ -106,8 +107,8 @@ React Router 8（单进程，react-router-serve 监听 17500）
 | 企微导入（在「任务进展」页内） | ✅                            | ✅ 本组织                         | ✅ 限自己                    |
 | 备份 / CLI / 改任何人的密码    | 只能在本机用 CLI              | ❌                                | ❌                           |
 
-> 上表是 **D-54 / D-55（2026-09-14）之后**的口径。逐条差异与判据落点见
-> [`ACCOUNTS_AND_ORGS.md`](ACCOUNTS_AND_ORGS.md) §4、§23 与 §24。
+> 上表是 **D-54 / D-55 / D-57（2026-09-14）之后**的口径。逐条差异与判据落点见
+> [`ACCOUNTS_AND_ORGS.md`](ACCOUNTS_AND_ORGS.md) §4、§23、§24 与 §25。
 > 「重要文件」的两个可见范围：`org`（默认，组织内公开）与 `private`（创建人 + 本组织管理员）。
 
 补充规则：
@@ -118,6 +119,10 @@ React Router 8（单进程，react-router-serve 监听 17500）
   不允许出现「列表里看不见、接口里改得动」。
 - **任务状态不能通过 `PATCH` 改**：`progress`/`status` 返回 `FIELD_FORBIDDEN`，必须走
   `progress` / `submit-review` / `approve` / `return`，保证状态机与通知一致。
+- **任务验收权归发布人**（D-57）：`approve` / `return` 要求「当前账号 = `tasks.created_by`」
+  （全局管理员兜底），**任务的负责人永远不能验收自己负责的任务**。判据是
+  [`app/lib/task-permissions.ts`](mdc:app/lib/task-permissions.ts) 的 `canReviewTask()`，
+  服务端与页面共用同一份；`100%` 是否进待验收也按「有没有第二方」（`created_by` 是不是自己）判定。
 - 组织里**最后一个 `manager`** 不能被停用、退出或降级；`admin` 不能把自己降级（只能本机 CLI 恢复）。
 
 ## API 清单（66）
@@ -188,8 +193,8 @@ React Router 8（单进程，react-router-serve 监听 17500）
 | DELETE | `/api/tasks/:id`               | 删除                                             |
 | POST   | `/api/tasks/:id/progress`      | 汇报进度                                         |
 | POST   | `/api/tasks/:id/submit-review` | 提交验收                                         |
-| POST   | `/api/tasks/:id/approve`       | 验收通过（管理者）                               |
-| POST   | `/api/tasks/:id/return`        | 退回（管理者）                                   |
+| POST   | `/api/tasks/:id/approve`       | 验收通过（**任务的发布人**，管理员兜底；D-57）   |
+| POST   | `/api/tasks/:id/return`        | 退回（同上，与通过同一道门）                     |
 | POST   | `/api/tasks/:id/archive`       | 归档                                             |
 | POST   | `/api/tasks/:id/restore`       | 恢复归档                                         |
 | GET    | `/api/tasks/:id/comments`      | 评论列表                                         |

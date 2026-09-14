@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { TaskStatus } from "../../shared/types/domain";
 import { clamp, date, db, flag, now, one, ownerIdOf, priority, rows, run, type User } from "./db.server";
 import { assertOrgAccess, orgIsActive } from "./session.server";
+import { canReviewTask } from "./task-permissions";
 import {
   canManageTasks,
   canView,
@@ -217,12 +218,17 @@ export function reportProgress(user: User, id: string, body: Record<string, unkn
   const current = located.task;
   if (current.archivedAt) return failed("ARCHIVED", "请先恢复归档任务", 400);
   if (current.ownerId !== user.id) return failed("FORBIDDEN", "只能更新自己负责的任务", 403);
-  if (current.status === "pending_review") return failed("INVALID_STATE", "任务已提交验收，请等待管理员或组织管理者处理", 400);
+  if (current.status === "pending_review") return failed("INVALID_STATE", "任务已提交验收，请等待任务发布人处理", 400);
   if (current.status === "completed") return failed("INVALID_STATE", "已完成任务不能再更新进度", 400);
   const p = clamp(body.progress);
-  // 管理员与组织管理者是验收方：自己负责的任务到 100% 直接完成；普通成员进入待验收（§14.3）
-  const status: TaskStatus =
-    user.role === "member" && p >= 100 ? "pending_review" : p >= 100 ? "completed" : p > 0 ? "in_progress" : "todo";
+  /**
+   * 100% 之后走不走验收，看的是**「有没有第二方需要验收」**（D-57），不是执行者的角色：
+   * - `created_by !== 我`：这条任务是别人发布给我的 → `pending_review`，等发布人验收；
+   * - `created_by === 我`：自己发布给自己做的（成员只能建给自己的任务就是这样）→ 直接完成。
+   *   旧口径按角色分成「member 进待验收 / 管理者直接完成」，结果是「谁执行」决定了「谁来验收」，
+   *   而验收权已经收敛到发布人，这两种情况都没有第二个验收人，只能自己结掉。
+   */
+  const status: TaskStatus = p >= 100 ? (current.createdBy === user.id ? "completed" : "pending_review") : p > 0 ? "in_progress" : "todo";
   const stamp = now();
   run(
     database,
@@ -255,6 +261,9 @@ export function submitReview(user: User, id: string, note: string): ServiceResul
   if (task.archivedAt) return failed("ARCHIVED", "请先恢复归档任务", 400);
   if (task.ownerId !== user.id) return failed("FORBIDDEN", "只有任务负责人可以提交验收", 403);
   if (task.status === "pending_review") return done(task);
+  // 已完成的任务不能靠提交验收「复活」成待验收：100% 后由 `reportProgress` 定局的终态就是终态，
+  // 否则负责人可以把一条已验收通过的任务拉回待验收，绕着状态机再走一遍（D-57）
+  if (task.status === "completed") return failed("INVALID_STATE", "已完成任务不能再提交验收", 400);
   if (task.progress < 100) return failed("VALIDATION_ERROR", "进度达到100%后才能提交验收", 400);
   run(database, "UPDATE tasks SET status='pending_review',updated_at=? WHERE id=?", now(), id);
   event(database, id, user, "task_submitted", note);
@@ -269,6 +278,8 @@ export function approveTask(user: User, id: string, note: string): ServiceResult
   const located = viewable(user, id);
   if (!located.ok) return located.failure;
   const task = located.task;
+  // 验收权归**发布人**（D-57）：只判角色会让任务的负责人自己把任务验收通过，见 canReviewTask
+  if (!canReviewTask(user, task)) return failed("FORBIDDEN", "只有任务发布人可以验收该任务", 403);
   if (task.archivedAt) return failed("ARCHIVED", "请先恢复归档任务", 400);
   if (task.status !== "pending_review") return failed("INVALID_STATE", "只有待验收任务可以通过", 400);
   const stamp = now();
@@ -285,6 +296,8 @@ export function returnTask(user: User, id: string, body: Record<string, unknown>
   const located = viewable(user, id);
   if (!located.ok) return located.failure;
   const task = located.task;
+  // 「退回」与「通过」是同一个验收动作的两面：同一条判据，不能一个收一个放（D-57）
+  if (!canReviewTask(user, task)) return failed("FORBIDDEN", "只有任务发布人可以退回该任务", 403);
   if (task.archivedAt) return failed("ARCHIVED", "请先恢复归档任务", 400);
   if (task.status !== "pending_review") return failed("INVALID_STATE", "只有待验收任务可以退回", 400);
   const p = Math.min(task.progress, 99);

@@ -3,7 +3,11 @@ import { fail, ok } from "../lib/http.server";
 import { requireManager } from "../lib/session.server";
 import { approveTask } from "../lib/task-service.server";
 
-/** POST /api/tasks/:id/approve —— 管理员或组织管理者验收；逻辑在 app/lib/task-service.server.ts */
+/**
+ * POST /api/tasks/:id/approve —— 任务**发布人**验收（全局管理员兜底）。
+ * 这里只判角色（`requireManager`），「是不是这条任务的发布人、是不是负责人」由服务层的
+ * `canReviewTask()` 判定；逻辑在 app/lib/task-service.server.ts
+ */
 export async function action({ request, params }: { request: Request; params: { id?: string } }): Promise<Response> {
   const auth = requireManager(request, appConfig().sessionCookieName);
   if (!auth.ok) return auth.response;

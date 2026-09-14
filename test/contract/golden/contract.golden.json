@@ -1,9 +1,9 @@
 {
   "meta": {
-    "generatedAt": "2026-09-14T07:44:08.214Z",
+    "generatedAt": "2026-09-14T09:38:41.461Z",
     "entry": "npm run serve",
-    "node": "24.9.0",
-    "caseCount": 369
+    "node": "24.19.0",
+    "caseCount": 378
   },
   "responses": [
     {
@@ -6095,6 +6095,57 @@
       }
     },
     {
+      "name": "tasks.create.admin.for-manager",
+      "role": "admin",
+      "request": {
+        "method": "POST",
+        "path": "/api/tasks",
+        "body": {
+          "title": "契约-管理员派给管理者的任务",
+          "orgId": "org-alpha",
+          "ownerId": "user-manager-a",
+          "priority": "P1"
+        }
+      },
+      "status": 201,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "id": "<uuid>",
+          "title": "契约-管理员派给管理者的任务",
+          "description": "",
+          "priority": "P1",
+          "status": "todo",
+          "progress": 0,
+          "dueDate": null,
+          "ownerId": "user-manager-a",
+          "createdBy": "user-admin",
+          "source": "manual",
+          "isPrivate": false,
+          "createdAt": "<ts>",
+          "updatedAt": "<ts>",
+          "completedAt": null,
+          "archivedAt": null,
+          "orgId": "org-alpha",
+          "orgName": "阿尔法组",
+          "ownerName": "阿尔法管理者",
+          "ownerRole": "manager"
+        }
+      }
+    },
+    {
       "name": "tasks.create.managerA",
       "role": "managerA",
       "request": {
@@ -7329,8 +7380,39 @@
       }
     },
     {
-      "name": "tasks.approve.managerA",
+      "name": "tasks.approve.managerA.not-publisher",
       "role": "managerA",
+      "request": {
+        "method": "POST",
+        "path": "/api/tasks/<uuid>/approve",
+        "body": {
+          "note": "越权验收"
+        }
+      },
+      "status": 403,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "FORBIDDEN",
+          "message": "只有任务发布人可以验收该任务"
+        }
+      }
+    },
+    {
+      "name": "tasks.approve.admin.publisher",
+      "role": "admin",
       "request": {
         "method": "POST",
         "path": "/api/tasks/<uuid>/approve",
@@ -7531,6 +7613,291 @@
           "orgId": "org-alpha",
           "orgName": "阿尔法组",
           "ownerName": "阿尔法成员乙",
+          "ownerRole": "member"
+        }
+      }
+    },
+    {
+      "name": "tasks.approve.managerA",
+      "role": "managerA",
+      "request": {
+        "method": "POST",
+        "path": "/api/tasks/t-review/approve",
+        "body": {
+          "note": "验收通过"
+        }
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "id": "t-review",
+          "title": "待验收任务",
+          "description": "",
+          "priority": "P1",
+          "status": "completed",
+          "progress": 100,
+          "dueDate": "2026-09-30",
+          "ownerId": "user-member-a",
+          "createdBy": "user-manager-a",
+          "source": "manual",
+          "isPrivate": false,
+          "createdAt": "<ts>",
+          "updatedAt": "<ts>",
+          "completedAt": "<ts>",
+          "archivedAt": null,
+          "orgId": "org-alpha",
+          "orgName": "阿尔法组",
+          "ownerName": "阿尔法成员甲",
+          "ownerRole": "member"
+        }
+      }
+    },
+    {
+      "name": "tasks.progress.managerA.executor",
+      "role": "managerA",
+      "request": {
+        "method": "POST",
+        "path": "/api/tasks/<uuid>/progress",
+        "body": {
+          "progress": 100,
+          "note": "管理者做完了"
+        }
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "id": "<uuid>",
+          "title": "契约-管理员派给管理者的任务",
+          "description": "",
+          "priority": "P1",
+          "status": "pending_review",
+          "progress": 100,
+          "dueDate": null,
+          "ownerId": "user-manager-a",
+          "createdBy": "user-admin",
+          "source": "manual",
+          "isPrivate": false,
+          "createdAt": "<ts>",
+          "updatedAt": "<ts>",
+          "completedAt": null,
+          "archivedAt": null,
+          "orgId": "org-alpha",
+          "orgName": "阿尔法组",
+          "ownerName": "阿尔法管理者",
+          "ownerRole": "manager"
+        }
+      }
+    },
+    {
+      "name": "tasks.approve.managerA.executor",
+      "role": "managerA",
+      "request": {
+        "method": "POST",
+        "path": "/api/tasks/<uuid>/approve",
+        "body": {
+          "note": "自己验收自己"
+        }
+      },
+      "status": 403,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "FORBIDDEN",
+          "message": "只有任务发布人可以验收该任务"
+        }
+      }
+    },
+    {
+      "name": "tasks.return.managerA.executor",
+      "role": "managerA",
+      "request": {
+        "method": "POST",
+        "path": "/api/tasks/<uuid>/return",
+        "body": {
+          "note": "自己退回自己"
+        }
+      },
+      "status": 403,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "FORBIDDEN",
+          "message": "只有任务发布人可以退回该任务"
+        }
+      }
+    },
+    {
+      "name": "tasks.approve.admin",
+      "role": "admin",
+      "request": {
+        "method": "POST",
+        "path": "/api/tasks/<uuid>/approve",
+        "body": {
+          "note": "管理员验收"
+        }
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "id": "<uuid>",
+          "title": "契约-管理员派给管理者的任务",
+          "description": "",
+          "priority": "P1",
+          "status": "completed",
+          "progress": 100,
+          "dueDate": null,
+          "ownerId": "user-manager-a",
+          "createdBy": "user-admin",
+          "source": "manual",
+          "isPrivate": false,
+          "createdAt": "<ts>",
+          "updatedAt": "<ts>",
+          "completedAt": "<ts>",
+          "archivedAt": null,
+          "orgId": "org-alpha",
+          "orgName": "阿尔法组",
+          "ownerName": "阿尔法管理者",
+          "ownerRole": "manager"
+        }
+      }
+    },
+    {
+      "name": "tasks.submit-review.managerA.completed",
+      "role": "managerA",
+      "request": {
+        "method": "POST",
+        "path": "/api/tasks/<uuid>/submit-review",
+        "body": {}
+      },
+      "status": 400,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "INVALID_STATE",
+          "message": "已完成任务不能再提交验收"
+        }
+      }
+    },
+    {
+      "name": "tasks.progress.memberA.own-task",
+      "role": "memberA",
+      "request": {
+        "method": "POST",
+        "path": "/api/tasks/<uuid>/progress",
+        "body": {
+          "progress": 100,
+          "note": "自己的活自己结"
+        }
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "id": "<uuid>",
+          "title": "契约-成员甲建任务",
+          "description": "",
+          "priority": "P1",
+          "status": "completed",
+          "progress": 100,
+          "dueDate": null,
+          "ownerId": "user-member-a",
+          "createdBy": "user-member-a",
+          "source": "manual",
+          "isPrivate": false,
+          "createdAt": "<ts>",
+          "updatedAt": "<ts>",
+          "completedAt": "<ts>",
+          "archivedAt": null,
+          "orgId": "org-alpha",
+          "orgName": "阿尔法组",
+          "ownerName": "阿尔法成员甲",
           "ownerRole": "member"
         }
       }
@@ -8782,7 +9149,47 @@
       },
       "body": {
         "ok": true,
-        "data": []
+        "data": [
+          {
+            "id": "<uuid>",
+            "recipientId": "user-admin",
+            "actorId": "user-manager-a",
+            "taskId": "<uuid>",
+            "reportId": null,
+            "eventType": "task_submitted",
+            "title": "任务待验收",
+            "message": "阿尔法管理者 更新了任务“契约-管理员派给管理者的任务”",
+            "isRead": 0,
+            "createdAt": "<ts>",
+            "readAt": null
+          },
+          {
+            "id": "<uuid>",
+            "recipientId": "user-admin",
+            "actorId": "user-member-a",
+            "taskId": "<uuid>",
+            "reportId": null,
+            "eventType": "task_submitted",
+            "title": "任务待验收",
+            "message": "阿尔法成员甲 更新了任务“契约-改名”",
+            "isRead": 0,
+            "createdAt": "<ts>",
+            "readAt": null
+          },
+          {
+            "id": "<uuid>",
+            "recipientId": "user-admin",
+            "actorId": "user-member-a",
+            "taskId": "<uuid>",
+            "reportId": null,
+            "eventType": "task_progress",
+            "title": "任务进度更新",
+            "message": "阿尔法成员甲 更新了任务“契约-改名”",
+            "isRead": 0,
+            "createdAt": "<ts>",
+            "readAt": null
+          }
+        ]
       }
     },
     {
@@ -8825,6 +9232,19 @@
             "id": "<uuid>",
             "recipientId": "user-member-a",
             "actorId": "user-manager-a",
+            "taskId": "t-review",
+            "reportId": null,
+            "eventType": "task_approved",
+            "title": "任务验收通过",
+            "message": "任务“待验收任务”已通过验收",
+            "isRead": 0,
+            "createdAt": "<ts>",
+            "readAt": null
+          },
+          {
+            "id": "<uuid>",
+            "recipientId": "user-member-a",
+            "actorId": "user-admin",
             "taskId": "<uuid>",
             "reportId": null,
             "eventType": "task_approved",
@@ -8942,6 +9362,19 @@
             "id": "<uuid>",
             "recipientId": "user-member-a",
             "actorId": "user-manager-a",
+            "taskId": "t-review",
+            "reportId": null,
+            "eventType": "task_approved",
+            "title": "任务验收通过",
+            "message": "任务“待验收任务”已通过验收",
+            "isRead": 0,
+            "createdAt": "<ts>",
+            "readAt": null
+          },
+          {
+            "id": "<uuid>",
+            "recipientId": "user-member-a",
+            "actorId": "user-admin",
             "taskId": "<uuid>",
             "reportId": null,
             "eventType": "task_approved",
@@ -9283,6 +9716,69 @@
             },
             {
               "id": "<uuid>",
+              "title": "契约-成员甲建任务",
+              "description": "",
+              "priority": "P1",
+              "status": "completed",
+              "progress": 100,
+              "dueDate": null,
+              "ownerId": "user-member-a",
+              "createdBy": "user-member-a",
+              "source": "manual",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": "<ts>",
+              "archivedAt": null,
+              "orgId": "org-alpha",
+              "orgName": "阿尔法组",
+              "ownerName": "阿尔法成员甲",
+              "ownerRole": "member"
+            },
+            {
+              "id": "<uuid>",
+              "title": "契约-管理员派给管理者的任务",
+              "description": "",
+              "priority": "P1",
+              "status": "completed",
+              "progress": 100,
+              "dueDate": null,
+              "ownerId": "user-manager-a",
+              "createdBy": "user-admin",
+              "source": "manual",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": "<ts>",
+              "archivedAt": null,
+              "orgId": "org-alpha",
+              "orgName": "阿尔法组",
+              "ownerName": "阿尔法管理者",
+              "ownerRole": "manager"
+            },
+            {
+              "id": "t-review",
+              "title": "待验收任务",
+              "description": "",
+              "priority": "P1",
+              "status": "completed",
+              "progress": 100,
+              "dueDate": "2026-09-30",
+              "ownerId": "user-member-a",
+              "createdBy": "user-manager-a",
+              "source": "manual",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": "<ts>",
+              "archivedAt": null,
+              "orgId": "org-alpha",
+              "orgName": "阿尔法组",
+              "ownerName": "阿尔法成员甲",
+              "ownerRole": "member"
+            },
+            {
+              "id": "<uuid>",
               "title": "契约-管理者建任务",
               "description": "",
               "priority": "P1",
@@ -9409,27 +9905,6 @@
             },
             {
               "id": "<uuid>",
-              "title": "契约-成员甲建任务",
-              "description": "",
-              "priority": "P1",
-              "status": "todo",
-              "progress": 0,
-              "dueDate": null,
-              "ownerId": "user-member-a",
-              "createdBy": "user-member-a",
-              "source": "manual",
-              "isPrivate": false,
-              "createdAt": "<ts>",
-              "updatedAt": "<ts>",
-              "completedAt": null,
-              "archivedAt": null,
-              "orgId": "org-alpha",
-              "orgName": "阿尔法组",
-              "ownerName": "阿尔法成员甲",
-              "ownerRole": "member"
-            },
-            {
-              "id": "<uuid>",
               "title": "契约-派给成员乙的私密任务",
               "description": "",
               "priority": "P1",
@@ -9477,27 +9952,6 @@
               "priority": "P0",
               "status": "in_progress",
               "progress": 40,
-              "dueDate": "2026-09-30",
-              "ownerId": "user-member-a",
-              "createdBy": "user-manager-a",
-              "source": "manual",
-              "isPrivate": false,
-              "createdAt": "<ts>",
-              "updatedAt": "<ts>",
-              "completedAt": null,
-              "archivedAt": null,
-              "orgId": "org-alpha",
-              "orgName": "阿尔法组",
-              "ownerName": "阿尔法成员甲",
-              "ownerRole": "member"
-            },
-            {
-              "id": "t-review",
-              "title": "待验收任务",
-              "description": "",
-              "priority": "P1",
-              "status": "pending_review",
-              "progress": 100,
               "dueDate": "2026-09-30",
               "ownerId": "user-member-a",
               "createdBy": "user-manager-a",
@@ -9598,11 +10052,11 @@
             }
           ],
           "summary": {
-            "total": 16,
-            "completed": 2,
-            "active": 14,
+            "total": 17,
+            "completed": 5,
+            "active": 12,
             "overdue": 1,
-            "completionRate": 13
+            "completionRate": 29
           }
         }
       }
@@ -9630,33 +10084,11 @@
       "body": {
         "ok": true,
         "data": {
-          "tasks": [
-            {
-              "id": "t-review",
-              "title": "待验收任务",
-              "description": "",
-              "priority": "P1",
-              "status": "pending_review",
-              "progress": 100,
-              "dueDate": "2026-09-30",
-              "ownerId": "user-member-a",
-              "createdBy": "user-manager-a",
-              "source": "manual",
-              "isPrivate": false,
-              "createdAt": "<ts>",
-              "updatedAt": "<ts>",
-              "completedAt": null,
-              "archivedAt": null,
-              "orgId": "org-alpha",
-              "orgName": "阿尔法组",
-              "ownerName": "阿尔法成员甲",
-              "ownerRole": "member"
-            }
-          ],
+          "tasks": [],
           "summary": {
-            "total": 1,
+            "total": 0,
             "completed": 0,
-            "active": 1,
+            "active": 0,
             "overdue": 0,
             "completionRate": 0
           }
@@ -9710,6 +10142,69 @@
             },
             {
               "id": "<uuid>",
+              "title": "契约-成员甲建任务",
+              "description": "",
+              "priority": "P1",
+              "status": "completed",
+              "progress": 100,
+              "dueDate": null,
+              "ownerId": "user-member-a",
+              "createdBy": "user-member-a",
+              "source": "manual",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": "<ts>",
+              "archivedAt": null,
+              "orgId": "org-alpha",
+              "orgName": "阿尔法组",
+              "ownerName": "阿尔法成员甲",
+              "ownerRole": "member"
+            },
+            {
+              "id": "<uuid>",
+              "title": "契约-管理员派给管理者的任务",
+              "description": "",
+              "priority": "P1",
+              "status": "completed",
+              "progress": 100,
+              "dueDate": null,
+              "ownerId": "user-manager-a",
+              "createdBy": "user-admin",
+              "source": "manual",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": "<ts>",
+              "archivedAt": null,
+              "orgId": "org-alpha",
+              "orgName": "阿尔法组",
+              "ownerName": "阿尔法管理者",
+              "ownerRole": "manager"
+            },
+            {
+              "id": "t-review",
+              "title": "待验收任务",
+              "description": "",
+              "priority": "P1",
+              "status": "completed",
+              "progress": 100,
+              "dueDate": "2026-09-30",
+              "ownerId": "user-member-a",
+              "createdBy": "user-manager-a",
+              "source": "manual",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": "<ts>",
+              "archivedAt": null,
+              "orgId": "org-alpha",
+              "orgName": "阿尔法组",
+              "ownerName": "阿尔法成员甲",
+              "ownerRole": "member"
+            },
+            {
+              "id": "<uuid>",
               "title": "契约-管理者建任务",
               "description": "",
               "priority": "P1",
@@ -9836,27 +10331,6 @@
             },
             {
               "id": "<uuid>",
-              "title": "契约-成员甲建任务",
-              "description": "",
-              "priority": "P1",
-              "status": "todo",
-              "progress": 0,
-              "dueDate": null,
-              "ownerId": "user-member-a",
-              "createdBy": "user-member-a",
-              "source": "manual",
-              "isPrivate": false,
-              "createdAt": "<ts>",
-              "updatedAt": "<ts>",
-              "completedAt": null,
-              "archivedAt": null,
-              "orgId": "org-alpha",
-              "orgName": "阿尔法组",
-              "ownerName": "阿尔法成员甲",
-              "ownerRole": "member"
-            },
-            {
-              "id": "<uuid>",
               "title": "契约-派给成员乙的私密任务",
               "description": "",
               "priority": "P1",
@@ -9904,27 +10378,6 @@
               "priority": "P0",
               "status": "in_progress",
               "progress": 40,
-              "dueDate": "2026-09-30",
-              "ownerId": "user-member-a",
-              "createdBy": "user-manager-a",
-              "source": "manual",
-              "isPrivate": false,
-              "createdAt": "<ts>",
-              "updatedAt": "<ts>",
-              "completedAt": null,
-              "archivedAt": null,
-              "orgId": "org-alpha",
-              "orgName": "阿尔法组",
-              "ownerName": "阿尔法成员甲",
-              "ownerRole": "member"
-            },
-            {
-              "id": "t-review",
-              "title": "待验收任务",
-              "description": "",
-              "priority": "P1",
-              "status": "pending_review",
-              "progress": 100,
               "dueDate": "2026-09-30",
               "ownerId": "user-member-a",
               "createdBy": "user-manager-a",
@@ -10025,11 +10478,11 @@
             }
           ],
           "summary": {
-            "total": 16,
-            "completed": 2,
-            "active": 14,
+            "total": 17,
+            "completed": 5,
+            "active": 12,
             "overdue": 1,
-            "completionRate": 13
+            "completionRate": 29
           }
         }
       }
@@ -10158,6 +10611,69 @@
             },
             {
               "id": "<uuid>",
+              "title": "契约-成员甲建任务",
+              "description": "",
+              "priority": "P1",
+              "status": "completed",
+              "progress": 100,
+              "dueDate": null,
+              "ownerId": "user-member-a",
+              "createdBy": "user-member-a",
+              "source": "manual",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": "<ts>",
+              "archivedAt": null,
+              "orgId": "org-alpha",
+              "orgName": "阿尔法组",
+              "ownerName": "阿尔法成员甲",
+              "ownerRole": "member"
+            },
+            {
+              "id": "<uuid>",
+              "title": "契约-管理员派给管理者的任务",
+              "description": "",
+              "priority": "P1",
+              "status": "completed",
+              "progress": 100,
+              "dueDate": null,
+              "ownerId": "user-manager-a",
+              "createdBy": "user-admin",
+              "source": "manual",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": "<ts>",
+              "archivedAt": null,
+              "orgId": "org-alpha",
+              "orgName": "阿尔法组",
+              "ownerName": "阿尔法管理者",
+              "ownerRole": "manager"
+            },
+            {
+              "id": "t-review",
+              "title": "待验收任务",
+              "description": "",
+              "priority": "P1",
+              "status": "completed",
+              "progress": 100,
+              "dueDate": "2026-09-30",
+              "ownerId": "user-member-a",
+              "createdBy": "user-manager-a",
+              "source": "manual",
+              "isPrivate": false,
+              "createdAt": "<ts>",
+              "updatedAt": "<ts>",
+              "completedAt": "<ts>",
+              "archivedAt": null,
+              "orgId": "org-alpha",
+              "orgName": "阿尔法组",
+              "ownerName": "阿尔法成员甲",
+              "ownerRole": "member"
+            },
+            {
+              "id": "<uuid>",
               "title": "契约-管理者建任务",
               "description": "",
               "priority": "P1",
@@ -10263,27 +10779,6 @@
             },
             {
               "id": "<uuid>",
-              "title": "契约-成员甲建任务",
-              "description": "",
-              "priority": "P1",
-              "status": "todo",
-              "progress": 0,
-              "dueDate": null,
-              "ownerId": "user-member-a",
-              "createdBy": "user-member-a",
-              "source": "manual",
-              "isPrivate": false,
-              "createdAt": "<ts>",
-              "updatedAt": "<ts>",
-              "completedAt": null,
-              "archivedAt": null,
-              "orgId": "org-alpha",
-              "orgName": "阿尔法组",
-              "ownerName": "阿尔法成员甲",
-              "ownerRole": "member"
-            },
-            {
-              "id": "<uuid>",
               "title": "契约-派给成员乙的私密任务",
               "description": "",
               "priority": "P1",
@@ -10331,27 +10826,6 @@
               "priority": "P0",
               "status": "in_progress",
               "progress": 40,
-              "dueDate": "2026-09-30",
-              "ownerId": "user-member-a",
-              "createdBy": "user-manager-a",
-              "source": "manual",
-              "isPrivate": false,
-              "createdAt": "<ts>",
-              "updatedAt": "<ts>",
-              "completedAt": null,
-              "archivedAt": null,
-              "orgId": "org-alpha",
-              "orgName": "阿尔法组",
-              "ownerName": "阿尔法成员甲",
-              "ownerRole": "member"
-            },
-            {
-              "id": "t-review",
-              "title": "待验收任务",
-              "description": "",
-              "priority": "P1",
-              "status": "pending_review",
-              "progress": 100,
               "dueDate": "2026-09-30",
               "ownerId": "user-member-a",
               "createdBy": "user-manager-a",
@@ -10431,11 +10905,11 @@
             }
           ],
           "summary": {
-            "total": 14,
-            "completed": 2,
-            "active": 12,
+            "total": 15,
+            "completed": 5,
+            "active": 10,
             "overdue": 1,
-            "completionRate": 14
+            "completionRate": 33
           }
         }
       }
@@ -16634,6 +17108,69 @@
           },
           {
             "id": "<uuid>",
+            "title": "契约-成员甲建任务",
+            "description": "",
+            "priority": "P1",
+            "status": "completed",
+            "progress": 100,
+            "dueDate": null,
+            "ownerId": "user-member-a",
+            "createdBy": "user-member-a",
+            "source": "manual",
+            "isPrivate": false,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "completedAt": "<ts>",
+            "archivedAt": null,
+            "orgId": "org-alpha",
+            "orgName": "阿尔法组",
+            "ownerName": "阿尔法成员甲",
+            "ownerRole": "member"
+          },
+          {
+            "id": "<uuid>",
+            "title": "契约-管理员派给管理者的任务",
+            "description": "",
+            "priority": "P1",
+            "status": "completed",
+            "progress": 100,
+            "dueDate": null,
+            "ownerId": "user-manager-a",
+            "createdBy": "user-admin",
+            "source": "manual",
+            "isPrivate": false,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "completedAt": "<ts>",
+            "archivedAt": null,
+            "orgId": "org-alpha",
+            "orgName": "阿尔法组",
+            "ownerName": "阿尔法管理者",
+            "ownerRole": "manager"
+          },
+          {
+            "id": "t-review",
+            "title": "待验收任务",
+            "description": "",
+            "priority": "P1",
+            "status": "completed",
+            "progress": 100,
+            "dueDate": "2026-09-30",
+            "ownerId": "user-member-a",
+            "createdBy": "user-manager-a",
+            "source": "manual",
+            "isPrivate": false,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "completedAt": "<ts>",
+            "archivedAt": null,
+            "orgId": "org-alpha",
+            "orgName": "阿尔法组",
+            "ownerName": "阿尔法成员甲",
+            "ownerRole": "member"
+          },
+          {
+            "id": "<uuid>",
             "title": "契约-管理者建任务",
             "description": "",
             "priority": "P1",
@@ -16760,27 +17297,6 @@
           },
           {
             "id": "<uuid>",
-            "title": "契约-成员甲建任务",
-            "description": "",
-            "priority": "P1",
-            "status": "todo",
-            "progress": 0,
-            "dueDate": null,
-            "ownerId": "user-member-a",
-            "createdBy": "user-member-a",
-            "source": "manual",
-            "isPrivate": false,
-            "createdAt": "<ts>",
-            "updatedAt": "<ts>",
-            "completedAt": null,
-            "archivedAt": null,
-            "orgId": "org-alpha",
-            "orgName": "阿尔法组",
-            "ownerName": "阿尔法成员甲",
-            "ownerRole": "member"
-          },
-          {
-            "id": "<uuid>",
             "title": "契约-派给成员乙的私密任务",
             "description": "",
             "priority": "P1",
@@ -16828,27 +17344,6 @@
             "priority": "P0",
             "status": "in_progress",
             "progress": 40,
-            "dueDate": "2026-09-30",
-            "ownerId": "user-member-a",
-            "createdBy": "user-manager-a",
-            "source": "manual",
-            "isPrivate": false,
-            "createdAt": "<ts>",
-            "updatedAt": "<ts>",
-            "completedAt": null,
-            "archivedAt": null,
-            "orgId": "org-alpha",
-            "orgName": "阿尔法组",
-            "ownerName": "阿尔法成员甲",
-            "ownerRole": "member"
-          },
-          {
-            "id": "t-review",
-            "title": "待验收任务",
-            "description": "",
-            "priority": "P1",
-            "status": "pending_review",
-            "progress": 100,
             "dueDate": "2026-09-30",
             "ownerId": "user-member-a",
             "createdBy": "user-manager-a",

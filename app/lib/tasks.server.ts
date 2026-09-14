@@ -5,6 +5,7 @@ import { createNotification } from "./notifications.server";
 import type { Paged, Paging, SortSpec } from "./paging";
 import { likeTerm, orderOf, pageOf, type SortableColumns } from "./paging.server";
 import { orgScope } from "./session.server";
+import { canManageRole } from "./task-permissions";
 
 /**
  * 任务读模型与可见性规则（组织隔离的收敛点）。
@@ -59,9 +60,14 @@ export function toTaskView(row: Record<string, unknown>): any {
   };
 }
 
-/** 任务管理权：改元信息 / 审批 / 退回 / 归档 / 恢复 / 删除（§4）。具体某个组织是否管得着由 assertOrgAccess 判定 */
+/**
+ * 任务管理权：改元信息 / 归档 / 恢复 / 删除（§4）。具体某个组织是否管得着由 `assertOrgAccess` 判定。
+ *
+ * ⚠️ **验收（`approve` / `return`）不在这条线上**：它还要求「是这条任务的发布人」，
+ * 判据在 `task-permissions.ts` 的 `canReviewTask()`（前后端共用一份），别在这里放行。
+ */
 export function canManageTasks(user: User): boolean {
-  return user.role === "admin" || user.role === "manager";
+  return canManageRole(user.role);
 }
 
 /**
@@ -295,13 +301,17 @@ export function orgManagerIds(database: Db, taskId: string): string[] {
 }
 
 /**
- * 通知任务参与者：负责人 + 本组织的组织管理者（验收方）。
+ * 通知任务参与者：负责人 + **发布人** + 本组织的组织管理者。
  * 私密任务只通知**可见的参与方**——负责人与发布人；其他组织管理者看不到这条任务，
  * 把标题发过去就是泄露（D-54 起负责人与发布人可以是两个人，因此这里要带上双方）。
+ *
+ * 发布人也必须在收件人里（D-57）：**验收权归发布人**，而「待验收」通知发出去的时候，
+ * 收件人多半就是唯一能动这条任务的人。管理员发布的组织任务是唯一的缺口——它不是该组织的
+ * 管理者，只靠 `orgManagerIds` 会收到「看得见但动不了」的人，而真正该验收的人一条都没收到。
  */
 export function notifyParticipants(database: Db, t: TaskView | null, actor: string, type: string, title: string, message: string): void {
   if (!t) return;
-  const recipients = t.isPrivate ? [t.ownerId, t.createdBy] : [t.ownerId, ...orgManagerIds(database, t.id)];
+  const recipients = t.isPrivate ? [t.ownerId, t.createdBy] : [t.ownerId, t.createdBy, ...orgManagerIds(database, t.id)];
   notify(
     database,
     recipients.filter((x): x is string => Boolean(x)),
@@ -365,8 +375,11 @@ export function notifyOverdueTasks(database: Db): void {
     today,
   ).map(toTaskView) as TaskView[];
   for (const item of overdue) {
-    // 与 notifyParticipants 同一收件人口径：私密任务只发负责人与发布人（其他人看不到它）
-    const recipients = item.isPrivate ? [item.ownerId, item.createdBy] : [item.ownerId, ...orgManagerIds(database, item.id)];
+    // 与 notifyParticipants 同一收件人口径：私密任务只发负责人与发布人（其他人看不到它）；
+    // 非私密任务 = 负责人 + 发布人 + 本组织管理者（发布人可能是不属于该组织的管理员，D-57）
+    const recipients = item.isPrivate
+      ? [item.ownerId, item.createdBy]
+      : [item.ownerId, item.createdBy, ...orgManagerIds(database, item.id)];
     for (const recipient of new Set(recipients.filter((value): value is string => Boolean(value))))
       createNotification(database, {
         recipientId: recipient,
