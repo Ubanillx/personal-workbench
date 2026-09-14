@@ -47,17 +47,22 @@
 
 ### 个人（3）
 
-| 表                | 关键字段                                                     | 说明                                                                 |
-| ----------------- | ------------------------------------------------------------ | -------------------------------------------------------------------- |
-| `todos`           | `org_id`, `owner_id`, `content`, `todo_date`, `is_completed` | 待办：**本人数据**（`owner_id` 由迁移 017 加入，管理员也只看自己的） |
-| `notes`           | `org_id`, `owner_id`, `content`, `is_pinned`                 | 随手记：同上                                                         |
-| `important_files` | `org_id`, `name`, `file_path`, `category`, `last_used_at`    | 重要文件收藏：**组织公共数据**（组织内都能看/加/改，只有删限管理者） |
+| 表                | 关键字段                                                                            | 说明                                                                                                     |
+| ----------------- | ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `todos`           | `org_id`, `owner_id`, `content`, `todo_date`, `is_completed`                        | 待办：**本人数据**（`owner_id` 由迁移 017 加入，管理员也只看自己的）                                     |
+| `notes`           | `org_id`, `owner_id`, `content`, `is_pinned`                                        | 随手记：同上                                                                                             |
+| `important_files` | `org_id`, `owner_id`, `visibility`, `name`, `file_path`, `category`, `last_used_at` | 重要文件收藏：`visibility` **每条自己选**（`org` = 组织内公开，`private` = 创建人 + 本组织管理员，D-55） |
 
 > `todos` / `notes` 的 `owner_id` 是 D-54 加的：改造前这两张表只有 `org_id`（同组织互相可见），
 > 而「随手记」本来就该是私人的。迁移 017 把历史行认领给本组织**最早的启用组织管理者**
 > （没有 manager 就回落到最早的启用管理员）；`owner_id` 允许为 NULL 只服务于
 > 「老数据 + 当时没有可认领账号」这一种情况，那种行按「不存在」处理（谁都读不到）。
 > 刻意**不加外键**：`ALTER TABLE ADD COLUMN` 加不了，归属人账号消失后记录不再属于任何人。
+
+> `important_files` 的 `visibility` / `owner_id` 是 D-55 加的（迁移 018，同一套回填规则）：
+> `visibility` 缺省与老数据一律按 `org` 处理（`NULL` 也当 `org`），所以升级后行为零变化；
+> `private` 只给**创建人**与**本组织的全局管理员**看，且**归属不可转让**。
+> 详见 [`ACCOUNTS_AND_ORGS.md`](ACCOUNTS_AND_ORGS.md) §24。
 
 > `important_files.file_path` 有两种取值，**没有加列、没有迁移**（D-41）：
 > 本机绝对路径 / 共享盘路径（`C:\work\x.xlsx`、`\\server\share\...`）原样存；
@@ -100,10 +105,11 @@
 | 直接有 `org_id`（NOT NULL） | `tasks`、`todos`、`notes`、`important_files`、`weekly_reports`                                                                                     |
 | 经父级关联（无 `org_id`）   | `task_progress_logs`/`task_comments`/`task_events` → `tasks`；`report_files` → `weekly_reports`；`notifications` → `recipient_id` → `users.org_id` |
 
-**归属与可见性不是一回事**（D-54）：`org_id` 决定「这条数据属于哪个组织」，
+**归属与可见性不是一回事**（D-54 / D-55）：`org_id` 决定「这条数据属于哪个组织」，
 而**谁能看见**还要看另一层判据——`tasks.is_private`（私密任务三个可见方）、
-`todos.owner_id` / `notes.owner_id`（本人数据）、`important_files`（组织公共数据）。
-三者的差别见 `ACCOUNTS_AND_ORGS.md` §4 权限矩阵与 §23。
+`todos.owner_id` / `notes.owner_id`（本人数据）、`important_files.visibility`（**每条自己选**：
+组织公开或个人文件）。三者的差别见 `ACCOUNTS_AND_ORGS.md` §4 权限矩阵、§23 与 §24。
+两类失败的响应也刻意不同：**跨组织 404、同组织但没权限 403**。
 
 ## 状态机与枚举
 
