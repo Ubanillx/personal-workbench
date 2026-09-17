@@ -862,6 +862,14 @@ export const CASES: ContractCase[] = [
   { name: "notifications.read.all.memberB", role: "memberB", method: "POST", path: "/api/notifications/read", body: { all: true } },
   { name: "notifications.read.anon", role: "anon", method: "POST", path: "/api/notifications/read", body: { all: true } },
 
+  // 组织管理者可重复手动提醒逾期任务负责人；权限、组织边界与逾期状态都在服务端复核。
+  { name: "tasks.remind.managerA.overdue", role: "managerA", method: "POST", path: "/api/tasks/{{taskOverdue}}/remind" },
+  { name: "tasks.remind.managerA.overdue.repeat", role: "managerA", method: "POST", path: "/api/tasks/{{taskOverdue}}/remind" },
+  { name: "tasks.remind.memberA.forbidden", role: "memberA", method: "POST", path: "/api/tasks/{{taskOverdue}}/remind" },
+  { name: "tasks.remind.managerB.cross-org", role: "managerB", method: "POST", path: "/api/tasks/{{taskOverdue}}/remind" },
+  { name: "tasks.remind.managerA.not-overdue", role: "managerA", method: "POST", path: "/api/tasks/{{taskDoing}}/remind" },
+  { name: "notifications.memberA.after-manual-remind", role: "memberA", method: "GET", path: "/api/notifications" },
+
   // ---------- 验收视图（管理员或组织管理者） ----------
   { name: "review.admin", role: "admin", method: "GET", path: "/api/review" },
   { name: "review.admin.status", role: "admin", method: "GET", path: "/api/review?status=pending_review" },

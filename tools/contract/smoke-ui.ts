@@ -87,7 +87,18 @@ async function loginAs(base: string, account: { username: string; password: stri
 const PAGE_MARKERS: Record<string, string[]> = {
   // 「最近更新」列与「更新时间范围」筛选器一一对应（D-47）：筛选字段必须在列表里看得见。
   // 企微导入（粘贴解析 → 批量导入）已并入本页页头的抽屉，因此这里盯着它的入口按钮
-  "/tasks": ["逾期任务", "待验收任务", "新建任务", "从企微导入", "搜索任务标题或负责人", "完成率", "全部时间", "最近更新", "所属组织"],
+  "/tasks": [
+    "逾期任务",
+    "待验收任务",
+    "新建任务",
+    "从企微导入",
+    "搜索任务标题或负责人",
+    "完成率",
+    "全部时间",
+    "最近更新",
+    "所属组织",
+    "手动提醒",
+  ],
   // 待办 / 随手记自 D-54 起是**本人数据**：这一轮用的是**管理员**会话，而夹具里的待办归成员甲、
   // 随手记也归成员甲，所以管理员页面上一条都看不到。这里只钉页面骨架，
   // 「本人的能看到、别人的看不到」由上面的第 4f 段用成员甲 / 成员乙的会话专门断言。
@@ -470,6 +481,18 @@ async function main(): Promise<void> {
     );
 
     const member = await loginAs(base, ACCOUNTS.memberA);
+    const managerTasksHtml = await pageHtml("/tasks", manager.cookie);
+    const memberTasksHtml = await pageHtml("/tasks", member.cookie);
+    check(
+      "组织管理者在逾期任务上看到「手动提醒」入口",
+      managerTasksHtml.includes("手动提醒"),
+      managerTasksHtml.includes("手动提醒") ? undefined : "逾期任务没有渲染管理者提醒按钮",
+    );
+    check(
+      "普通成员不看到「手动提醒」入口",
+      !memberTasksHtml.includes("手动提醒"),
+      memberTasksHtml.includes("手动提醒") ? "成员页面仍渲染了管理者提醒按钮" : undefined,
+    );
     const managerPendingTasksHtml = await pageHtml("/tasks?status=pending_review", manager.cookie);
     const memberPendingTasksHtml = await pageHtml("/tasks?status=pending_review", member.cookie);
     check(

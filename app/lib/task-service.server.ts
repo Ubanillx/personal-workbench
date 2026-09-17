@@ -201,6 +201,24 @@ export function updateTask(user: User, id: string, body: Record<string, unknown>
   return done(findTask(database, id) as TaskView);
 }
 
+/** 手动提醒逾期任务：管理员 / 组织管理者可重复提醒负责人，不受自动扫描的一次性标记限制。 */
+export function remindOverdueTask(user: User, id: string): ServiceResult<null> {
+  if (!canManageTasks(user)) return failed("FORBIDDEN", "只有管理员或组织管理者可以执行此操作", 403);
+  const database = db();
+  const located = viewable(user, id);
+  if (!located.ok) return located.failure;
+  const task = located.task;
+  if (task.archivedAt) return failed("ARCHIVED", "归档任务不能发送提醒", 400);
+  const today = new Date().toISOString().slice(0, 10);
+  if (!task.dueDate || task.dueDate >= today || task.status === "completed") {
+    return failed("NOT_OVERDUE", "只有已逾期且未完成的任务可以提醒", 400);
+  }
+  if (!task.ownerId) return failed("VALIDATION_ERROR", "任务未分配负责人，无法发送提醒", 400);
+  if (task.ownerId === user.id) return failed("VALIDATION_ERROR", "当前账号已是负责人，无需提醒自己", 400);
+  notify(database, [task.ownerId], user.id, task.id, "task_overdue", "任务逾期提醒", `${user.name}提醒你尽快跟进任务“${task.title}”`);
+  return done(null);
+}
+
 export function deleteTask(user: User, id: string): ServiceResult<null> {
   if (!canManageTasks(user)) return failed("FORBIDDEN", "只有管理员或组织管理者可以执行此操作", 403);
   const database = db();

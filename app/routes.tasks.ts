@@ -10,6 +10,7 @@ export const taskRoutes = [
   route("api/tasks/:id", "routes/api.tasks.$id.ts"),
   route("api/tasks/:id/progress", "routes/api.tasks.$id.progress.ts"),
   route("api/tasks/:id/submit-review", "routes/api.tasks.$id.submit-review.ts"),
+  route("api/tasks/:id/remind", "routes/api.tasks.$id.remind.ts"),
   route("api/tasks/:id/approve", "routes/api.tasks.$id.approve.ts"),
   route("api/tasks/:id/return", "routes/api.tasks.$id.return.ts"),
   route("api/tasks/:id/archive", "routes/api.tasks.$id.archive.ts"),

@@ -32,6 +32,7 @@ import {
   DeleteOutlined,
   EditOutlined,
   EyeOutlined,
+  BellOutlined,
   ImportOutlined,
   InboxOutlined,
   PlusOutlined,
@@ -67,6 +68,7 @@ import {
   listActivity,
   markTaskNotificationsRead,
   reportProgress,
+  remindOverdueTask,
   restoreTask,
   returnTask,
   submitReview,
@@ -175,6 +177,7 @@ const NOTICE: Record<string, string> = {
   restore: "任务已恢复",
   delete: "任务已彻底删除",
   comment: "评论已发送",
+  remind: "已发送逾期提醒",
 };
 
 function toMember(row: Record<string, unknown>): Member {
@@ -216,6 +219,10 @@ function memberLabel(member: Member): string {
 
 function isOverdue(task: TaskRow, today: string): boolean {
   return Boolean(task.dueDate && task.dueDate < today && task.status !== "completed" && !task.archivedAt);
+}
+
+function canSendReminder(task: TaskRow, userId: string, today: string): boolean {
+  return Boolean(task.ownerId && task.ownerId !== userId && isOverdue(task, today));
 }
 
 /* ------------------------------------------------------------------ loader / action */
@@ -343,6 +350,8 @@ export async function action({ request }: { request: Request }): Promise<ActionR
         return approveTask(user, taskId, String(payload.note ?? "验收通过"));
       case "return":
         return returnTask(user, taskId, { note: payload.note });
+      case "remind":
+        return remindOverdueTask(user, taskId);
       case "archive":
         return archiveTask(user, taskId);
       case "restore":
@@ -584,8 +593,8 @@ export default function TasksRoute(): React.ReactElement {
       title: "操作",
       key: "actions",
       // 图标动作按钮每个约 36px（`size="small"` + `variant="text"`）。
-      // 一行最多是 详情 / 编辑 / 改派 / 通过验收 / 退回修改 / 归档 = 6 个，宽度留足余量
-      width: canManage ? 300 : 120,
+      // 一行最多是 详情 / 编辑 / 改派 / 手动提醒 / 通过验收 / 退回修改 / 归档 = 7 个，宽度留足余量
+      width: canManage ? 340 : 120,
       align: "right",
       ellipsis: false,
       render: (_value, task) => {
@@ -620,6 +629,20 @@ export default function TasksRoute(): React.ReactElement {
             disabled: Boolean(task.archivedAt),
             onClick: () => openReassign(task),
           });
+          if (canSendReminder(task, me.id, today)) {
+            actions.push({
+              key: "remind",
+              label: "手动提醒",
+              icon: <BellOutlined />,
+              onClick: () =>
+                confirmAction(modal, {
+                  title: "发送逾期提醒？",
+                  content: `将向负责人发送一条关于「${task.title}」的站内提醒，可重复发送。`,
+                  okText: "发送提醒",
+                  onOk: () => post({ intent: "remind", taskId: task.id }),
+                }),
+            });
+          }
         }
         if (canReview && task.status === "pending_review") {
           actions.push({
@@ -1273,20 +1296,38 @@ function TaskDetailDrawer({
                 </Button>
               </>
             ) : (
-              <Button
-                icon={<InboxOutlined />}
-                disabled={busy}
-                onClick={() =>
-                  confirmAction(modal, {
-                    title: "归档该任务？",
-                    content: "归档后任务从列表隐藏（可勾选「显示归档」查看），之后可以恢复。",
-                    okText: "归档",
-                    onOk: () => onPost({ intent: "archive", taskId: task.id }),
-                  })
-                }
-              >
-                归档任务
-              </Button>
+              <>
+                {canSendReminder(task, me.id, today) ? (
+                  <Button
+                    icon={<BellOutlined />}
+                    disabled={busy}
+                    onClick={() =>
+                      confirmAction(modal, {
+                        title: "发送逾期提醒？",
+                        content: `将向负责人发送一条关于「${task.title}」的站内提醒，可重复发送。`,
+                        okText: "发送提醒",
+                        onOk: () => onPost({ intent: "remind", taskId: task.id }),
+                      })
+                    }
+                  >
+                    手动提醒
+                  </Button>
+                ) : null}
+                <Button
+                  icon={<InboxOutlined />}
+                  disabled={busy}
+                  onClick={() =>
+                    confirmAction(modal, {
+                      title: "归档该任务？",
+                      content: "归档后任务从列表隐藏（可勾选「显示归档」查看），之后可以恢复。",
+                      okText: "归档",
+                      onOk: () => onPost({ intent: "archive", taskId: task.id }),
+                    })
+                  }
+                >
+                  归档任务
+                </Button>
+              </>
             )}
           </Space>
         ) : null}

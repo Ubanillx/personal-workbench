@@ -1,9 +1,9 @@
 {
   "meta": {
-    "generatedAt": "2026-09-14T10:31:55.875Z",
+    "generatedAt": "2026-09-17T01:23:56.365Z",
     "entry": "npm run serve",
     "node": "24.19.0",
-    "caseCount": 378
+    "caseCount": 384
   },
   "responses": [
     {
@@ -9667,6 +9667,296 @@
           "code": "UNAUTHENTICATED",
           "message": "请先完成访问验证"
         }
+      }
+    },
+    {
+      "name": "tasks.remind.managerA.overdue",
+      "role": "managerA",
+      "request": {
+        "method": "POST",
+        "path": "/api/tasks/t-overdue/remind"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": null
+      }
+    },
+    {
+      "name": "tasks.remind.managerA.overdue.repeat",
+      "role": "managerA",
+      "request": {
+        "method": "POST",
+        "path": "/api/tasks/t-overdue/remind"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": null
+      }
+    },
+    {
+      "name": "tasks.remind.memberA.forbidden",
+      "role": "memberA",
+      "request": {
+        "method": "POST",
+        "path": "/api/tasks/t-overdue/remind"
+      },
+      "status": 403,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "FORBIDDEN",
+          "message": "只有管理员或组织管理者可以执行此操作"
+        }
+      }
+    },
+    {
+      "name": "tasks.remind.managerB.cross-org",
+      "role": "managerB",
+      "request": {
+        "method": "POST",
+        "path": "/api/tasks/t-overdue/remind"
+      },
+      "status": 404,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "未找到该资源"
+        }
+      }
+    },
+    {
+      "name": "tasks.remind.managerA.not-overdue",
+      "role": "managerA",
+      "request": {
+        "method": "POST",
+        "path": "/api/tasks/t-doing/remind"
+      },
+      "status": 400,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "NOT_OVERDUE",
+          "message": "只有已逾期且未完成的任务可以提醒"
+        }
+      }
+    },
+    {
+      "name": "notifications.memberA.after-manual-remind",
+      "role": "memberA",
+      "request": {
+        "method": "GET",
+        "path": "/api/notifications"
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": [
+          {
+            "id": "<uuid>",
+            "recipientId": "user-member-a",
+            "actorId": "user-manager-a",
+            "taskId": "t-overdue",
+            "reportId": null,
+            "eventType": "task_overdue",
+            "title": "任务逾期提醒",
+            "message": "阿尔法管理者提醒你尽快跟进任务“逾期任务”",
+            "isRead": 0,
+            "createdAt": "<ts>",
+            "readAt": null
+          },
+          {
+            "id": "<uuid>",
+            "recipientId": "user-member-a",
+            "actorId": "user-manager-a",
+            "taskId": "t-overdue",
+            "reportId": null,
+            "eventType": "task_overdue",
+            "title": "任务逾期提醒",
+            "message": "阿尔法管理者提醒你尽快跟进任务“逾期任务”",
+            "isRead": 0,
+            "createdAt": "<ts>",
+            "readAt": null
+          },
+          {
+            "id": "<uuid>",
+            "recipientId": "user-member-a",
+            "actorId": "user-member-a2",
+            "taskId": "t-doing",
+            "reportId": null,
+            "eventType": "task_commented",
+            "title": "任务有新评论",
+            "message": "阿尔法成员乙 评论了任务“进行中任务”",
+            "isRead": 0,
+            "createdAt": "<ts>",
+            "readAt": null
+          },
+          {
+            "id": "<uuid>",
+            "recipientId": "user-member-a",
+            "actorId": "user-manager-a",
+            "taskId": "t-review",
+            "reportId": null,
+            "eventType": "task_approved",
+            "title": "任务验收通过",
+            "message": "任务“待验收任务”已通过验收",
+            "isRead": 0,
+            "createdAt": "<ts>",
+            "readAt": null
+          },
+          {
+            "id": "<uuid>",
+            "recipientId": "user-member-a",
+            "actorId": "user-admin",
+            "taskId": "<uuid>",
+            "reportId": null,
+            "eventType": "task_approved",
+            "title": "任务验收通过",
+            "message": "任务“契约-改名”已通过验收",
+            "isRead": 0,
+            "createdAt": "<ts>",
+            "readAt": null
+          },
+          {
+            "id": "<uuid>",
+            "recipientId": "user-member-a",
+            "actorId": "user-manager-a",
+            "taskId": "<uuid>",
+            "reportId": null,
+            "eventType": "task_reassigned",
+            "title": "任务负责人已变更",
+            "message": "任务“契约-管理者私密任务”已重新分配",
+            "isRead": 0,
+            "createdAt": "<ts>",
+            "readAt": null
+          },
+          {
+            "id": "<uuid>",
+            "recipientId": "user-member-a",
+            "actorId": "user-manager-a",
+            "taskId": "<uuid>",
+            "reportId": null,
+            "eventType": "task_reassigned",
+            "title": "任务负责人已变更",
+            "message": "任务“契约-管理者私密任务”已重新分配",
+            "isRead": 0,
+            "createdAt": "<ts>",
+            "readAt": null
+          },
+          {
+            "id": "<uuid>",
+            "recipientId": "user-member-a",
+            "actorId": "user-admin",
+            "taskId": "<uuid>",
+            "reportId": null,
+            "eventType": "task_assigned",
+            "title": "收到新任务",
+            "message": "你收到来自 管理员 的任务“契约-管理员建阿尔法任务”",
+            "isRead": 0,
+            "createdAt": "<ts>",
+            "readAt": null
+          },
+          {
+            "id": "<uuid>",
+            "recipientId": "user-member-a",
+            "actorId": null,
+            "taskId": "t-overdue",
+            "reportId": null,
+            "eventType": "task_overdue",
+            "title": "任务已逾期",
+            "message": "任务“逾期任务”已超过截止日期",
+            "isRead": 0,
+            "createdAt": "<ts>",
+            "readAt": null
+          },
+          {
+            "id": "notif-a1",
+            "recipientId": "user-member-a",
+            "actorId": "user-manager-a",
+            "taskId": "t-todo",
+            "reportId": null,
+            "eventType": "task_assigned",
+            "title": "收到新任务",
+            "message": "有一项新任务指派给你",
+            "isRead": 1,
+            "createdAt": "<ts>",
+            "readAt": "<ts>"
+          }
+        ]
       }
     },
     {

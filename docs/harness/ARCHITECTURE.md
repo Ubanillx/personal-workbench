@@ -10,7 +10,7 @@
 | `app/`                      | **应用主体**：路由、页面、SSR 外壳、`/api` 资源路由、共享服务（`lib/`）         | 唯一的 UI + API 层                       |
 | `server/src/`               | 框架无关的服务端层：SQLite 客户端/迁移/备份、账号密码与会话安全、配置、CLI      | 不依赖 React Router，可被独立测试        |
 | `shared/`                   | 前后端共享的领域类型（仅类型，无运行时逻辑）                                    | 迁移后只剩 `types/domain.ts`             |
-| `tools/contract/`           | 契约工具与验收工具：夹具库（3 组织 / 8 账号）、378 条用例、录制、回放、SSR 冒烟 | `npm test` 的主要执行体                  |
+| `tools/contract/`           | 契约工具与验收工具：夹具库（3 组织 / 8 账号）、384 条用例、录制、回放、SSR 冒烟 | `npm test` 的主要执行体                  |
 | `test/`                     | 数据层测试（密码/账号/迁移/备份/自举）+ WebDAV 客户端 + 注册登录改密端到端      | 8 个测试文件                             |
 | `build/`                    | 生产构建产物（客户端 + SSR）                                                    | 构建生成，可安全删除                     |
 | `.react-router/`            | RR8 生成的类型（`+types/*`）                                                    | 构建生成，可安全删除                     |
@@ -27,7 +27,7 @@
 | `routes.ts`                        | 路由表：页面路由 + `api` 资源路由，按域展开片段文件                                                                                                                                                                                                     | 加路由只改这里与对应文件                        |
 | `routes/*.tsx`（12 个）            | 页面：`login`、`register`、`password`、`join`、`settings`、`dashboard`、`tasks`、`todos`、`notes`、`files`、`review`、`reports`                                                                                                                         | 每页导出 `loader`（取数）/ 可选 `action`（写）  |
 | `routes/logout.ts`                 | `POST /logout`：撤销会话并重定向回登录页                                                                                                                                                                                                                | 无 UI                                           |
-| `routes/api.*.ts`（53 个）         | **66 个端点**的全部实现（按域分组见「API 清单」）                                                                                                                                                                                                       | 每个都是共享服务的薄包装                        |
+| `routes/api.*.ts`（54 个）         | **67 个端点**的全部实现（按域分组见「API 清单」）                                                                                                                                                                                                       | 每个都是共享服务的薄包装                        |
 | `routes.{tasks,people,reports}.ts` | 路由片段：按域声明各自的页面与 API 路由，由 `routes.ts` 展开                                                                                                                                                                                            | 分批迁移时避免争抢同一文件                      |
 | `lib/*.server.ts`（21 个）         | 共享服务层：`session`、`http`、`db`、`context`、`task-service`、`tasks`、`todos`、`notes`、`records`、`organization`、`files`、`webdav`、`webdav-settings`、`report-storage`、`review`、`access`、`reports`、`dashboard`、`notifications`、`form`、`ui` | 页面与 API 路由**共用同一份实现**，杜绝两套逻辑 |
 | `components/placeholder-page.tsx`  | 迁移期的占位页组件                                                                                                                                                                                                                                      | 13 个页面全部自实现后已无引用                   |
@@ -125,9 +125,9 @@ React Router 8（单进程，react-router-serve 监听 17500）
   服务端与页面共用同一份；普通成员被组织管理者指派后进度到 `100%` 自动进入待验收，自己发布并自己执行时可直接完成。
 - 组织里**最后一个 `manager`** 不能被停用、退出或降级；`admin` 不能把自己降级（只能本机 CLI 恢复）。
 
-## API 清单（66）
+## API 清单（67）
 
-构成：health/认证 8 + 组织与成员 16 + 业务域 42 = 66，全部由 `app/routes/api.*.ts`（53 个文件）承载。
+构成：health/认证 8 + 组织与成员 16 + 业务域 43 = 67，全部由 `app/routes/api.*.ts`（54 个文件）承载。
 下表按域分组，括号内为该域端点数。
 
 > 注意：RR8 的 `action` 负责该路径的**所有非 GET 方法**，因此 `PATCH /api/todos/:id` 与 `DELETE /api/todos/:id` 写在同一个
@@ -177,7 +177,7 @@ React Router 8（单进程，react-router-serve 监听 17500）
 | PATCH  | `/api/members/:id` | 启用/停用、改角色（`LAST_MANAGER` 时 400） |
 | DELETE | `/api/members/:id` | 移出组织（退回「未加入」）                 |
 
-### 概览与任务（14）
+### 概览与任务（15）
 
 > 站内通知有两条读通道：轮询式的 `GET /api/notifications`（页面/API 通用）与
 > 常驻 SSE `GET /api/notifications/stream`（`text/event-stream`，按收件人实时推送）。
@@ -193,6 +193,7 @@ React Router 8（单进程，react-router-serve 监听 17500）
 | DELETE | `/api/tasks/:id`               | 删除                                                     |
 | POST   | `/api/tasks/:id/progress`      | 汇报进度                                                 |
 | POST   | `/api/tasks/:id/submit-review` | 提交验收                                                 |
+| POST   | `/api/tasks/:id/remind`        | 手动提醒逾期任务负责人（管理员 / 组织管理者）            |
 | POST   | `/api/tasks/:id/approve`       | 验收通过（任务发布人；管理员应急兜底；负责人除外；D-58） |
 | POST   | `/api/tasks/:id/return`        | 退回（同上，与通过同一道门）                             |
 | POST   | `/api/tasks/:id/archive`       | 归档                                                     |
@@ -295,6 +296,6 @@ UI 层统一使用 **antd v6**（`antd@6.6.3` + `@ant-design/icons@6.3.4`）：`
 
 1. **两套数据访问风格（已消除）**：旧 `report.ts` 用 repository 类、旧 `workbench.ts` 全内联 SQL 的分裂，随 Phase 4 归档消失；
    当前 `app/lib/*.server.ts` 是唯一生产数据访问路径。仅剩 1 个无生产调用的 repository 文件（`task-repository.ts`，只被 `test:db` 引用）见 `DEBT-05`。
-2. **端点粒度不一致（已消除）**：旧 39 个端点挤在单文件 `workbench.ts` 的问题由 RR8 文件路由自然拆开——现为 53 个 `api.*.ts` 承载 66 个端点。
+2. **端点粒度不一致（已消除）**：旧 39 个端点挤在单文件 `workbench.ts` 的问题由 RR8 文件路由自然拆开——现为 54 个 `api.*.ts` 承载 67 个端点。
 3. **空目录（已修复）**：`server/src/{middleware,utils}`、`test/{unit,fixtures}`、`web/src/components` 已在 Phase 4 删除（`DEBT-11`）。
 4. **`app/components/placeholder-page.tsx` 已成为死代码**：8/8 页面迁移完成后没有页面再引用它，保留仅作为后续新增页面的起点。
