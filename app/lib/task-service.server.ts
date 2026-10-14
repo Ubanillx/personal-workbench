@@ -3,6 +3,7 @@ import type { TaskStatus } from "../../shared/types/domain";
 import { clamp, date, db, flag, now, one, ownerIdOf, priority, rows, run, type User } from "./db.server";
 import { assertOrgAccess, orgIsActive } from "./session.server";
 import { canReviewTask } from "./task-permissions";
+import { invalidateTaskNotifications } from "./notifications.server";
 import {
   canManageTasks,
   canView,
@@ -172,6 +173,7 @@ export function updateTask(user: User, id: string, body: Record<string, unknown>
     stamp,
     id,
   );
+  if (ownerId !== current.ownerId || movingOrg || isPrivate !== Number(current.isPrivate)) invalidateTaskNotifications(database, id);
   if (ownerId !== current.ownerId) {
     event(database, id, user, "task_reassigned", `负责人从 ${current.ownerName ?? "未分配"} 改为 ${owner.user?.name ?? "未分配"}`);
     notify(
@@ -225,6 +227,7 @@ export function deleteTask(user: User, id: string): ServiceResult<null> {
   const located = viewable(user, id);
   if (!located.ok) return located.failure;
   if (!located.task.archivedAt) return failed("ARCHIVE_REQUIRED", "请先归档任务，再彻底删除", 400);
+  invalidateTaskNotifications(database, id);
   run(database, "DELETE FROM tasks WHERE id=?", id);
   return done(null);
 }

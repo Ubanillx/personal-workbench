@@ -50,7 +50,7 @@
 | antd API 查询    | `npx antd info` / `demo` / `doc <组件>`                                  | 写 antd 代码前先查，禁止凭记忆写 v6 API                                                                                                       |
 | antd 项目诊断    | `npx antd doctor`                                                        | 版本冲突、重复安装、主题配置                                                                                                                  |
 | 全部测试         | `npm test`                                                               | 依次 `test:db` → `test:webdav` → `test:api` → `test:auth` → `test:ui`                                                                         |
-| 单项测试         | `npm run test:db` / `test:webdav` / `test:api` / `test:auth` / `test:ui` | 数据层 / WebDAV 客户端（假服务器）/ 378 条契约回放 / 注册登录改密端到端 / SSR 冒烟                                                            |
+| 单项测试         | `npm run test:db` / `test:webdav` / `test:api` / `test:auth` / `test:ui` | 数据层 / WebDAV 客户端（假服务器）/ 契约回放 / 注册登录改密与任务权限排序端到端（`test/api/*.spec.ts`）/ SSR 冒烟                             |
 | 生成夹具库       | `npm run contract:fixture`                                               | 输出可直接用作 `DATABASE_PATH` 的临时库（含固定令牌与管理员 WebDAV 连接行）                                                                   |
 | SSR 冒烟         | `npm run smoke:ui -- --require-migrated`                                 | 逐页验收；`--paths` 限定页面，`--require-migrated` 把占位页计为失败                                                                           |
 | 手动备份         | `npm run db:backup`                                                      | 写入 `data/backups/`，保留最近 5 份                                                                                                           |

@@ -36,6 +36,9 @@ export function NotificationBell({ initial }: { initial: Notification[] }): Reac
   const navigate = useNavigate();
   const { message, notification } = AntdApp.useApp();
   const [items, setItems] = useState<Notification[]>(initial);
+  useEffect(() => {
+    setItems(initial);
+  }, [initial]);
   const [open, setOpen] = useState(false);
   const [permission, setPermission] = useState<DesktopPermission>("unsupported");
   // 事件回调在 effect 里只订阅一次，用 ref 读取最新的权限与「打开通知」逻辑，避免反复重建 SSE 连接
@@ -131,6 +134,7 @@ export function NotificationBell({ initial }: { initial: Notification[] }): Reac
 
     source.addEventListener("notification", onNotification);
     source.addEventListener("ready", () => void resync());
+    source.addEventListener("resync", () => void resync());
     source.onopen = () => void resync();
     return () => {
       source.removeEventListener("notification", onNotification);

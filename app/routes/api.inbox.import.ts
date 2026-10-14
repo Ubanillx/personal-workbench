@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { appConfig } from "../lib/context.server";
-import { date, db, inboxFingerprint, now, ownerIdOf, one, priority, run } from "../lib/db.server";
+import { date, db, inboxFingerprint, now, ownerIdOf, priority, run } from "../lib/db.server";
 import { fail, ok } from "../lib/http.server";
 import { orgIsActive, requireAuth } from "../lib/session.server";
-import { event, findTask, notify, validateOwner, type TaskView } from "../lib/tasks.server";
+import { event, findTask, hasVisibleFingerprint, notify, validateOwner, type TaskView } from "../lib/tasks.server";
 
 /**
  * POST /api/inbox/import —— 批量导入企微任务（指纹去重，allowDuplicates 可覆盖）。
@@ -11,7 +11,7 @@ import { event, findTask, notify, validateOwner, type TaskView } from "../lib/ta
  * 组织隔离（§14.2）：
  * - 建任务必须显式写 `org_id`（迁移 009 起是 NOT NULL）：成员/组织管理者写自己的组织，
  *   管理员写请求里指定的 `orgId`（全局角色不隶属组织）——与任务域 createTask 同一口径；
- * - 指纹算法一个字没改，但重复判定只看**目标组织**内的任务，不跨组织误判；
+ * - 指纹算法不变，重复判定只看目标组织内当前可见的任务；
  * - 负责人规则与任务域一致（`validateOwner(..., { orgId })`）：member 只能建给自己的，
  *   manager/admin 可以指派本组织的人，跨组织的人会被拒；
  * - 未加入组织的账号没有目标组织，直接 403（D-34）。
@@ -39,7 +39,7 @@ export async function action({ request }: { request: Request }): Promise<Respons
     const title = String(item.title ?? "").trim();
     if (!title) continue;
     const fingerprint = inboxFingerprint(item, title);
-    if (one(database, "SELECT id FROM tasks WHERE wecom_fingerprint=? AND org_id=?", fingerprint, orgId) && !body.allowDuplicates) {
+    if (hasVisibleFingerprint(database, user, orgId, fingerprint) && !body.allowDuplicates) {
       skipped.push({ title, reason: "疑似重复" });
       continue;
     }

@@ -76,6 +76,8 @@ export const IDS = {
   taskArchived: "t-archived",
   taskPrivate: "t-private",
   taskOverdue: "t-overdue",
+  dimensionA: "dimension-member-a",
+  dimensionA2: "dimension-member-a2",
   /** 同组织里别人的任务：验证「member 只看自己负责的」 */
   taskOfA2: "t-of-a2",
   todoOpen: "todo-open",
@@ -551,6 +553,18 @@ export function createFixture(): Fixture {
     STAMP,
   );
 
+  for (const [id, userId] of [
+    [IDS.dimensionA, IDS.userMemberA],
+    [IDS.dimensionA2, IDS.userMemberA2],
+  ] as const) {
+    db.prepare("INSERT INTO task_dimensions(id,user_id,name,created_at,updated_at) VALUES(?,?,?,?,?)").run(
+      id,
+      userId,
+      "客户跟进",
+      STAMP,
+      STAMP,
+    );
+  }
   db.close();
   return { directory, databasePath, uploadsDir, ids: IDS };
 }

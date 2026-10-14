@@ -92,7 +92,7 @@ React Router 8（单进程，react-router-serve 监听 17500）
 | 改组织名描述 / 解散本组织      | ✅                            | ✅ 仅本组织                            | ❌                           |
 | 审批入组与退出申请 / 拉人入组  | ✅                            | ✅ 仅本组织                            | ❌                           |
 | 启用停用成员、改成员角色       | ✅（不能动 admin）            | ✅ 仅本组织                            | ❌                           |
-| 任务：查看                     | 全部组织（带筛选器）          | 本组织全部                             | 本组织全部非私密任务         |
+| 任务：查看                     | 全部组织（带筛选器）          | 本组织非私密 + 本人相关私密任务        | 本组织本人发布或当前负责     |
 | 任务：创建并指派负责人         | ✅ 任意组织任意人             | ✅ 本组织                              | 只能建给自己的               |
 | 任务：改元信息/归档/删除       | ✅                            | ✅ 本组织（看不见的私密任务除外）      | ❌                           |
 | 任务：**验收（通过 / 退回）**  | 全部任务（负责人之外）        | **自己发布的本组织任务**（负责人之外） | ❌                           |
@@ -111,10 +111,12 @@ React Router 8（单进程，react-router-serve 监听 17500）
 > [`ACCOUNTS_AND_ORGS.md`](ACCOUNTS_AND_ORGS.md) §4、§23、§24、§25 与 §26。
 > 「重要文件」的两个可见范围：`org`（默认，组织内公开）与 `private`（创建人 + 本组织管理员）。
 
+> 2026-10-13 起普通成员任务范围收紧为本人发布/当前负责，见 `ACCOUNTS_AND_ORGS.md` §27；组织管理者与管理员范围不变。
+
 补充规则：
 
 - **跨组织按 id 访问一律 404**（不是 403），避免泄露资源是否存在。**同组织但没有可见权
-  （别人的私密任务、别人的待办）返回 403**。
+  （成员无关任务、别人的私密任务、别人的待办）返回 403**。
 - **能看见才改得动**：写操作与读操作共用同一个可见性判据（私密任务 / 本人数据），
   不允许出现「列表里看不见、接口里改得动」。
 - **任务状态不能通过 `PATCH` 改**：`progress`/`status` 返回 `FIELD_FORBIDDEN`，必须走
@@ -184,23 +186,38 @@ React Router 8（单进程，react-router-serve 监听 17500）
 > 二者的写入点是同一处 `app/lib/notifications.server.ts` 的 `createNotification`（落库 + 进程内事件总线），
 > 前端由 `app/components/notification-bell.tsx` 消费并触发浏览器桌面通知。
 
-| 方法   | 路径                           | 说明                                                     |
-| ------ | ------------------------------ | -------------------------------------------------------- |
-| GET    | `/api/dashboard`               | 概览统计（只读展板）                                     |
-| GET    | `/api/tasks`                   | 任务列表（`includeArchived`、`org`，按角色过滤）         |
-| POST   | `/api/tasks`                   | 创建任务                                                 |
-| PATCH  | `/api/tasks/:id`               | 修改元信息（状态字段禁止，走专用端点）                   |
-| DELETE | `/api/tasks/:id`               | 删除                                                     |
-| POST   | `/api/tasks/:id/progress`      | 汇报进度                                                 |
-| POST   | `/api/tasks/:id/submit-review` | 提交验收                                                 |
-| POST   | `/api/tasks/:id/remind`        | 手动提醒逾期任务负责人（管理员 / 组织管理者）            |
-| POST   | `/api/tasks/:id/approve`       | 验收通过（任务发布人；管理员应急兜底；负责人除外；D-58） |
-| POST   | `/api/tasks/:id/return`        | 退回（同上，与通过同一道门）                             |
-| POST   | `/api/tasks/:id/archive`       | 归档                                                     |
-| POST   | `/api/tasks/:id/restore`       | 恢复归档                                                 |
-| GET    | `/api/tasks/:id/comments`      | 评论列表                                                 |
-| POST   | `/api/tasks/:id/comments`      | 新增评论                                                 |
-| GET    | `/api/tasks/:id/activity`      | 时间线（`task_events`）                                  |
+| 方法   | 路径                           | 说明                                                                                |
+| ------ | ------------------------------ | ----------------------------------------------------------------------------------- |
+| GET    | `/api/dashboard`               | 概览统计（只读展板）                                                                |
+| GET    | `/api/tasks`                   | 任务列表（`includeArchived`、`org`、个人 `dimension`、`hideHandled=1`，按角色过滤） |
+| POST   | `/api/tasks`                   | 创建任务，可选本人 `dimensionIds` 数组，任务与关联原子写入                          |
+| PATCH  | `/api/tasks/:id`               | 修改元信息（状态字段禁止，走专用端点）                                              |
+| DELETE | `/api/tasks/:id`               | 删除                                                                                |
+| POST   | `/api/tasks/:id/progress`      | 汇报进度                                                                            |
+| POST   | `/api/tasks/:id/submit-review` | 提交验收                                                                            |
+| POST   | `/api/tasks/:id/remind`        | 手动提醒逾期任务负责人（管理员 / 组织管理者）                                       |
+| POST   | `/api/tasks/:id/approve`       | 验收通过（任务发布人；管理员应急兜底；负责人除外；D-58）                            |
+| POST   | `/api/tasks/:id/return`        | 退回（同上，与通过同一道门）                                                        |
+| POST   | `/api/tasks/:id/archive`       | 归档                                                                                |
+| POST   | `/api/tasks/:id/restore`       | 恢复归档                                                                            |
+| GET    | `/api/tasks/:id/comments`      | 评论列表                                                                            |
+| POST   | `/api/tasks/:id/comments`      | 新增评论                                                                            |
+| GET    | `/api/tasks/:id/activity`      | 时间线（`task_events`）                                                             |
+| GET    | `/api/task-dimensions`         | 本人维度列表（所有已登录角色，管理员无他人管理特权）                                |
+| POST   | `/api/task-dimensions`         | 创建本人维度 `{ name }`                                                             |
+| PATCH  | `/api/task-dimensions/:id`     | 本人维度改名 `{ name }`，他人维度 404                                               |
+| DELETE | `/api/task-dimensions/:id`     | 删除本人维度及其关联，不删除任务                                                    |
+| GET    | `/api/tasks/:id/personal`      | 本人归类及处理状态 `{ dimensionIds, handled }`                                      |
+| PATCH  | `/api/tasks/:id/personal`      | 替换本人维度集合和/或设置布尔 `handled`，不改变任务进度、状态或他人数据             |
+
+个人维度服务集中在 `app/lib/task-dimensions.server.ts`，页面 action 与 API 共用。
+`dimension=all`（缺省）不限制维度，`dimension=unclassified` 查询本人尚无任何关联的任务，其余值按本人维度 ID 过滤；未知或他人的维度 ID 不返回任务。
+`/tasks` 的维度筛选与个人处理筛选在服务端排序/分页前应用，统计复用同一 WHERE，用 EXISTS 防止多维度造成重复行。
+`view=checklist` 提供按当前维度查看的清单卡片，默认保留现有表格。所有筛选与视图状态保留在 URL，重置恢复默认。
+
+`/api/tasks` 与 `/api/dashboard` 均应用普通成员本人发布/当前负责的范围；数组载荷和更新时间排序不变。
+`/tasks` 页面通过 `defaultTaskSort()` 按角色选择默认排序，普通成员优先级升序，管理角色更新时间降序。
+`TASK_SORTABLE.priority` 在服务端按优先级 + 更新时间降序 + ID 排序后分页；`sort/order` 只存在 URL 中，全部角色可切换，无偏好存储。
 
 ### 通知与验收（4）
 
@@ -210,6 +227,10 @@ React Router 8（单进程，react-router-serve 监听 17500）
 | GET  | `/api/notifications/stream` | SSE 实时推送（`text/event-stream`）  |
 | POST | `/api/notifications/read`   | 标记已读（可带 `taskId`）            |
 | GET  | `/api/review`               | 验收视图（`from/to/ownerId/status`） |
+
+通知 API、外壳 loader 和概览未读数通过 `notificationScope()` 复用 `task-visibility.server.ts` 的 SQL 判据，历史通知在任务改派/跨组织移动/隐私变更后按当前权限过滤，不删除历史记录。
+SSE 的 `notification` 事件重新鉴权并校验任务可见性；`resync` 事件无任务内容，用于权限变更及周期同步时移除客户端已失去查看权的通知。
+企微 `/api/inbox/preview` 与 `/api/inbox/import` 的判重同样使用当前可见范围，非可见任务不返回重复信号。
 
 ### 待办与随手记（8）
 

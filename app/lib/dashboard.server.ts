@@ -1,7 +1,8 @@
 import type { TaskPriority, TaskStatus } from "../../shared/types/domain";
-import { db, one, type User } from "./db.server";
+import { db, type User } from "./db.server";
 import { listFiles } from "./files.server";
 import { listNotes } from "./notes.server";
+import { countUnreadNotifications } from "./notifications.server";
 import { notifyOverdueTasks, visible } from "./tasks.server";
 import { listTodos } from "./todos.server";
 
@@ -10,11 +11,12 @@ import { listTodos } from "./todos.server";
  * （`orgName` 为空时按 D-24/D-34 明确写出来，而不是含糊地显示为空）。
  * 「谁看得见什么」的角色判断只出现在 dashboard 域模块里，页面不再自己维护旧的角色映射。
  *
- * 措辞与 D-54 对齐：组织成员看到的是**本组织全部非私密任务**（私密任务只有发布人 / 负责人 / 管理员），
+ * 普通成员仅看本人发布/负责的任务；管理者看本组织非私密任务和本人相关的私密任务，
  * 待办与随手记则是**只有自己**的 —— 三块数据的范围不同，文案不能笼统写成「本组织数据」。
  */
 export function dashboardScopeLabel(user: User): string {
   if (user.role === "admin") return "全部组织（合并视图）";
+  if (user.role === "member") return `本组织：${user.orgName ?? "尚未加入组织"}（任务：我发布或负责的）`;
   return `本组织：${user.orgName ?? "尚未加入组织"}（任务：全部非私密）`;
 }
 
@@ -170,9 +172,6 @@ function toBoardFile(row: Record<string, unknown>): BoardFile {
 }
 
 /** 未读通知数与外壳右上角的铃铛徽标同源（同一张表、同一条件） */
-function unreadNotifications(userId: string): number {
-  return one<{ n: number }>(db(), "SELECT COUNT(*) AS n FROM notifications WHERE recipient_id=? AND is_read=0", userId)?.n ?? 0;
-}
 
 /**
  * 概览页的只读展板：在 `dashboardData()` 的结果上做派生，**不再重复查任务/待办/随手记**
@@ -229,7 +228,7 @@ export function dashboardBoard(user: User, base: { tasks: unknown[]; todos: unkn
       pendingReview: tasks.filter((task) => task.status === "pending_review").length,
       todayTodos: todos.filter((todo) => todo.isCompleted === 0 && todo.todoDate === today).length,
       overdueTodos: todos.filter((todo) => todo.isCompleted === 0 && todo.todoDate !== null && todo.todoDate < today).length,
-      unreadNotifications: unreadNotifications(user.id),
+      unreadNotifications: countUnreadNotifications(db(), user),
     },
     statusCounts: STATUS_ORDER.map((status) => ({
       status,
