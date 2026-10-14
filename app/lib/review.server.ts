@@ -4,7 +4,7 @@ import { SELECT_TASK, toTaskView, visibilityClauses } from "./tasks.server";
 /**
  * 回顾统计共享逻辑：页面 loader 与 /api/review 资源路由共用（筛选与统计口径与旧实现逐字一致）。
  * 组织隔离复用 tasks.server 的 visibilityClauses（§14.3）：admin 全部组织、manager 本组织、
- * 私密任务只对创建它的组织管理者可见；member 与未加入组织的账号看不到任何数据。
+ * 私密任务仅发布人/负责人/管理员可见；member 在路由层禁止访问，未入组账号无范围。
  */
 
 export type ReviewFilters = {

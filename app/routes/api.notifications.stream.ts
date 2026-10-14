@@ -1,6 +1,11 @@
 import { appConfig } from "../lib/context.server";
 import { db } from "../lib/db.server";
-import { subscribeNotifications, type NotificationPayload } from "../lib/notifications.server";
+import {
+  canReceiveNotification,
+  subscribeNotifications,
+  subscribeNotificationVisibility,
+  type NotificationPayload,
+} from "../lib/notifications.server";
 import { requireAuth } from "../lib/session.server";
 import { notifyOverdueTasks } from "../lib/tasks.server";
 
@@ -31,6 +36,7 @@ export async function loader({ request }: { request: Request }): Promise<Respons
     start(controller) {
       let finished = false;
       let stopSubscription: () => void = () => {};
+      let stopVisibility: () => void = () => {};
       let heartbeat: ReturnType<typeof setInterval> | null = null;
       let scanner: ReturnType<typeof setInterval> | null = null;
 
@@ -38,6 +44,7 @@ export async function loader({ request }: { request: Request }): Promise<Respons
         if (finished) return;
         finished = true;
         stopSubscription();
+        stopVisibility();
         if (heartbeat) clearInterval(heartbeat);
         if (scanner) clearInterval(scanner);
         try {
@@ -57,7 +64,15 @@ export async function loader({ request }: { request: Request }): Promise<Respons
         }
       };
 
-      stopSubscription = subscribeNotifications(userId, (payload: NotificationPayload) => send("notification", payload));
+      stopSubscription = subscribeNotifications(userId, (payload: NotificationPayload) => {
+        const current = requireAuth(request, appConfig().sessionCookieName);
+        if (!current.ok) {
+          finish();
+          return;
+        }
+        if (canReceiveNotification(db(), current.user, payload.taskId ?? null)) send("notification", payload);
+      });
+      stopVisibility = subscribeNotificationVisibility(userId, () => send("resync", {}));
       heartbeat = setInterval(() => {
         if (finished) return;
         try {
@@ -69,6 +84,12 @@ export async function loader({ request }: { request: Request }): Promise<Respons
       scanner = setInterval(() => {
         try {
           notifyOverdueTasks(db());
+          const current = requireAuth(request, appConfig().sessionCookieName);
+          if (!current.ok) {
+            finish();
+            return;
+          }
+          send("resync", {});
         } catch {
           // 扫描失败不能拖垮已经建立的推送连接
         }

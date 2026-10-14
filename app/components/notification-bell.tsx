@@ -4,6 +4,7 @@ import { App as AntdApp, Badge, Button, Drawer, Empty, Flex, Typography } from "
 import { BellOutlined, CheckOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
 import type { Notification } from "../../shared/types/domain";
+import { createNotificationSync, type NotificationSync } from "../lib/notification-sync";
 import { brandLogoUrl } from "./brand-logo";
 
 /**
@@ -36,6 +37,7 @@ export function NotificationBell({ initial }: { initial: Notification[] }): Reac
   const navigate = useNavigate();
   const { message, notification } = AntdApp.useApp();
   const [items, setItems] = useState<Notification[]>(initial);
+  const syncRef = useRef<NotificationSync | null>(null);
   const [open, setOpen] = useState(false);
   const [permission, setPermission] = useState<DesktopPermission>("unsupported");
   // 事件回调在 effect 里只订阅一次，用 ref 读取最新的权限与「打开通知」逻辑，避免反复重建 SSE 连接
@@ -93,19 +95,17 @@ export function NotificationBell({ initial }: { initial: Notification[] }): Reac
   useEffect(() => {
     const source = new EventSource("/api/notifications/stream");
 
-    const resync = async (): Promise<void> => {
-      try {
-        const response = await fetch("/api/notifications?unread=1", { credentials: "include" });
-        if (!response.ok) return;
-        const body = (await response.json()) as { data?: Notification[] };
-        if (Array.isArray(body.data)) setItems(body.data);
-      } catch {
-        // 断线或服务未就绪：保留现有列表，EventSource 会自动重连
-      }
-    };
+    const sync = createNotificationSync<Notification>(async () => {
+      const response = await fetch("/api/notifications?unread=1", { credentials: "include" });
+      if (!response.ok) return null;
+      const body = (await response.json()) as { data?: Notification[] };
+      return Array.isArray(body.data) ? body.data : null;
+    }, setItems);
+    syncRef.current = sync;
 
     const onNotification = (event: Event): void => {
       const payload = JSON.parse((event as MessageEvent<string>).data) as Notification;
+      sync.invalidate();
       setItems((prev) => [payload, ...prev.filter((entry) => entry.id !== payload.id)].slice(0, 100));
       notification.open({
         title: payload.title,
@@ -130,13 +130,21 @@ export function NotificationBell({ initial }: { initial: Notification[] }): Reac
     };
 
     source.addEventListener("notification", onNotification);
-    source.addEventListener("ready", () => void resync());
-    source.onopen = () => void resync();
+    source.addEventListener("ready", () => void sync.sync());
+    source.addEventListener("resync", () => void sync.sync());
+    source.onopen = () => void sync.sync();
     return () => {
+      sync.dispose();
+      syncRef.current = null;
       source.removeEventListener("notification", onNotification);
       source.close();
     };
   }, []);
+
+  useEffect(() => {
+    // Root data may predate a child loader's overdue scan or a live SSE event.
+    void syncRef.current?.sync();
+  }, [initial]);
 
   const footer =
     permission === "unsupported" ? (

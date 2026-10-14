@@ -367,6 +367,24 @@ body {
   border-bottom: 1px solid #e5e7eb;
 }
 
+.task-toolbar-switches {
+  min-height: 32px;
+}
+
+.task-toolbar-switches > * {
+  white-space: nowrap;
+}
+
+.task-checklist-copy {
+  min-width: 0;
+  flex: 1 1 220px;
+}
+
+.task-checklist-actions {
+  flex: none;
+  margin-inline-start: auto;
+}
+
 @media (max-width: 600px) {
   .task-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));

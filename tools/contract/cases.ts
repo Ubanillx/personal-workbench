@@ -43,6 +43,69 @@ export const CASES: ContractCase[] = [
   { name: "health.status.anon", role: "anon", method: "GET", path: "/api/health" },
   { name: "health.status.admin", role: "admin", method: "GET", path: "/api/health" },
 
+  // ---------- personal task dimensions: account isolation, multi-links and independent handling ----------
+  { name: "dimensions.list.anon", role: "anon", method: "GET", path: "/api/task-dimensions" },
+  { name: "dimensions.list.memberA", role: "memberA", method: "GET", path: "/api/task-dimensions" },
+  {
+    name: "dimensions.create.memberA",
+    role: "memberA",
+    method: "POST",
+    path: "/api/task-dimensions",
+    body: { name: "验货申请" },
+    capture: { createdDimension: "data.id" },
+  },
+  { name: "dimensions.create.duplicate", role: "memberA", method: "POST", path: "/api/task-dimensions", body: { name: "客户跟进" } },
+  {
+    name: "dimensions.patch.own",
+    role: "memberA",
+    method: "PATCH",
+    path: "/api/task-dimensions/{{createdDimension}}",
+    body: { name: "验货跟进" },
+  },
+  {
+    name: "dimensions.patch.admin.other",
+    role: "admin",
+    method: "PATCH",
+    path: "/api/task-dimensions/{{createdDimension}}",
+    body: { name: "越权" },
+  },
+  { name: "dimensions.delete.other", role: "memberA2", method: "DELETE", path: "/api/task-dimensions/{{createdDimension}}" },
+  { name: "personal.read.own", role: "memberA", method: "GET", path: "/api/tasks/{{taskTodo}}/personal" },
+  {
+    name: "personal.patch.own",
+    role: "memberA",
+    method: "PATCH",
+    path: "/api/tasks/{{taskTodo}}/personal",
+    body: { dimensionIds: [IDS.dimensionA], handled: true },
+  },
+  { name: "personal.read.other.actor", role: "managerA", method: "GET", path: "/api/tasks/{{taskTodo}}/personal" },
+  { name: "personal.read.same-org.hidden", role: "memberA2", method: "GET", path: "/api/tasks/{{taskTodo}}/personal" },
+  { name: "personal.patch.cross-org", role: "memberB", method: "PATCH", path: "/api/tasks/{{taskTodo}}/personal", body: { handled: true } },
+  {
+    name: "personal.patch.foreign-dimension",
+    role: "memberA",
+    method: "PATCH",
+    path: "/api/tasks/{{taskTodo}}/personal",
+    body: { dimensionIds: [IDS.dimensionA2] },
+  },
+  {
+    name: "personal.patch.invalid-boolean",
+    role: "memberA",
+    method: "PATCH",
+    path: "/api/tasks/{{taskTodo}}/personal",
+    body: { handled: "false" },
+  },
+  { name: "tasks.list.dimension", role: "memberA", method: "GET", path: "/api/tasks?dimension={{dimensionA}}" },
+  { name: "tasks.list.dimension.hide-handled", role: "memberA", method: "GET", path: "/api/tasks?dimension={{dimensionA}}&hideHandled=1" },
+  {
+    name: "personal.patch.clear",
+    role: "memberA",
+    method: "PATCH",
+    path: "/api/tasks/{{taskTodo}}/personal",
+    body: { dimensionIds: [], handled: false },
+  },
+  { name: "dimensions.delete.own", role: "memberA", method: "DELETE", path: "/api/task-dimensions/{{createdDimension}}" },
+
   // ---------- auth：登录（5） ----------
   {
     name: "auth.login.admin",
@@ -842,6 +905,8 @@ export const CASES: ContractCase[] = [
     body: { content: "  " },
   },
   { name: "activity.managerA", role: "managerA", method: "GET", path: "/api/tasks/{{taskDoing}}/activity" },
+  { name: "activity.memberA2.others-task", role: "memberA2", method: "GET", path: "/api/tasks/{{taskDoing}}/activity" },
+  { name: "activity.memberA.own-published", role: "memberA", method: "GET", path: "/api/tasks/{{taskByMember}}/activity" },
   { name: "activity.anon", role: "anon", method: "GET", path: "/api/tasks/{{taskDoing}}/activity" },
   { name: "activity.managerB.cross-org", role: "managerB", method: "GET", path: "/api/tasks/{{taskDoing}}/activity" },
   { name: "activity.missing", role: "managerA", method: "GET", path: "/api/tasks/no-such-task/activity" },
@@ -867,7 +932,7 @@ export const CASES: ContractCase[] = [
   { name: "tasks.remind.managerA.overdue.repeat", role: "managerA", method: "POST", path: "/api/tasks/{{taskOverdue}}/remind" },
   { name: "tasks.remind.memberA.forbidden", role: "memberA", method: "POST", path: "/api/tasks/{{taskOverdue}}/remind" },
   { name: "tasks.remind.managerB.cross-org", role: "managerB", method: "POST", path: "/api/tasks/{{taskOverdue}}/remind" },
-  { name: "tasks.remind.managerA.not-overdue", role: "managerA", method: "POST", path: "/api/tasks/{{taskDoing}}/remind" },
+  { name: "tasks.remind.managerA.not-overdue", role: "managerA", method: "POST", path: "/api/tasks/{{taskTodo}}/remind" },
   { name: "notifications.memberA.after-manual-remind", role: "memberA", method: "GET", path: "/api/notifications" },
 
   // ---------- 验收视图（管理员或组织管理者） ----------
@@ -929,6 +994,20 @@ export const CASES: ContractCase[] = [
     role: "memberA",
     method: "POST",
     path: "/api/inbox/import",
+    body: { drafts: [{ title: "成员甲导入", fingerprint: "fp-a" }] },
+  },
+  {
+    name: "inbox.preview.memberA2.invisible-duplicate",
+    role: "memberA2",
+    method: "POST",
+    path: "/api/inbox/preview",
+    body: { drafts: [{ title: "成员甲导入", fingerprint: "fp-a" }] },
+  },
+  {
+    name: "inbox.preview.memberA.visible-duplicate",
+    role: "memberA",
+    method: "POST",
+    path: "/api/inbox/preview",
     body: { drafts: [{ title: "成员甲导入", fingerprint: "fp-a" }] },
   },
   {

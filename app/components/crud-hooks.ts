@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { App as AntdApp } from "antd";
 import type { TablePaginationConfig, TableProps } from "antd";
 import { useSearchParams } from "react-router";
-import { LIST_PARAMS, VIEW_PARAMS, type Paged } from "../lib/paging";
+import { LIST_PARAMS, paginationChanges, VIEW_PARAMS, type Paged } from "../lib/paging";
 import { paginationBase } from "./table-layout";
 
 /** antd 表头的排序箭头：受控（唯一真相在 URL），组件里不再存一份 */
@@ -89,20 +89,13 @@ export function useListParams(): {
 export function useServerTable<T>(list: Paged<T>): {
   pagination: TablePaginationConfig;
   onTableChange: NonNullable<TableProps<T>["onChange"]>;
+  onPaginationChange: (page: number, size: number) => void;
   /** 列上写 `sortOrder: sortOrderOf("title")`：箭头跟着**服务端实际采用**的排序走 */
   sortOrderOf: (key: string) => SortArrow;
 } {
   const { patch } = useListParams();
   const onTableChange: NonNullable<TableProps<T>["onChange"]> = (next, _filters, sorter, extra) => {
-    const changes: Record<string, string | null> = {};
-    const nextSize = next.pageSize ?? list.size;
-    if (nextSize !== list.size) {
-      changes[LIST_PARAMS.size] = String(nextSize);
-      // 条数变了，原来的页码没有意义（第 3 页在每页 50 条下可能根本不存在）
-      changes[LIST_PARAMS.page] = "1";
-    } else {
-      changes[LIST_PARAMS.page] = String(next.current ?? list.page);
-    }
+    const changes: Record<string, string | null> = paginationChanges(list, next.current ?? list.page, next.pageSize ?? list.size);
     // 翻页事件也会携带当前已生效的 sorter；只有明确是 sort 动作时才更新排序，
     // 否则每次翻页都会把当前页误重置成 1（antd Table 的 onChange extra.action）。
     if (extra.action === "sort") {
@@ -126,6 +119,7 @@ export function useServerTable<T>(list: Paged<T>): {
       total: list.total,
     },
     onTableChange,
+    onPaginationChange: (page, size) => patch(paginationChanges(list, page, size)),
     sortOrderOf: (key: string): SortArrow => (list.sort.key === key ? (list.sort.direction === "desc" ? "descend" : "ascend") : null),
   };
 }

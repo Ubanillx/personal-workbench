@@ -32,7 +32,8 @@ import "dayjs/locale/zh-cn";
 import type { Notification } from "../shared/types/domain";
 import { BrandLogo, brandLogoUrl } from "./components/brand-logo";
 import { NotificationBell } from "./components/notification-bell";
-import { db, rows } from "./lib/db.server";
+import { db } from "./lib/db.server";
+import { listNotifications } from "./lib/notifications.server";
 import { currentUser } from "./lib/ui.server";
 import "./styles/layout.css";
 // 表格排版基线的兜底层（裁剪 / 收缩）：`dataTable()` 的配套样式，全站所有表格共用
@@ -107,11 +108,7 @@ type SessionUser = {
 export async function loader({ request }: { request: Request }) {
   const user = currentUser(request);
   if (!user) return { user: null, notifications: [] as Notification[] };
-  const unread = rows<Notification>(
-    db(),
-    "SELECT id,actor_id AS actorId,task_id AS taskId,report_id AS reportId,event_type AS eventType,title,message,created_at AS createdAt FROM notifications WHERE recipient_id=? AND is_read=0 ORDER BY created_at DESC",
-    user.id,
-  );
+  const unread = listNotifications(db(), user, true);
   return { user: user as SessionUser, notifications: unread };
 }
 

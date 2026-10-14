@@ -92,7 +92,7 @@ const PAGE_MARKERS: Record<string, string[]> = {
     "待验收任务",
     "新建任务",
     "从企微导入",
-    "搜索任务标题或负责人",
+    "搜索任务或负责人",
     "完成率",
     "全部时间",
     "最近更新",
@@ -483,6 +483,17 @@ async function main(): Promise<void> {
     const member = await loginAs(base, ACCOUNTS.memberA);
     const managerTasksHtml = await pageHtml("/tasks", manager.cookie);
     const memberTasksHtml = await pageHtml("/tasks", member.cookie);
+    check("普通成员任务页说明只看本人发布/负责", memberTasksHtml.includes("仅显示本组织内我发布或当前负责的任务"));
+    check("任务页展示优先级排序入口", memberTasksHtml.includes("任务排序") && memberTasksHtml.includes("优先级：高优先在前"));
+    check("任务页展示个人维度筛选与管理入口", memberTasksHtml.includes("任务维度") && memberTasksHtml.includes("管理维度"));
+    check(
+      "个人处理与任务进度分开显示",
+      memberTasksHtml.includes("我的处理") && memberTasksHtml.includes("本人已处理") && memberTasksHtml.includes("进度另行汇报"),
+    );
+    check("任务显示选项使用开关", (memberTasksHtml.match(/role="switch"/g) ?? []).length === 2);
+    check("筛选栏先下拉后搜索", memberTasksHtml.indexOf('aria-label="任务排序"') < memberTasksHtml.indexOf("搜索任务或负责人"));
+    check("个人任务支持清单展示", (await pageHtml("/tasks?view=checklist", member.cookie)).includes("任务清单"));
+    check("普通成员列表不展示其他成员的任务", !memberTasksHtml.includes("成员乙的任务"));
     check(
       "组织管理者在逾期任务上看到「手动提醒」入口",
       managerTasksHtml.includes("手动提醒"),

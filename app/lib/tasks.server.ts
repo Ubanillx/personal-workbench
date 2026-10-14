@@ -4,15 +4,15 @@ import { now, one, rows, run, toUser, type Db, type User } from "./db.server";
 import { createNotification } from "./notifications.server";
 import type { Paged, Paging, SortSpec } from "./paging";
 import { likeTerm, orderOf, pageOf, type SortableColumns } from "./paging.server";
-import { orgScope } from "./session.server";
 import { canManageRole } from "./task-permissions";
+import { canViewTask, taskVisibilityClauses } from "./task-visibility.server";
 
 /**
  * 任务读模型与可见性规则（组织隔离的收敛点）。
  *
  * 设计见 docs/harness/ACCOUNTS_AND_ORGS.md §14 与 §23（D-54）：
  * - `tasks` 有 `org_id`，所有查询都必须带组织条件，条件由 `visibilityClauses` 统一产出；
- * - 角色映射（§14.3 + D-54）：admin 看全部组织；manager 与 member 都是**本组织全部非私密任务**；
+ * - admin 看全部组织；manager 看本组织全部非私密任务；member 仅看本人发布或当前负责的任务；
  * - 私密任务（`is_private=1`）只有三类人可见：**发布人（`created_by`）、负责人（`owner_id`）、全局管理员**，
  *   组织管理者不因管理员身份自动获得他人的私密任务；
  * - 按 id 取单条资源时先取 `org_id` 再用 `assertOrgAccess` 判定（见 app/lib/task-service.server.ts）。
@@ -74,28 +74,15 @@ export function canManageTasks(user: User): boolean {
  * 可见性 SQL 条件（§14.3 + D-54）。调用方把 clauses 用 AND 拼进自己的 WHERE，参数按顺序拼进 params，
  * 这样"漏加组织过滤"只可能发生在这一处，而不是散落在每个查询里。
  * - admin：全部组织（私密任务也全部可见）；
- * - manager / member：**本组织全部非私密任务**（组织内协作对所有人可见），
- *   外加**自己发布或自己负责**的私密任务；
+ * - manager：本组织非私密任务 + 本人发布/负责的私密任务；
+ * - member：本组织本人发布或当前负责的任务，不因非私密而扩大范围；
  * - 未加入组织的账号（orgId 为 NULL，D-24）：不落在任何组织范围内，一条都看不到。
  *
  * 私密任务的三个可见条件与 `canView` 逐条对应：改这里必须同步改 `canView`，
  * 否则会出现「列表里看得到、点进去 403」（或反过来）。
  */
 export function visibilityClauses(user: User): { clauses: string[]; params: string[] } {
-  const clauses: string[] = [];
-  const params: string[] = [];
-  const scope = orgScope(user);
-  if (scope) {
-    clauses.push("t.org_id=?");
-    params.push(scope);
-  } else if (user.role !== "admin") {
-    clauses.push("1=0");
-  }
-  if (user.role !== "admin") {
-    clauses.push("(t.is_private=0 OR t.created_by=? OR t.owner_id=?)");
-    params.push(user.id, user.id);
-  }
-  return { clauses, params };
+  return taskVisibilityClauses(user);
 }
 
 /** `/tasks` 的列表筛选条件（与 URL 参数一一对应；服务端分页后筛选也必须在服务端） */
@@ -109,6 +96,8 @@ export type TaskFilters = {
   /** 更新时间范围的两端（含当天）：原来也是在 loader 里内存过滤 */
   from?: string | undefined;
   to?: string | undefined;
+  dimension?: string | undefined;
+  hideHandled?: boolean | undefined;
 };
 
 /**
@@ -117,6 +106,19 @@ export type TaskFilters = {
  */
 function taskWhere(user: User, filters: TaskFilters): { where: string; params: string[] } {
   const { clauses, params } = visibilityClauses(user);
+  if (filters.dimension && filters.dimension !== "all") {
+    if (filters.dimension === "unclassified") {
+      clauses.push("NOT EXISTS (SELECT 1 FROM task_dimension_links dl WHERE dl.task_id=t.id AND dl.user_id=?)");
+      params.push(user.id);
+    } else {
+      clauses.push("EXISTS (SELECT 1 FROM task_dimension_links dl WHERE dl.task_id=t.id AND dl.user_id=? AND dl.dimension_id=?)");
+      params.push(user.id, filters.dimension);
+    }
+  }
+  if (filters.hideHandled) {
+    clauses.push("NOT EXISTS (SELECT 1 FROM personal_task_handling ph WHERE ph.task_id=t.id AND ph.user_id=? AND ph.handled=1)");
+    params.push(user.id);
+  }
   if (!filters.includeArchived) clauses.push("t.archived_at IS NULL");
   if (filters.status && filters.status !== "all") {
     clauses.push("t.status=?");
@@ -162,8 +164,9 @@ export function visible(
   status?: string,
   assignee?: string,
   orgFilter?: string | null,
+  personalFilters: Pick<TaskFilters, "dimension" | "hideHandled"> = {},
 ): TaskView[] {
-  const { where, params } = taskWhere(user, { includeArchived, status, assignee, orgFilter });
+  const { where, params } = taskWhere(user, { includeArchived, status, assignee, orgFilter, ...personalFilters });
   return rows(database, `${SELECT_TASK} ${where} ORDER BY t.updated_at DESC`, ...params).map(toTaskView);
 }
 
@@ -175,6 +178,7 @@ export function visible(
  * 于是升序时空值排最后、降序时排最前；SQLite 默认把 NULL 当最小值，两者正好相反，不能直接用列名排。
  */
 export const TASK_SORTABLE: SortableColumns = {
+  priority: { by: "t.priority {dir}, t.updated_at DESC" },
   title: { column: "t.title" },
   progress: { by: "t.progress {dir}" },
   dueDate: { by: "IFNULL(t.due_date,'9999-99-99') {dir}" },
@@ -183,6 +187,24 @@ export const TASK_SORTABLE: SortableColumns = {
 
 /** 默认排序：最近更新在前（与改动前表头的默认排序一致） */
 export const DEFAULT_TASK_SORT: SortSpec = { key: "updatedAt", direction: "desc" };
+
+export function defaultTaskSort(user: User): SortSpec {
+  return user.role === "member" ? { key: "priority", direction: "asc" } : DEFAULT_TASK_SORT;
+}
+
+/** 只对当前可见任务判重，不能通过指纹探测其他成员的任务。 */
+export function hasVisibleFingerprint(database: Db, user: User, orgId: string, fingerprint: string): boolean {
+  const { clauses, params } = visibilityClauses(user);
+  return Boolean(
+    one(
+      database,
+      `SELECT t.id FROM tasks t WHERE t.org_id=? AND t.wecom_fingerprint=?${clauses.length ? ` AND ${clauses.join(" AND ")}` : ""}`,
+      orgId,
+      fingerprint,
+      ...params,
+    ),
+  );
+}
 
 /** 任务列表的一页（服务端筛选 + 排序 + 分页；页面只拿到当页的行） */
 export function visiblePage(database: Db, user: User, filters: TaskFilters, paging: Paging, sort: SortSpec): Paged<TaskView> {
@@ -201,7 +223,7 @@ export function visiblePage(database: Db, user: User, filters: TaskFilters, pagi
 }
 
 /** 任务列表的统计（任务总数 / 已完成 / 待验收 / 已逾期） */
-export type TaskStats = { total: number; completed: number; pendingReview: number; overdue: number };
+export type TaskStats = { total: number; completed: number; pendingReview: number; overdue: number; handled: number };
 
 /**
  * 列表统计必须由服务端算：服务端分页后页面手里只有一页，
@@ -210,13 +232,15 @@ export type TaskStats = { total: number; completed: number; pendingReview: numbe
  */
 export function taskStats(database: Db, user: User, filters: TaskFilters, today: string): TaskStats {
   const { where, params } = taskWhere(user, filters);
-  const row = one<{ total: number; completed: number; pendingReview: number; overdue: number }>(
+  const row = one<TaskStats>(
     database,
     `SELECT COUNT(*) AS total,
+             IFNULL(SUM(CASE WHEN EXISTS (SELECT 1 FROM personal_task_handling ph WHERE ph.task_id=t.id AND ph.user_id=? AND ph.handled=1) THEN 1 ELSE 0 END),0) AS handled,
             IFNULL(SUM(CASE WHEN t.status='completed' THEN 1 ELSE 0 END),0) AS completed,
             IFNULL(SUM(CASE WHEN t.status='pending_review' THEN 1 ELSE 0 END),0) AS pendingReview,
             IFNULL(SUM(CASE WHEN t.due_date IS NOT NULL AND t.due_date<? AND t.status<>'completed' AND t.archived_at IS NULL THEN 1 ELSE 0 END),0) AS overdue
      ${TASK_SOURCE} ${where}`,
+    user.id,
     today,
     ...params,
   );
@@ -225,6 +249,7 @@ export function taskStats(database: Db, user: User, filters: TaskFilters, today:
     completed: Number(row?.completed ?? 0),
     pendingReview: Number(row?.pendingReview ?? 0),
     overdue: Number(row?.overdue ?? 0),
+    handled: Number(row?.handled ?? 0),
   };
 }
 
@@ -244,13 +269,10 @@ export function findTaskWithOrg(database: Db, id: string): { task: TaskView; org
  * 单条任务对某人是否可见（组织边界由调用方先用 assertOrgAccess 判定，§14.2）。
  *
  * D-54 起私密任务只有三类人可见，**组织管理者身份不再自动带来看他人的私密任务的权限**：
- * 发布人（`createdBy`）、负责人（`ownerId`）、全局管理员。非私密任务是组织内公开的，
- * 组织边界已经由调用方判过，到这里就放行。
+ * 普通成员对非私密任务也必须是发布人或当前负责人；管理者的非私密范围保持不变。
  */
 export function canView(t: TaskView, user: User): boolean {
-  if (user.role === "admin") return true;
-  if (t.isPrivate) return t.createdBy === user.id || t.ownerId === user.id;
-  return true;
+  return canViewTask(t, user);
 }
 
 /**
