@@ -76,6 +76,11 @@ React Router 8（单进程，react-router-serve 监听 17500）
 响应统一信封：成功 `{ ok: true, data: ... }`；失败 `{ ok: false, error: { code, message } }`（由 `app/lib/http.server.ts` 统一产出，
 包含 `application/json; charset=utf-8`、去除了 `upgrade-insecure-requests` 的 CSP、`X-Content-Type-Options: nosniff`，不发 HSTS/COOP）。
 
+内网 HTTPS 由 Nginx 终止后，内侧 `react-router-serve` 默认不信任代理头，页面 action 的 `request.url` 仍为 HTTP。
+React Router 会将浏览器 `Origin: https://192.168.3.251` 与它比较，不匹配时在进入 action 之前返回 400。
+`react-router.config.ts` 的 `allowedActionOrigins` 只允许该精确部署主机执行页面 action；不使用通配符，也不改写客户端 `Origin`，其它来源继续被拒绝。
+资源路由的权限仍由原来的会话与服务层判据执行。`X-Forwarded-Proto: https` 保证登录 Cookie 带 `Secure`，它本身不改变 React Router 的来源校验。
+
 **架构硬规则**：页面 loader/action 直接调用共享服务，**不允许**去 fetch 自己的 `/api`。API 资源路由与页面共享同一份服务实现，
 所以"页面能用但 API 挂了"这类漂移在结构上不可能发生。
 

@@ -157,3 +157,34 @@ test("登录失败一律 401：密码错与用户名不存在返回同一条消�
   const anonymousBody = await envelope(anonymous);
   assert.equal(anonymous.status, 401, `没有会话访问业务端点应 401：${JSON.stringify(anonymousBody)}`);
 });
+
+test("HTTPS 反向代理允许指定来源的页面登录，拒绝其他来源", async () => {
+  const registered = await register("https-proxy-user", "https-proxy@example.test", "https-proxy-password", "代理测试用户");
+  assertAccepted(registered.status, registered.body, "注册");
+
+  const body = JSON.stringify({ username: "https-proxy-user", password: "https-proxy-password", redirectTo: "/" });
+  const submit = (origin: string): Promise<Response> =>
+    fetch(`${baseUrl}/login.data`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        accept: "text/x-script",
+        origin,
+        "x-forwarded-proto": "https",
+      },
+      body,
+    });
+
+  const allowed = await submit("https://192.168.3.251");
+  const allowedBody = await allowed.text();
+  assert.equal(allowed.status, 202, `合法来源的页面 action 应重定向，实际 ${allowed.status}：${allowedBody}`);
+  assert.match(allowed.headers.get("set-cookie") ?? "", /workbench_session=.*; Secure/u);
+  assert.match(allowedBody, /redirect/u);
+
+  for (const origin of ["https://attacker.example", "https://192.168.3.251.attacker.example"]) {
+    const denied = await submit(origin);
+    assert.equal(denied.status, 400, `不应放行来源 ${origin}`);
+    assert.equal(denied.headers.get("set-cookie"), null);
+    await denied.text();
+  }
+});
