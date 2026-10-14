@@ -1097,7 +1097,7 @@ export default function TasksRoute(): React.ReactElement {
               ) : (
                 <Empty description="没有符合条件的任务" />
               )}
-              <Pagination {...paging.pagination} onChange={(page, size) => list.patch({ page: String(page), size: String(size) })} />
+              <Pagination {...paging.pagination} onChange={paging.onPaginationChange} />
             </Flex>
           </Card>
         ) : (

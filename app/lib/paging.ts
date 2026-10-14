@@ -80,6 +80,11 @@ export function sortOf(searchParams: URLSearchParams, allowed: readonly string[]
 /** URL 上「分页 + 排序」四个参数的统一名字（客户端写入与服务端读取共用，避免两边写错字） */
 export const LIST_PARAMS = { page: "page", size: "size", sort: "sort", order: "order" } as const;
 
+/** Tables and standalone pagination both reset to page one when the size changes. */
+export function paginationChanges(current: { size: number }, page: number, size: number): Record<string, string> {
+  return size === current.size ? { [LIST_PARAMS.page]: String(page) } : { [LIST_PARAMS.page]: "1", [LIST_PARAMS.size]: String(size) };
+}
+
 /**
  * URL 上**不影响「这一页是谁」**的视图参数：目前只有任务详情抽屉的 `?task=`。
  *

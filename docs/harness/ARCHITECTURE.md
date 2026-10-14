@@ -214,6 +214,7 @@ React Router 8（单进程，react-router-serve 监听 17500）
 `dimension=all`（缺省）不限制维度，`dimension=unclassified` 查询本人尚无任何关联的任务，其余值按本人维度 ID 过滤；未知或他人的维度 ID 不返回任务。
 `/tasks` 的维度筛选与个人处理筛选在服务端排序/分页前应用，统计复用同一 WHERE，用 EXISTS 防止多维度造成重复行。
 `view=checklist` 提供按当前维度查看的清单卡片，默认保留现有表格。所有筛选与视图状态保留在 URL，重置恢复默认。
+表格与清单通过 `useServerTable().onPaginationChange` / `paginationChanges()` 共用分页接线：只翻页保留目标页，修改每页条数回到第一页，维度、搜索与排序参数不丢失。
 
 `/api/tasks` 与 `/api/dashboard` 均应用普通成员本人发布/当前负责的范围；数组载荷和更新时间排序不变。
 `/tasks` 页面通过 `defaultTaskSort()` 按角色选择默认排序，普通成员优先级升序，管理角色更新时间降序。
@@ -230,6 +231,7 @@ React Router 8（单进程，react-router-serve 监听 17500）
 
 通知 API、外壳 loader 和概览未读数通过 `notificationScope()` 复用 `task-visibility.server.ts` 的 SQL 判据，历史通知在任务改派/跨组织移动/隐私变更后按当前权限过滤，不删除历史记录。
 SSE 的 `notification` 事件重新鉴权并校验任务可见性；`resync` 事件无任务内容，用于权限变更及周期同步时移除客户端已失去查看权的通知。
+通知铃铛仅在首次渲染使用 root loader 的通知快照；后续 root 重验证触发新的未读查询，不直接覆盖 SSE 已更新的列表。`notification-sync.ts` 串行同步并按修订号丢弃过期响应：查询期间收到 SSE 或新的重同步请求时重新取数，仍按服务端当前权限整体替换列表，组件卸载后不应用迟到的响应，网络失败保留现有列表。
 企微 `/api/inbox/preview` 与 `/api/inbox/import` 的判重同样使用当前可见范围，非可见任务不返回重复信号。
 
 ### 待办与随手记（8）

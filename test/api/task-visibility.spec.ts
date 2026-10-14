@@ -5,6 +5,8 @@ import { ACCOUNTS, createFixture, IDS, removeFixture, type Fixture } from "../..
 import { findFreePort, startServer } from "../../tools/contract/runner";
 import { toUser, USER_SELECT } from "../../app/lib/db.server";
 import { countUnreadNotifications } from "../../app/lib/notifications.server";
+import { createNotificationSync } from "../../app/lib/notification-sync";
+import { paginationChanges } from "../../app/lib/paging";
 
 type Task = { id: string; title: string; priority: string; createdBy: string; ownerId: string | null };
 type Notice = { id: string; taskId: string | null; message: string };
@@ -61,6 +63,83 @@ async function html(role: string, pathname: string): Promise<string> {
 }
 
 const rowKeys = (markup: string): string[] => [...markup.matchAll(/data-row-key="([^"]+)"/gu)].map((match) => match[1] ?? "");
+
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((complete) => {
+    resolve = complete;
+  });
+  return { promise, resolve };
+}
+
+test("通知旧快照不能覆盖请求期间收到的 SSE 消息", async () => {
+  const stale = deferred<string[]>();
+  const snapshots: string[][] = [];
+  let loads = 0;
+  const sync = createNotificationSync(
+    () => (++loads === 1 ? stale.promise : Promise.resolve(["old", "new"])),
+    (items) => snapshots.push(items),
+  );
+  const pending = sync.sync();
+  sync.invalidate();
+  stale.resolve(["old"]);
+  await pending;
+  assert.equal(loads, 2);
+  assert.deepEqual(snapshots, [["old", "new"]]);
+});
+
+test("页面重验证和权限 resync 共用最新快照，并移除不可见历史通知", async () => {
+  const stale = deferred<string[]>();
+  const snapshots: string[][] = [];
+  let loads = 0;
+  const sync = createNotificationSync(
+    () => (++loads === 1 ? stale.promise : Promise.resolve(["visible"])),
+    (items) => snapshots.push(items),
+  );
+  const first = sync.sync();
+  const second = sync.sync();
+  stale.resolve(["hidden", "visible"]);
+  await Promise.all([first, second]);
+  assert.equal(loads, 2);
+  assert.deepEqual(snapshots, [["visible"]]);
+});
+
+test("卸载通知组件后不应用迟到的响应", async () => {
+  const stale = deferred<string[]>();
+  const snapshots: string[][] = [];
+  const sync = createNotificationSync(
+    () => stale.promise,
+    (items) => snapshots.push(items),
+  );
+  const pending = sync.sync();
+  sync.dispose();
+  stale.resolve(["late"]);
+  await pending;
+  await sync.sync();
+  assert.deepEqual(snapshots, []);
+});
+
+test("通知同步网络失败保留现有状态，后续同步可以恢复", async () => {
+  const snapshots: string[][] = [];
+  let loads = 0;
+  const sync = createNotificationSync(
+    async () => {
+      if (++loads === 1) throw new Error("offline");
+      return ["recovered"];
+    },
+    (items) => snapshots.push(items),
+  );
+  await sync.sync();
+  assert.deepEqual(snapshots, []);
+  await sync.sync();
+  assert.deepEqual(snapshots, [["recovered"]]);
+});
+
+test("表格和清单翻页保持目标页，修改每页条数统一回第一页", () => {
+  assert.deepEqual(paginationChanges({ size: 20 }, 2, 50), { page: "1", size: "50" });
+  assert.deepEqual(paginationChanges({ size: 50 }, 3, 20), { page: "1", size: "20" });
+  assert.deepEqual(paginationChanges({ size: 20 }, 3, 20), { page: "3" });
+});
 
 test("成员仅看本人发布/负责，列表、详情、统计、评论和时间线同源", async () => {
   const own = await create("memberA", "权限核验-本人发布", { ownerId: IDS.userMemberA2 });
