@@ -64,6 +64,9 @@
 | 部署（查状态）   | `sudo /opt/personal-workbench/bin/deploy.sh status`                      | 目标机上执行：当前 release / 服务状态 / 健康检查 / 历史版本                                                                                   |
 | 部署（回滚）     | `sudo …/deploy.sh rollback` 或 Jenkins `ACTION=rollback`                 | 切回上一个 release 并重启；**只回代码不回数据库结构**                                                                                         |
 
+内网 HTTPS 登录依赖构建时的 `react-router.config.ts` 中精确列出的 `allowedActionOrigins`（当前仅 `192.168.3.251`）。
+Nginx 终止 TLS 后，`react-router-serve` 会将页面 action 的请求 URL 视为 HTTP；如调整对外主机名，须更新该配置并运行 `npm run build` 后发布。`test/api/auth.spec.ts` 覆盖 HTTPS 来源的页面登录及非白名单来源拒绝；自签名证书另需客户端信任。
+
 ## 文档索引
 
 | 文件                            | 内容                                                                       | 什么时候看 / 改                                |

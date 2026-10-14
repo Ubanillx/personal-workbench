@@ -147,6 +147,10 @@ WORKBENCH_ADMIN_PASSWORD=
 - 没有 `.env` 也能正常启动（该文件被 gitignore）；
 - `HOST` / `PORT` 由 `npm run serve` 的适配器读取（所以 `serve` 脚本里带了 `--env-file-if-exists=.env`），其余变量由 `server/src/config/env.ts` 读取。
 
+内网 HTTPS 由 Nginx 终止时，`react-router-serve` 仍通过本机 HTTP 接收请求。`react-router.config.ts` 的
+`allowedActionOrigins` 仅放行页面 action 的部署入口 `192.168.3.251`，以免浏览器的 HTTPS `Origin` 被误判为跨站请求；
+更换部署地址时须同步更新该精确主机名并重新构建。自签名证书的信任是独立的客户端配置。
+
 不要将真实 token、`.env`、数据库备份或隐私数据提交到代码仓库或写入日志。
 
 ## WebDAV（可选，用于「重要文件」与「周报正文」）
