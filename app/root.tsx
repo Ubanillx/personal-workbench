@@ -43,51 +43,52 @@ import "./styles/table-layout.css";
 dayjs.locale("zh-cn");
 
 /**
- * 主题基线（03 靛蓝）：主色 #4053a8，页面底色 #eef0f7，其余按 Ant Design v6 的设计语言取值——
- * 控件高 36px（小型控件 32px）、基础圆角 6px、浮层（卡片/弹窗）圆角 8px、表格表头 #f1f3fa，
- * 一律通过 Design Token 表达，不覆盖 antd 内部类名（见 docs/harness/CODE_STYLE.md §10.5）。
+ * 主题基线（阿里蓝）：主色 #1677ff，页面底色 #fcfcfd（接近纯白、只带一丝灰），
+ * 其余按 Ant Design v6 的设计语言取值——控件高 36px（小型控件 32px）、基础圆角 6px、
+ * 浮层（卡片/弹窗）圆角 8px、表格表头 #f7f8fa，一律通过 Design Token 表达，
+ * 不覆盖 antd 内部类名（见 docs/harness/CODE_STYLE.md §10.5）。
  */
 const workbenchTheme: ThemeConfig = {
   token: {
-    colorPrimary: "#4053a8",
-    colorPrimaryHover: "#5064bd",
-    colorPrimaryActive: "#33438c",
-    colorPrimaryText: "#33438c",
-    colorPrimaryTextHover: "#5064bd",
-    colorPrimaryTextActive: "#2a3775",
-    colorPrimaryBg: "#e9edf9",
-    colorPrimaryBgHover: "#dde4f6",
-    colorPrimaryBorder: "#c3cdec",
-    colorPrimaryBorderHover: "#a5b4e0",
-    colorInfo: "#4053a8",
-    colorInfoBg: "#e9edf9",
-    colorInfoBorder: "#c3cdec",
-    colorInfoText: "#33438c",
-    colorLink: "#4053a8",
-    colorLinkHover: "#5064bd",
-    colorLinkActive: "#33438c",
-    colorText: "#232838",
-    colorTextHeading: "#232838",
-    colorTextSecondary: "#5c6478",
-    colorTextTertiary: "#7c8497",
-    colorTextQuaternary: "#9aa2b3",
-    colorTextLabel: "#5c6478",
-    colorTextDescription: "#5c6478",
-    colorTextPlaceholder: "#9aa2b3",
-    colorTextDisabled: "#c0c6d4",
-    colorBgLayout: "#eef0f7",
+    colorPrimary: "#1677ff",
+    colorPrimaryHover: "#4096ff",
+    colorPrimaryActive: "#0958d9",
+    colorPrimaryText: "#0958d9",
+    colorPrimaryTextHover: "#4096ff",
+    colorPrimaryTextActive: "#003eb3",
+    colorPrimaryBg: "#e6f4ff",
+    colorPrimaryBgHover: "#bae0ff",
+    colorPrimaryBorder: "#91caff",
+    colorPrimaryBorderHover: "#69b1ff",
+    colorInfo: "#1677ff",
+    colorInfoBg: "#e6f4ff",
+    colorInfoBorder: "#91caff",
+    colorInfoText: "#0958d9",
+    colorLink: "#1677ff",
+    colorLinkHover: "#4096ff",
+    colorLinkActive: "#0958d9",
+    colorText: "#1f2329",
+    colorTextHeading: "#1f2329",
+    colorTextSecondary: "#4e5969",
+    colorTextTertiary: "#86909c",
+    colorTextQuaternary: "#c9cdd4",
+    colorTextLabel: "#4e5969",
+    colorTextDescription: "#4e5969",
+    colorTextPlaceholder: "#86909c",
+    colorTextDisabled: "#c9cdd4",
+    colorBgLayout: "#fcfcfd",
     colorBgContainer: "#ffffff",
     colorBgElevated: "#ffffff",
-    colorBgContainerDisabled: "#e9edf5",
-    colorBorder: "#dde2ee",
-    colorBorderSecondary: "#e7ebf4",
-    colorSplit: "#e7ebf4",
-    colorFillContent: "#eef0f7",
-    colorFillContentHover: "#e7eaf4",
-    colorFillAlter: "#f4f6fb",
-    colorFillSecondary: "#e9edf5",
-    colorFillTertiary: "#eef0f7",
-    colorFillQuaternary: "#f8f9fc",
+    colorBgContainerDisabled: "#f7f8fa",
+    colorBorder: "#e9ebef",
+    colorBorderSecondary: "#f2f3f5",
+    colorSplit: "#f7f8fa",
+    colorFillContent: "#f7f8fa",
+    colorFillContentHover: "#f0f2f5",
+    colorFillAlter: "#f8f9fb",
+    colorFillSecondary: "#f7f8fa",
+    colorFillTertiary: "#f8f9fb",
+    colorFillQuaternary: "#fcfcfd",
     borderRadius: 6,
     borderRadiusLG: 8,
     // 大屏工作台采用略宽松的点击基线，避免按钮和表单控件显得过小。
@@ -97,21 +98,21 @@ const workbenchTheme: ThemeConfig = {
     controlHeightLG: 40,
   },
   components: {
-    Layout: { headerBg: "#f8f9fc", siderBg: "#f8f9fc", bodyBg: "#eef0f7", headerHeight: 60, headerPadding: "0 20px" },
+    Layout: { headerBg: "#ffffff", siderBg: "#ffffff", bodyBg: "#fcfcfd", headerHeight: 60, headerPadding: "0 20px" },
     Menu: {
       itemBg: "transparent",
-      itemSelectedBg: "#e9edf9",
-      itemSelectedColor: "#4053a8",
+      itemSelectedBg: "#e8f3ff",
+      itemSelectedColor: "#1677ff",
       itemBorderRadius: 6,
       itemMarginInline: 8,
       itemHeight: 44,
     },
     Table: {
-      headerBg: "#f1f3fa",
-      headerColor: "#232838",
-      headerSplitColor: "#dde2ee",
-      borderColor: "#dde2ee",
-      rowHoverBg: "#f6f8fd",
+      headerBg: "#f7f8fa",
+      headerColor: "#1f2329",
+      headerSplitColor: "#e9ebef",
+      borderColor: "#eff1f4",
+      rowHoverBg: "#f7f9fc",
       cellPaddingBlock: 12,
       cellPaddingInline: 16,
     },
@@ -165,7 +166,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <meta name="theme-color" content="#eef0f7" />
+        <meta name="theme-color" content="#fcfcfd" />
         <link rel="icon" type="image/png" href={brandLogoUrl} />
         <link rel="apple-touch-icon" href={brandLogoUrl} />
         <title>个人工作台</title>

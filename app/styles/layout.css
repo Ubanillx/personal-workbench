@@ -32,7 +32,7 @@ body {
 .app-sider {
   height: 100vh;
   overflow: auto;
-  border-right: 1px solid #dde2ee;
+  border-right: 1px solid #e9ebef;
 }
 
 .brand {
@@ -43,7 +43,7 @@ body {
 }
 
 .brand-avatar {
-  background: #4053a8;
+  background: #1677ff;
   flex: none;
 }
 
@@ -74,7 +74,7 @@ body {
   justify-content: space-between;
   height: 60px;
   padding: 0 20px;
-  border-bottom: 1px solid #dde2ee;
+  border-bottom: 1px solid #e9ebef;
 }
 
 .app-content {
@@ -184,7 +184,7 @@ body {
 .stat-icon {
   display: inline-flex;
   align-items: center;
-  color: #7c8497;
+  color: #86909c;
 }
 
 .stat-icon-danger {
@@ -294,7 +294,7 @@ body {
 }
 
 .notification-item:hover {
-  background: #f4f6fb;
+  background: #f7f8fa;
 }
 
 .notification-item-head {
@@ -321,7 +321,7 @@ body {
   align-items: center;
   min-height: 100vh;
   padding: 32px 24px 48px;
-  background: #eef0f7;
+  background: #fcfcfd;
 }
 
 .join-panel {
@@ -374,9 +374,9 @@ body {
 }
 
 .task-board-card.is-drop-target {
-  outline: 2px dashed #4053a8;
+  outline: 2px dashed #1677ff;
   outline-offset: -2px;
-  background: #f5f7fd;
+  background: #f7f9fc;
 }
 
 .task-board-item[draggable="true"] {
@@ -393,7 +393,7 @@ body {
   justify-content: space-between;
   gap: 12px;
   padding: 14px 16px;
-  border-bottom: 1px solid #e7ebf4;
+  border-bottom: 1px solid #eff1f4;
 }
 
 .task-board-dimension {
@@ -410,8 +410,8 @@ body {
   min-width: 24px;
   padding: 0 8px;
   border-radius: 999px;
-  background: #f4f6fb;
-  color: #5c6478;
+  background: #f7f8fa;
+  color: #4e5969;
   font-size: 12px;
   line-height: 22px;
   text-align: center;
@@ -432,7 +432,7 @@ body {
 }
 
 .task-board-item + .task-board-item {
-  border-top: 1px solid #e7ebf4;
+  border-top: 1px solid #eff1f4;
 }
 
 .task-board-title {
@@ -493,17 +493,17 @@ body {
 }
 
 .task-metric + .task-metric {
-  border-inline-start: 1px solid #e7ebf4;
+  border-inline-start: 1px solid #eff1f4;
 }
 
 .task-metric-label {
-  color: #7c8497;
+  color: #86909c;
   font-size: 12px;
   line-height: 18px;
 }
 
 .task-metric-value {
-  color: #232838;
+  color: #1f2329;
   font-size: 20px;
   font-weight: 600;
   line-height: 26px;
@@ -515,7 +515,7 @@ body {
 
 .task-metric-unit {
   margin-inline-start: 2px;
-  color: #7c8497;
+  color: #86909c;
   font-size: 12px;
   font-weight: 400;
 }
@@ -532,12 +532,12 @@ body {
 
 /* 任务标题是行内主角：默认深色，悬停才显示链接色，避免整列蓝色链接抢注意力 */
 .task-title-link.ant-btn {
-  color: #232838;
+  color: #1f2329;
   font-weight: 500;
 }
 
 .task-title-link.ant-btn:hover {
-  color: #4053a8;
+  color: #1677ff;
 }
 
 .task-toolbar-switches {
@@ -573,7 +573,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: #7c8497;
+  color: #86909c;
   font-size: 12px;
 }
 
@@ -582,7 +582,7 @@ body {
   width: 8px;
   height: 8px;
   border-radius: 2px;
-  background: #4053a8;
+  background: #1677ff;
 }
 
 .calendar-scroll {
@@ -592,15 +592,15 @@ body {
 .calendar-weekdays {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  border-top: 1px solid #e7ebf4;
-  border-bottom: 1px solid #e7ebf4;
-  background: #f4f6fb;
+  border-top: 1px solid #eff1f4;
+  border-bottom: 1px solid #eff1f4;
+  background: #f7f8fa;
   min-width: 840px;
 }
 
 .calendar-weekday {
   padding: 9px 12px;
-  color: #7c8497;
+  color: #86909c;
   font-size: 12px;
 }
 
@@ -617,8 +617,8 @@ body {
   min-width: 0;
   min-height: 132px;
   padding: 8px;
-  border-right: 1px solid #e7ebf4;
-  border-bottom: 1px solid #e7ebf4;
+  border-right: 1px solid #eff1f4;
+  border-bottom: 1px solid #eff1f4;
 }
 
 .calendar-cell:nth-child(7n) {
@@ -626,11 +626,11 @@ body {
 }
 
 .calendar-cell.is-outside {
-  background: #f8f9fc;
+  background: #fafbfc;
 }
 
 .calendar-cell.is-outside .calendar-day-num {
-  color: #9aa2b3;
+  color: #c9cdd4;
 }
 
 .calendar-cell.is-clickable {
@@ -638,7 +638,7 @@ body {
 }
 
 .calendar-cell.is-clickable:hover {
-  background: #f5f7fd;
+  background: #f7f9fc;
 }
 
 .calendar-day-head {
@@ -654,12 +654,12 @@ body {
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  color: #5c6478;
+  color: #4e5969;
   font-size: 13px;
 }
 
 .calendar-day-num.is-today {
-  background: #4053a8;
+  background: #1677ff;
   color: #fff;
   font-weight: 600;
 }
@@ -715,14 +715,14 @@ body {
   padding: 0 6px;
   border: none;
   background: transparent;
-  color: #7c8497;
+  color: #86909c;
   font-size: 12px;
   text-align: left;
   cursor: pointer;
 }
 
 .calendar-more:hover {
-  color: #4053a8;
+  color: #1677ff;
 }
 
 .calendar-popover-list {

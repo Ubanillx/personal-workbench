@@ -5,7 +5,7 @@
 export type DimensionTone = { background: string; color: string };
 
 const TONES: DimensionTone[] = [
-  { background: "#e9edf9", color: "#33438c" },
+  { background: "#e6f4ff", color: "#0958d9" },
   { background: "#fff7e6", color: "#d46b08" },
   { background: "#f6ffed", color: "#389e0d" },
   { background: "#f9f0ff", color: "#531dab" },

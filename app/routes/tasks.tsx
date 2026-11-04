@@ -159,9 +159,9 @@ const PRIORITY_COLOR: Record<string, string> = { P0: "red", P1: "gold", P2: "def
  * 保持在白色行里清晰可辨，又不像主按钮那样抢层级。
  */
 const TODO_STATUS_STYLE: React.CSSProperties = {
-  background: "#dce2f6",
-  color: "#26337a",
-  borderColor: "#aab8e6",
+  background: "#e8f3ff",
+  color: "#0958d9",
+  borderColor: "#bae0ff",
 };
 
 /** 状态标签的唯一渲染入口：表格、看板、详情抽屉共用，避免各写一份颜色 */
