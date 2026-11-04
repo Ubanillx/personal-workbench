@@ -19,6 +19,7 @@ export default [
   route("settings", "routes/settings.tsx"),
   route("logout", "routes/logout.ts"),
   route("tasks", "routes/tasks.tsx"),
+  route("calendar", "routes/calendar.tsx"),
   route("todos", "routes/todos.tsx"),
   route("notes", "routes/notes.tsx"),
   // 企微导入已并入 /tasks（页头抽屉）；这条只是老链接的重定向，不是页面

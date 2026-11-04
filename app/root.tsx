@@ -17,6 +17,7 @@ import {
 } from "antd";
 import zhCN from "antd/locale/zh_CN";
 import {
+  CalendarOutlined,
   CheckSquareOutlined,
   DashboardOutlined,
   EditOutlined,
@@ -80,6 +81,7 @@ const NAV: NavItem[] = [
   { to: "/", label: "每日概览", icon: <DashboardOutlined />, roles: ["admin", "manager", "member"] },
   // 「任务进展」页内含企微导入（页头抽屉），因此不再单独列出企微收件箱这一页
   { to: "/tasks", label: "任务进展", icon: <CheckSquareOutlined />, roles: ["admin", "manager", "member"] },
+  { to: "/calendar", label: "日历", icon: <CalendarOutlined />, roles: ["admin", "manager", "member"] },
   { to: "/todos", label: "待办清单", icon: <UnorderedListOutlined />, roles: ["admin", "manager", "member"] },
   { to: "/notes", label: "随手记", icon: <EditOutlined />, roles: ["admin", "manager", "member"] },
   { to: "/reports", label: "周报/总结", icon: <FileTextOutlined />, roles: ["admin", "manager", "member"] },
@@ -88,7 +90,7 @@ const NAV: NavItem[] = [
 ];
 
 /** 已实现的路径；未实现的路径不出现在导航里，避免点了 404 */
-const MIGRATED_PATHS = new Set(["/", "/join", "/settings", "/tasks", "/todos", "/notes", "/reports", "/files", "/review"]);
+const MIGRATED_PATHS = new Set(["/", "/join", "/settings", "/tasks", "/calendar", "/todos", "/notes", "/reports", "/files", "/review"]);
 
 const ROLE_LABEL = { admin: "管理员", manager: "组织管理者", member: "普通用户" } as const;
 const ROLE_COLOR: Record<"admin" | "manager" | "member", string> = { admin: "blue", manager: "green", member: "default" };

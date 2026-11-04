@@ -364,7 +364,7 @@ export function listComments(user: User, id: string): ServiceResult<unknown[]> {
   return done(
     rows(
       database,
-      "SELECT id,task_id AS taskId,author_id AS authorId,author_name AS authorName,author_role AS authorRole,content,created_at AS createdAt FROM task_comments WHERE task_id=? ORDER BY created_at",
+      "SELECT id,task_id AS taskId,author_id AS authorId,author_name AS authorName,author_role AS authorRole,content,created_at AS createdAt,edited_at AS editedAt FROM task_comments WHERE task_id=? ORDER BY created_at",
       task.id,
     ),
   );
@@ -403,6 +403,35 @@ export function addComment(user: User, id: string, body: Record<string, unknown>
   return done(comment, 201);
 }
 
+/**
+ * 编辑评论：只有原作者能改。`created_at` 不动（时间线次序稳定），另记 `edited_at` 供界面标注「已编辑」。
+ */
+export function updateComment(
+  user: User,
+  id: string,
+  commentId: string,
+  body: Record<string, unknown>,
+): ServiceResult<Record<string, unknown>> {
+  const database = db();
+  const located = viewable(user, id, "无权修改该评论");
+  if (!located.ok) return located.failure;
+  const task = located.task;
+  const comment = one<{ authorId: string }>(
+    database,
+    "SELECT author_id AS authorId FROM task_comments WHERE id=? AND task_id=?",
+    commentId,
+    task.id,
+  );
+  if (!comment) return failed("NOT_FOUND", "未找到该评论", 404);
+  if (String(comment.authorId) !== user.id) return failed("FORBIDDEN", "只能修改自己发的评论", 403);
+  const content = String(body.content ?? "").trim();
+  if (!content) return failed("VALIDATION_ERROR", "评论内容不能为空", 400);
+  if (content.length > 500) return failed("VALIDATION_ERROR", "评论最多 500 个字符", 400);
+  const stamp = now();
+  run(database, "UPDATE task_comments SET content=?,edited_at=? WHERE id=? AND task_id=?", content, stamp, commentId, task.id);
+  return done({ id: commentId, taskId: task.id, content, editedAt: stamp });
+}
+
 /** 时间线：三张间接表都经 task_id 关联，组织边界由上面那次 locate 兜住 */
 export function listActivity(user: User, id: string): ServiceResult<unknown[]> {
   const database = db();
@@ -411,17 +440,17 @@ export function listActivity(user: User, id: string): ServiceResult<unknown[]> {
   const task = located.task;
   const logs = rows(
     database,
-    "SELECT id,'progress' AS kind,author_id AS authorId,author_name AS authorName,content,progress_snapshot AS progress,created_at AS createdAt FROM task_progress_logs WHERE task_id=?",
+    "SELECT id,'progress' AS kind,author_id AS authorId,author_name AS authorName,content,progress_snapshot AS progress,created_at AS createdAt,NULL AS editedAt FROM task_progress_logs WHERE task_id=?",
     task.id,
   );
   const comments = rows(
     database,
-    "SELECT id,'comment' AS kind,author_id AS authorId,author_name AS authorName,content,NULL AS progress,created_at AS createdAt FROM task_comments WHERE task_id=?",
+    "SELECT id,'comment' AS kind,author_id AS authorId,author_name AS authorName,content,NULL AS progress,created_at AS createdAt,edited_at AS editedAt FROM task_comments WHERE task_id=?",
     task.id,
   );
   const events = rows(
     database,
-    "SELECT id,event_type AS kind,actor_id AS authorId,actor_name AS authorName,content,NULL AS progress,created_at AS createdAt FROM task_events WHERE task_id=?",
+    "SELECT id,event_type AS kind,actor_id AS authorId,actor_name AS authorName,content,NULL AS progress,created_at AS createdAt,NULL AS editedAt FROM task_events WHERE task_id=?",
     task.id,
   );
   return done([...logs, ...comments, ...events].toSorted((a, b) => String(a.createdAt).localeCompare(String(b.createdAt))));

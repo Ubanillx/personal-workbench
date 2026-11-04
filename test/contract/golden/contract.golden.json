@@ -1,6 +1,6 @@
 {
   "meta": {
-    "generatedAt": "2026-10-14T02:50:37.546Z",
+    "generatedAt": "2026-11-04T05:08:37.109Z",
     "entry": "npm run serve",
     "node": "22.22.2",
     "caseCount": 406
@@ -8539,7 +8539,8 @@
             "authorName": "阿尔法管理者",
             "authorRole": "manager",
             "content": "请补充报价单",
-            "createdAt": "<ts>"
+            "createdAt": "<ts>",
+            "editedAt": null
           }
         ]
       }
@@ -8574,7 +8575,8 @@
             "authorName": "阿尔法管理者",
             "authorRole": "manager",
             "content": "请补充报价单",
-            "createdAt": "<ts>"
+            "createdAt": "<ts>",
+            "editedAt": null
           }
         ]
       }
@@ -8830,7 +8832,8 @@
             "authorName": "阿尔法管理者",
             "authorRole": "manager",
             "content": "私密任务由创建者评论",
-            "createdAt": "<ts>"
+            "createdAt": "<ts>",
+            "editedAt": null
           }
         ]
       }
@@ -8893,7 +8896,8 @@
             "authorName": "阿尔法管理者",
             "authorRole": "manager",
             "content": "私密任务由创建者评论",
-            "createdAt": "<ts>"
+            "createdAt": "<ts>",
+            "editedAt": null
           }
         ]
       }
@@ -8995,7 +8999,8 @@
             "authorName": "阿尔法管理者",
             "authorRole": "manager",
             "content": "私密任务由创建者评论",
-            "createdAt": "<ts>"
+            "createdAt": "<ts>",
+            "editedAt": null
           },
           {
             "id": "<uuid>",
@@ -9004,7 +9009,8 @@
             "authorName": "阿尔法成员乙",
             "authorRole": "member",
             "content": "成员乙不是这条私密任务的负责人",
-            "createdAt": "<ts>"
+            "createdAt": "<ts>",
+            "editedAt": null
           }
         ]
       }
@@ -9100,7 +9106,8 @@
             "authorName": "阿尔法成员乙",
             "authorRole": "member",
             "content": "负责人评论自己的私密任务",
-            "createdAt": "<ts>"
+            "createdAt": "<ts>",
+            "editedAt": null
           }
         ]
       }
@@ -9222,7 +9229,8 @@
             "authorName": "阿尔法成员甲",
             "content": "已完成一半",
             "progress": 40,
-            "createdAt": "<ts>"
+            "createdAt": "<ts>",
+            "editedAt": null
           },
           {
             "id": "comment-1",
@@ -9231,7 +9239,8 @@
             "authorName": "阿尔法管理者",
             "content": "请补充报价单",
             "progress": null,
-            "createdAt": "<ts>"
+            "createdAt": "<ts>",
+            "editedAt": null
           },
           {
             "id": "event-1",
@@ -9240,7 +9249,8 @@
             "authorName": "阿尔法管理者",
             "content": "创建任务",
             "progress": null,
-            "createdAt": "<ts>"
+            "createdAt": "<ts>",
+            "editedAt": null
           },
           {
             "id": "<uuid>",
@@ -9249,7 +9259,8 @@
             "authorName": "阿尔法成员甲",
             "content": "阿尔法成员甲的评论",
             "progress": null,
-            "createdAt": "<ts>"
+            "createdAt": "<ts>",
+            "editedAt": null
           }
         ]
       }
@@ -9312,7 +9323,8 @@
             "authorName": "阿尔法成员甲",
             "content": "创建任务",
             "progress": null,
-            "createdAt": "<ts>"
+            "createdAt": "<ts>",
+            "editedAt": null
           },
           {
             "id": "<uuid>",
@@ -9321,7 +9333,8 @@
             "authorName": "阿尔法成员甲",
             "content": "自己的活自己结",
             "progress": 100,
-            "createdAt": "<ts>"
+            "createdAt": "<ts>",
+            "editedAt": null
           }
         ]
       }
@@ -17023,7 +17036,8 @@
             "authorName": "管理员",
             "content": "负责人从 阿尔法成员甲 改为 贝塔成员",
             "progress": null,
-            "createdAt": "<ts>"
+            "createdAt": "<ts>",
+            "editedAt": null
           },
           {
             "id": "<uuid>",
@@ -17032,7 +17046,8 @@
             "authorName": "管理员",
             "content": "所属组织从 阿尔法组 改为 贝塔组",
             "progress": null,
-            "createdAt": "<ts>"
+            "createdAt": "<ts>",
+            "editedAt": null
           },
           {
             "id": "<uuid>",
@@ -17041,7 +17056,8 @@
             "authorName": "管理员",
             "content": "负责人从 贝塔成员 改为 阿尔法成员甲",
             "progress": null,
-            "createdAt": "<ts>"
+            "createdAt": "<ts>",
+            "editedAt": null
           },
           {
             "id": "<uuid>",
@@ -17050,7 +17066,8 @@
             "authorName": "管理员",
             "content": "所属组织从 贝塔组 改为 阿尔法组",
             "progress": null,
-            "createdAt": "<ts>"
+            "createdAt": "<ts>",
+            "editedAt": null
           }
         ]
       }

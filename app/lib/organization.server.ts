@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { JoinRequest, JoinRequestKind, Organization } from "../../shared/types/domain";
+import type { JoinRequest, JoinRequestKind, Organization, UserRole } from "../../shared/types/domain";
 import { db, one, rows, run, now, type User } from "./db.server";
 import { fail } from "./http.server";
 import { createNotification } from "./notifications.server";
@@ -213,6 +213,42 @@ export function listMembers(orgId: string): Record<string, unknown>[] {
 
 export function listAllAccounts(): Record<string, unknown>[] {
   return rows(db(), `${MEMBER_SELECT} ORDER BY u.org_id IS NOT NULL, o.name, u.name`);
+}
+
+/** 负责人候选的展示字段（任务页与日历页的新建表单共用） */
+export type AccountOption = {
+  id: string;
+  name: string;
+  role: UserRole;
+  orgId: string | null;
+  orgName: string | null;
+  isActive: boolean;
+};
+
+function toAccountOption(row: Record<string, unknown>): AccountOption {
+  return {
+    id: String(row.id),
+    name: String(row.name ?? ""),
+    role: String(row.role ?? "member") as UserRole,
+    orgId: row.orgId === null || row.orgId === undefined ? null : String(row.orgId),
+    orgName: row.orgName === null || row.orgName === undefined ? null : String(row.orgName),
+    isActive: Number(row.isActive) === 1,
+  };
+}
+
+/**
+ * 负责人候选（§14.3 指派规则）：
+ * - admin：全部账号（跨组织，界面上按组织筛选，服务端仍要求负责人属于任务所在组织）；
+ * - manager：本组织成员，另加全局管理员（管理员可以当负责人）；
+ * - member：只能建给自己的任务，没有可选名单。
+ */
+export function taskAssigneeCandidates(user: User): AccountOption[] {
+  if (user.role === "admin") return listAllAccounts().map(toAccountOption);
+  if (user.role === "manager" && user.orgId) {
+    const admins = listAllAccounts().filter((row) => row.role === "admin");
+    return [...listMembers(user.orgId), ...admins].map(toAccountOption);
+  }
+  return [];
 }
 
 /* -------------------------------- 成员 / 账号列表的分页（设置页的两个 Tab 共用一套筛选条件） */

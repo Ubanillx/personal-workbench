@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type React from "react";
 import { useFetcher } from "react-router";
 import { Alert, App as AntdApp, Button, Checkbox, Drawer, Empty, Flex, Form, Input, Select, Space, Tag, Typography } from "antd";
@@ -6,6 +6,7 @@ import { SettingOutlined } from "@ant-design/icons";
 import { FormDrawer } from "./crud-drawer";
 import { confirmDanger, IconActionButton } from "./crud-actions";
 import { useCrudFeedback } from "./crud-hooks";
+import { dimensionTones } from "../lib/dimension-tones";
 import type { PersonalTaskState, TaskDimension } from "../lib/task-dimensions.server";
 
 type Feedback = { ok: true; notice: string } | { error: string };
@@ -28,6 +29,8 @@ export function PersonalTaskControls({
   const [form] = Form.useForm<{ dimensionIds: string[] }>();
   const { error } = useCrudFeedback(fetcher.data, () => setOpen(false));
   const busy = fetcher.state !== "idle";
+  // 与看板卡片标题同一份配色：同一维度在标题和行内标签里颜色一致
+  const tones = useMemo(() => dimensionTones(dimensions.map((item) => item.id)), [dimensions]);
   const post = (body: Record<string, unknown>): void => {
     void fetcher.submit({ intent: "personal-task", taskId, ...body }, { method: "post", action: "/tasks", encType: "application/json" });
   };
@@ -45,7 +48,13 @@ export function PersonalTaskControls({
           </Checkbox>
         ) : null}
         {mode !== "dimension"
-          ? dimensions.filter((item) => state.dimensionIds.includes(item.id)).map((item) => <Tag key={item.id}>{item.name}</Tag>)
+          ? dimensions
+              .filter((item) => state.dimensionIds.includes(item.id))
+              .map((item) => (
+                <Tag key={item.id} variant="filled" style={tones[item.id] ?? {}}>
+                  {item.name}
+                </Tag>
+              ))
           : null}
         {mode !== "summary" ? (
           <IconActionButton label="设置维度" icon={<SettingOutlined />} disabled={busy} onClick={() => setOpen(true)} />

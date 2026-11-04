@@ -36,7 +36,7 @@
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
 | `tasks`                  | `org_id`, `status`, `priority`, `progress`, `owner_id`, `created_by`, `source`, `is_private`, `archived_at`, `wecom_fingerprint`, `overdue_notified_at` | 主表，见下方状态机                                                           |
 | `task_progress_logs`     | `task_id`, `content`, `progress_snapshot`                                                                                                               | 进度汇报流水（经 `task_id` 归属组织）                                        |
-| `task_comments`          | `task_id`, `author_role(admin/manager/member)`, `content`                                                                                               | 评论                                                                         |
+| `task_comments`          | `task_id`, `author_role(admin/manager/member)`, `content`, `edited_at`                                                                                  | 评论；作者可编辑正文，`edited_at` 记录最后修改时间（迁移 020）                |
 | `task_events`            | `task_id`, `event_type`, `content`                                                                                                                      | 时间线（创建/改派/提交/通过/退回/归档/恢复/调整组织）                        |
 | `task_dimensions`        | `id`, `user_id`, `name`, `created_at`, `updated_at`                                                                                                     | 个人维度，同一账号名称唯一（1-40 字符）；所有角色只管理本人的维度            |
 | `task_dimension_links`   | `(user_id, task_id, dimension_id)` 复合主键                                                                                                             | 一条任务可归入本人多个维度；复合外键 `(dimension_id,user_id)` 防止跨账号关联 |
@@ -45,6 +45,9 @@
 迁移 `019_personal_task_dimensions.sql` 只新增上述三张空表和索引，不回填、不复制、不改写历史任务。
 删除维度级联删除该维度的关联，不删除任务或个人处理标记；删除任务/账号时对应关联和处理标记级联清理。
 个人关联不是任务访问凭据：所有任务读取、筛选、统计及个人写操作仍先按当前组织与任务可见性鉴权，改派后旧关联不会恢复查看权。
+
+迁移 `020_task_comment_edits.sql` 只给 `task_comments` 增加可空的 `edited_at`：编辑评论时只更新 `content` 与
+`edited_at`，`created_at` 保持不变（时间线次序稳定）；未编辑的历史评论该列为 `NULL`，不回填。
 
 ### 协作（1）
 

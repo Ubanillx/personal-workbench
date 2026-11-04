@@ -96,6 +96,9 @@ export type TaskFilters = {
   /** 更新时间范围的两端（含当天）：原来也是在 loader 里内存过滤 */
   from?: string | undefined;
   to?: string | undefined;
+  /** 截止日期范围（含两端，`YYYY-MM-DD`）；日历按月取数用，不参与任务页筛选 */
+  dueFrom?: string | undefined;
+  dueTo?: string | undefined;
   dimension?: string | undefined;
   hideHandled?: boolean | undefined;
 };
@@ -154,6 +157,14 @@ function taskWhere(user: User, filters: TaskFilters): { where: string; params: s
     clauses.push("substr(t.updated_at,1,10)<=?");
     params.push(filters.to);
   }
+  if (filters.dueFrom) {
+    clauses.push("t.due_date IS NOT NULL AND t.due_date>=?");
+    params.push(filters.dueFrom);
+  }
+  if (filters.dueTo) {
+    clauses.push("t.due_date IS NOT NULL AND t.due_date<=?");
+    params.push(filters.dueTo);
+  }
   return { where: clauses.length ? `WHERE ${clauses.join(" AND ")}` : "", params };
 }
 
@@ -164,7 +175,7 @@ export function visible(
   status?: string,
   assignee?: string,
   orgFilter?: string | null,
-  personalFilters: Pick<TaskFilters, "dimension" | "hideHandled"> = {},
+  personalFilters: Pick<TaskFilters, "dimension" | "hideHandled" | "dueFrom" | "dueTo"> = {},
 ): TaskView[] {
   const { where, params } = taskWhere(user, { includeArchived, status, assignee, orgFilter, ...personalFilters });
   return rows(database, `${SELECT_TASK} ${where} ORDER BY t.updated_at DESC`, ...params).map(toTaskView);
@@ -220,6 +231,25 @@ export function visiblePage(database: Db, user: User, filters: TaskFilters, pagi
     order: orderOf({ sortable: TASK_SORTABLE, sort, tieBreak: "t.id", id: "t.id" }),
     map: toTaskView,
   });
+}
+
+/**
+ * 不分页的全量任务（维度看板按卡片分组用）。
+ *
+ * 与 `visiblePage()` 共用同一份 `taskWhere()` 与排序翻译，只是去掉 LIMIT/OFFSET：
+ * 看板一次展示所有维度，卡片内的条目不翻页。
+ */
+export function visibleAll(database: Db, user: User, filters: TaskFilters, sort: SortSpec): TaskView[] {
+  const { where, params } = taskWhere(user, filters);
+  const order = orderOf({ sortable: TASK_SORTABLE, sort, tieBreak: "t.id", id: "t.id" });
+  if (order.kind === "sql") {
+    return rows(database, `${SELECT_TASK} ${where} ORDER BY ${order.by}`, ...params).map(toTaskView);
+  }
+  // 中文文本列（目前只有标题）：先在服务端取全量，再用与分页同一个比较器排序
+  const raw = rows<Record<string, unknown>>(database, `${SELECT_TASK} ${where} ORDER BY ${order.tieBreak}`, ...params);
+  const key = order.column.split(".").pop() ?? order.column;
+  raw.sort((a, b) => order.compare(String(a[key] ?? ""), String(b[key] ?? "")));
+  return raw.map(toTaskView);
 }
 
 /** 任务列表的统计（任务总数 / 已完成 / 待验收 / 已逾期） */
