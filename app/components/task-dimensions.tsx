@@ -66,9 +66,7 @@ export function PersonalTaskControls({
                 </Tag>
               ))
           : null}
-        {showGear ? (
-          <IconActionButton label="设置维度" icon={<SettingOutlined />} disabled={busy} onClick={() => setOpen(true)} />
-        ) : null}
+        {showGear ? <IconActionButton label="设置维度" icon={<SettingOutlined />} disabled={busy} onClick={() => setOpen(true)} /> : null}
       </Flex>
       {error && !open ? <Alert type="error" showIcon title={error} /> : null}
       <FormDrawer

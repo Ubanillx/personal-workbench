@@ -128,7 +128,8 @@ function replaceLinks(user: User, taskId: string, ids: string[]): void {
   for (const id of ids) run(database, "INSERT INTO task_dimension_links(user_id,task_id,dimension_id) VALUES(?,?,?)", user.id, taskId, id);
 }
 
-export function savePersonalTask(user: User, taskId: string, body: Record<string, unknown>): ServiceResult<PersonalTaskState> {  const access = taskAccess(user, taskId);
+export function savePersonalTask(user: User, taskId: string, body: Record<string, unknown>): ServiceResult<PersonalTaskState> {
+  const access = taskAccess(user, taskId);
   if (!access.ok) return access;
   const dimensions = body.dimensionIds === undefined ? null : validateDimensions(user, body.dimensionIds);
   if (dimensions && !dimensions.ok) return dimensions;

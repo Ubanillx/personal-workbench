@@ -515,12 +515,7 @@ async function main(): Promise<void> {
       data?: Array<{ id: string; name: string }>;
     };
     const dragDimensionId = dimensionList.data?.find((item) => item.name === dragDimension)?.id ?? "";
-    await pagePost(
-      "/tasks",
-      { intent: "move-dimension", taskId: IDS.taskDoing, dimensionId: dragDimensionId },
-      member.cookie,
-      true,
-    );
+    await pagePost("/tasks", { intent: "move-dimension", taskId: IDS.taskDoing, dimensionId: dragDimensionId }, member.cookie, true);
     const movedPersonal = (await (
       await fetch(`${base}/api/tasks/${IDS.taskDoing}/personal`, { headers: { cookie: member.cookie } })
     ).json()) as { data?: { dimensionIds: string[] } };
@@ -558,10 +553,7 @@ async function main(): Promise<void> {
       await fetch(`${base}/api/tasks/${IDS.taskDoing}/activity`, { headers: { cookie: manager.cookie } })
     ).json()) as { data?: Array<{ id: string; content: string; editedAt: string | null }> };
     const editedComment = editedActivity.data?.find((item) => item.id === "comment-1");
-    check(
-      "评论作者可以修改内容并记录编辑时间",
-      editedComment?.content === "请补充报价单（更正）" && Boolean(editedComment?.editedAt),
-    );
+    check("评论作者可以修改内容并记录编辑时间", editedComment?.content === "请补充报价单（更正）" && Boolean(editedComment?.editedAt));
     check("普通成员列表不展示其他成员的任务", !memberTasksHtml.includes("成员乙的任务"));
     check(
       "组织管理者在逾期任务上看到「手动提醒」入口",

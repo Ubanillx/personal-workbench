@@ -1,21 +1,7 @@
 import type React from "react";
 import { useEffect, useMemo, useState } from "react";
 import { useActionData, useLoaderData, useNavigate, useNavigation, useSubmit } from "react-router";
-import {
-  Alert,
-  Button,
-  Card,
-  DatePicker,
-  Flex,
-  Form,
-  Input,
-  Modal,
-  Popover,
-  Select,
-  Space,
-  Tooltip,
-  Typography,
-} from "antd";
+import { Alert, Button, Card, DatePicker, Flex, Form, Input, Modal, Popover, Select, Space, Tooltip, Typography } from "antd";
 import { LeftOutlined, PlusOutlined, RightOutlined } from "@ant-design/icons";
 import dayjs, { type Dayjs } from "dayjs";
 import { db } from "../lib/db.server";
@@ -304,13 +290,7 @@ export default function CalendarRoute(): React.ReactElement {
         description="按截止日期查看任务与待办，点击日期空白处可直接新建任务。"
         help="任务按截止日期落在日历上，颜色按优先级区分（P0 红 / P1 橙 / P2 灰蓝），同一天内优先级高的排在前面；待办按计划日期显示为青色条目。管理角色点击任务可直接修改标题、优先级和截止日期，普通成员点击仍进入任务详情。权限沿用任务与待办的可见范围：普通成员只看到自己发布或负责的任务，待办只有本人可见。"
         extra={
-          <Button
-            color="primary"
-            variant="solid"
-            icon={<PlusOutlined />}
-            onClick={() => openCreate(data.today)}
-            disabled={!data.canCreate}
-          >
+          <Button color="primary" variant="solid" icon={<PlusOutlined />} onClick={() => openCreate(data.today)} disabled={!data.canCreate}>
             新建任务
           </Button>
         }
@@ -367,20 +347,14 @@ export default function CalendarRoute(): React.ReactElement {
               return (
                 <div
                   key={day.key}
-                  className={[
-                    "calendar-cell",
-                    day.inMonth ? "" : "is-outside",
-                    data.canCreate ? "is-clickable" : "",
-                  ]
+                  className={["calendar-cell", day.inMonth ? "" : "is-outside", data.canCreate ? "is-clickable" : ""]
                     .filter(Boolean)
                     .join(" ")}
                   onClick={() => openCreate(day.key)}
                   {...(data.canCreate ? { title: "点击新建任务" } : {})}
                 >
                   <div className="calendar-day-head">
-                    <span className={day.key === data.today ? "calendar-day-num is-today" : "calendar-day-num"}>
-                      {day.date.date()}
-                    </span>
+                    <span className={day.key === data.today ? "calendar-day-num is-today" : "calendar-day-num"}>{day.date.date()}</span>
                   </div>
                   <div className="calendar-events">
                     {shown.map(renderEvent)}
