@@ -23,7 +23,7 @@
 
 | 文件 / 目录                        | 职责                                                                                                                                                                                                                                                    | 备注                                            |
 | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| `root.tsx`                         | antd 外壳：`ConfigProvider`(zh_CN + `#185fa5`) → `AntdApp` → Sider/Menu 导航 + Header 通知/退出；未入组普通账号不套工作台壳，直接渲染全屏页                                                                                                             | 导航开关 `MIGRATED_PATHS`，新页面在此登记       |
+| `root.tsx`                         | antd 外壳：`ConfigProvider`(zh_CN + `#4053a8`) → `AntdApp` → Sider/Menu 导航 + Header 通知/退出；未入组普通账号不套工作台壳，直接渲染全屏页                                                                                                             | 导航开关 `MIGRATED_PATHS`，新页面在此登记       |
 | `routes.ts`                        | 路由表：页面路由 + `api` 资源路由，按域展开片段文件                                                                                                                                                                                                     | 加路由只改这里与对应文件                        |
 | `routes/*.tsx`（13 个）            | 页面：`login`、`register`、`password`、`join`、`settings`、`dashboard`、`tasks`、`calendar`、`todos`、`notes`、`files`、`review`、`reports`                                                                                                             | 每页导出 `loader`（取数）/ 可选 `action`（写）  |
 | `routes/logout.ts`                 | `POST /logout`：撤销会话并重定向回登录页                                                                                                                                                                                                                | 无 UI                                           |
@@ -300,7 +300,7 @@ SSE 的 `notification` 事件重新鉴权并校验任务可见性；`resync` 事
 
 ## 前端结构
 
-UI 层统一使用 **antd v6**（`antd@6.6.3` + `@ant-design/icons@6.3.4`）：`app/root.tsx` 用 `ConfigProvider`（`locale=zh_CN`、`theme.token.colorPrimary=#185fa5`）与 `AntdApp` 包裹整棵树，反馈组件一律走 `AntdApp.useApp()`。组件 API 规范、v6 差异清单与 `antd lint` 门禁见 `CODE_STYLE.md` 第 10 节。
+UI 层统一使用 **antd v6**（`antd@6.6.3` + `@ant-design/icons@6.3.4`）：`app/root.tsx` 用 `ConfigProvider`（`locale=zh_CN`、`theme.token.colorPrimary=#4053a8`）与 `AntdApp` 包裹整棵树，反馈组件一律走 `AntdApp.useApp()`。组件 API 规范、v6 差异清单与 `antd lint` 门禁见 `CODE_STYLE.md` 第 10 节。
 
 | 文件                                       | 职责                                                                                                                         |
 | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |

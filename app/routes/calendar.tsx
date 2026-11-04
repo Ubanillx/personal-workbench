@@ -1,5 +1,5 @@
 import type React from "react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useActionData, useLoaderData, useNavigate, useNavigation, useSubmit } from "react-router";
 import {
   Alert,
@@ -19,12 +19,10 @@ import {
 import { LeftOutlined, PlusOutlined, RightOutlined } from "@ant-design/icons";
 import dayjs, { type Dayjs } from "dayjs";
 import { db } from "../lib/db.server";
-import { dimensionTones, type DimensionTone } from "../lib/dimension-tones";
 import { readPayload } from "../lib/form.server";
 import { listOrganizations, taskAssigneeCandidates } from "../lib/organization.server";
-import { createTask } from "../lib/task-service.server";
-import { listTaskDimensions, personalTaskStates } from "../lib/task-dimensions.server";
-import { visible } from "../lib/tasks.server";
+import { createTask, updateTask } from "../lib/task-service.server";
+import { canManageTasks, visible } from "../lib/tasks.server";
 import { listTodos } from "../lib/todos.server";
 import { requireUserOrRedirect } from "../lib/ui.server";
 import { useCrudFeedback } from "../components/crud-hooks";
@@ -35,8 +33,22 @@ import { PageHeader } from "../components/page-header";
 const WEEKDAYS = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
 const MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/u;
 const STATUS_LABEL: Record<string, string> = { todo: "待办", in_progress: "进行中", pending_review: "待验收", completed: "已完成" };
-/** 待办与任务用色区分；任务沿用维度配色（与任务看板一致） */
-const TODO_TONE: DimensionTone = { background: "#e6fffb", color: "#08979c" };
+const PRIORITY_OPTIONS = [
+  { value: "P0", label: "P0 · 阻断" },
+  { value: "P1", label: "P1 · 重要" },
+  { value: "P2", label: "P2 · 一般" },
+];
+
+type EventTone = { background: string; color: string };
+/** 日历里任务按优先级着色：P0 红、P1 橙、P2 灰蓝；待办固定青色与之区分 */
+const PRIORITY_TONE: Record<string, EventTone> = {
+  P0: { background: "#fde2e1", color: "#a8071a" },
+  P1: { background: "#fff0d1", color: "#ad4e00" },
+  P2: { background: "#eaedf3", color: "#4e5969" },
+};
+const FALLBACK_TONE: EventTone = PRIORITY_TONE.P2 ?? { background: "#eaedf3", color: "#4e5969" };
+const PRIORITY_RANK: Record<string, number> = { P0: 0, P1: 1, P2: 2 };
+const TODO_TONE: EventTone = { background: "#e6fffb", color: "#08979c" };
 const EVENT_LIMIT = 3;
 
 type CalendarTask = { id: string; title: string; dueDate: string | null; priority: string; status: string; ownerName?: string };
@@ -48,9 +60,13 @@ type CalendarEvent = {
   title: string;
   hint: string;
   done: boolean;
-  tone: DimensionTone;
+  tone: EventTone;
+  /** 仅任务有；用于同日排序与直接编辑 */
+  priority?: string;
 };
 type CreateValues = { title: string; priority: string; dueDate: Dayjs; orgId?: string; ownerId?: string };
+type EditValues = { title: string; priority: string; dueDate: Dayjs };
+type EditingTask = { id: string; title: string; priority: string; dueDate: string };
 type ActionResult = { ok: true; notice: string } | { error: string };
 
 /* ------------------------------------------------------------------ loader / action */
@@ -67,19 +83,11 @@ export async function loader({ request }: { request: Request }) {
 
   const database = db();
   const tasks = visible(database, user, false, undefined, undefined, null, { dueFrom: from, dueTo: to }) as CalendarTask[];
-  const states = personalTaskStates(
-    user,
-    tasks.map((task) => task.id),
-  );
-  const dimensions = listTaskDimensions(user);
-  const tones = dimensionTones(dimensions.map((item) => item.id));
-  const fallbackTone = tones.unclassified ?? { background: "#f5f5f5", color: "#595959" };
 
   const events: CalendarEvent[] = [];
   for (const task of tasks) {
     // 截止日期为空的任务不进日历（SQL 已按日期范围过滤，这里只是类型收窄）
     if (!task.dueDate) continue;
-    const primary = dimensions.find((item) => states[task.id]?.dimensionIds.includes(item.id));
     events.push({
       date: task.dueDate,
       kind: "task",
@@ -87,7 +95,8 @@ export async function loader({ request }: { request: Request }) {
       title: task.title,
       hint: `${STATUS_LABEL[task.status] ?? task.status} · ${task.ownerName ?? "未分配"} · ${task.priority}`,
       done: task.status === "completed",
-      tone: (primary && tones[primary.id]) || fallbackTone,
+      tone: PRIORITY_TONE[task.priority] ?? FALLBACK_TONE,
+      priority: task.priority,
     });
   }
   for (const todo of listTodos(user) as unknown as CalendarTodo[]) {
@@ -102,7 +111,14 @@ export async function loader({ request }: { request: Request }) {
       tone: TODO_TONE,
     });
   }
-  events.sort((a, b) => a.date.localeCompare(b.date) || Number(a.kind === "todo") - Number(b.kind === "todo"));
+  // 同日排序：任务在前、按 P0 → P1 → P2，再按标题；待办排在当天任务之后
+  events.sort(
+    (a, b) =>
+      a.date.localeCompare(b.date) ||
+      Number(a.kind === "todo") - Number(b.kind === "todo") ||
+      (PRIORITY_RANK[a.priority ?? ""] ?? 9) - (PRIORITY_RANK[b.priority ?? ""] ?? 9) ||
+      a.title.localeCompare(b.title, "zh-Hans-CN"),
+  );
 
   const organizations = user.role === "admin" ? listOrganizations(user).filter((item) => item.status === "active") : [];
   return {
@@ -111,6 +127,7 @@ export async function loader({ request }: { request: Request }) {
     today: dayjs().format("YYYY-MM-DD"),
     gridStart: from,
     events,
+    canManage: canManageTasks(user),
     canCreate: user.role === "admin" ? organizations.length > 0 : Boolean(user.orgId),
     organizations: organizations.map((item) => ({ id: item.id, name: item.name })),
     members: taskAssigneeCandidates(user),
@@ -120,9 +137,16 @@ export async function loader({ request }: { request: Request }) {
 export async function action({ request }: { request: Request }): Promise<ActionResult> {
   const user = requireUserOrRedirect(request);
   const payload = await readPayload(request);
-  if (String(payload.intent ?? "") !== "create") return { error: "未知操作" };
-  const result = createTask(user, payload);
-  return result.ok ? { ok: true, notice: "任务已创建" } : { error: result.message };
+  const intent = String(payload.intent ?? "");
+  if (intent === "create") {
+    const result = createTask(user, payload);
+    return result.ok ? { ok: true, notice: "任务已创建" } : { error: result.message };
+  }
+  if (intent === "update") {
+    const result = updateTask(user, String(payload.taskId ?? ""), payload);
+    return result.ok ? { ok: true, notice: "任务已更新" } : { error: result.message };
+  }
+  return { error: "未知操作" };
 }
 
 /* ------------------------------------------------------------------ 页面 */
@@ -134,8 +158,13 @@ export default function CalendarRoute(): React.ReactElement {
   const navigate = useNavigate();
   const submit = useSubmit();
   const [createDate, setCreateDate] = useState<string | null>(null);
+  const [editingTask, setEditingTask] = useState<EditingTask | null>(null);
   const [form] = Form.useForm<CreateValues>();
-  const { error } = useCrudFeedback(actionData, () => setCreateDate(null));
+  const [editForm] = Form.useForm<EditValues>();
+  const { error } = useCrudFeedback(actionData, () => {
+    setCreateDate(null);
+    setEditingTask(null);
+  });
   const busy = navigation.state !== "idle";
 
   const month = dayjs(`${data.month}-01`);
@@ -171,7 +200,16 @@ export default function CalendarRoute(): React.ReactElement {
     if (data.canCreate) setCreateDate(date);
   };
   const openEvent = (event: CalendarEvent): void => {
-    void navigate(event.kind === "task" ? `/tasks?task=${event.id}` : "/todos");
+    if (event.kind === "todo") {
+      void navigate("/todos");
+      return;
+    }
+    // 能管理任务的人直接在日历里改；普通成员沿用「进任务详情」的旧路径（服务端也禁止他们编辑）
+    if (!data.canManage) {
+      void navigate(`/tasks?task=${event.id}`);
+      return;
+    }
+    setEditingTask({ id: event.id, title: event.title, priority: event.priority ?? "P1", dueDate: event.date });
   };
   const memberLabel = (member: { name: string; role: string }): string =>
     member.role === "admin" ? `${member.name}（管理员）` : member.name;
@@ -209,6 +247,38 @@ export default function CalendarRoute(): React.ReactElement {
     );
   };
 
+  const onEdit = (values: EditValues): void => {
+    if (!editingTask) return;
+    submit(
+      {
+        intent: "update",
+        taskId: editingTask.id,
+        title: values.title,
+        priority: values.priority,
+        dueDate: values.dueDate.format("YYYY-MM-DD"),
+      },
+      { method: "post", encType: "application/json" },
+    );
+  };
+
+  // Form 实例在多次打开之间复用，initialValues 只在首次挂载生效；每次打开都显式回填
+  useEffect(() => {
+    if (!createDate) return;
+    form.resetFields();
+    form.setFieldsValue(initialCreateValues());
+    // 只跟随打开日期：初始值里的组织/负责人由当前数据决定
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [createDate]);
+
+  useEffect(() => {
+    if (!editingTask) return;
+    editForm.setFieldsValue({
+      title: editingTask.title,
+      priority: editingTask.priority,
+      dueDate: dayjs(editingTask.dueDate),
+    });
+  }, [editingTask, editForm]);
+
   const renderEvent = (event: CalendarEvent): React.ReactElement => (
     <Tooltip key={`${event.kind}-${event.id}`} title={`${event.title} · ${event.hint}`} mouseEnterDelay={0.4}>
       <button
@@ -232,7 +302,7 @@ export default function CalendarRoute(): React.ReactElement {
         title="日历"
         eyebrow="CALENDAR"
         description="按截止日期查看任务与待办，点击日期空白处可直接新建任务。"
-        help="任务按截止日期落在日历上，颜色跟随个人维度（与任务看板一致）；待办按计划日期显示为青色条目。权限沿用任务与待办的可见范围：普通成员只看到自己发布或负责的任务，待办只有本人可见。点击任务打开任务详情，点击待办进入待办清单。"
+        help="任务按截止日期落在日历上，颜色按优先级区分（P0 红 / P1 橙 / P2 灰蓝），同一天内优先级高的排在前面；待办按计划日期显示为青色条目。管理角色点击任务可直接修改标题、优先级和截止日期，普通成员点击仍进入任务详情。权限沿用任务与待办的可见范围：普通成员只看到自己发布或负责的任务，待办只有本人可见。"
         extra={
           <Button
             color="primary"
@@ -259,14 +329,17 @@ export default function CalendarRoute(): React.ReactElement {
             <Button onClick={goToday}>今天</Button>
           </Space>
           <Space size="middle" align="center" wrap>
-            <span className="calendar-legend">
-              <i className="calendar-dot" aria-hidden="true" />
-              任务
-            </span>
-            <span className="calendar-legend">
-              <i className="calendar-dot calendar-dot-todo" aria-hidden="true" />
-              待办
-            </span>
+            {[
+              { key: "P0", color: PRIORITY_TONE.P0?.color ?? "#a8071a" },
+              { key: "P1", color: PRIORITY_TONE.P1?.color ?? "#ad4e00" },
+              { key: "P2", color: PRIORITY_TONE.P2?.color ?? "#4e5969" },
+              { key: "待办", color: TODO_TONE.color },
+            ].map((item) => (
+              <span key={item.key} className="calendar-legend">
+                <i className="calendar-dot" style={{ background: item.color }} aria-hidden="true" />
+                {item.key}
+              </span>
+            ))}
             <DatePicker
               picker="month"
               allowClear={false}
@@ -365,13 +438,7 @@ export default function CalendarRoute(): React.ReactElement {
             </Form.Item>
             <Flex gap="middle" wrap>
               <Form.Item name="priority" label="优先级" style={{ flex: 1, minWidth: 140 }}>
-                <Select
-                  options={[
-                    { value: "P0", label: "P0 · 阻断" },
-                    { value: "P1", label: "P1 · 重要" },
-                    { value: "P2", label: "P2 · 一般" },
-                  ]}
-                />
+                <Select options={PRIORITY_OPTIONS} />
               </Form.Item>
               <Form.Item
                 name="dueDate"
@@ -401,6 +468,46 @@ export default function CalendarRoute(): React.ReactElement {
                 <Select showSearch={{ optionFilterProp: "label" }} options={ownerOptions} placeholder="选择负责人" />
               </Form.Item>
             ) : null}
+          </Form>
+        </Modal>
+      ) : null}
+
+      {editingTask ? (
+        <Modal
+          open
+          title={`编辑任务 · ${dayjs(editingTask.dueDate).format("M月D日")}`}
+          okText="保存修改"
+          cancelText="取消"
+          confirmLoading={busy}
+          onCancel={() => setEditingTask(null)}
+          onOk={() => editForm.submit()}
+        >
+          <Form
+            form={editForm}
+            layout="vertical"
+            initialValues={{
+              title: editingTask.title,
+              priority: editingTask.priority,
+              dueDate: dayjs(editingTask.dueDate),
+            }}
+            onFinish={onEdit}
+          >
+            <Form.Item name="title" label="任务标题" rules={[{ required: true, whitespace: true, message: "请输入任务标题" }]}>
+              <Input maxLength={240} autoFocus />
+            </Form.Item>
+            <Flex gap="middle" wrap>
+              <Form.Item name="priority" label="优先级" style={{ flex: 1, minWidth: 140 }}>
+                <Select options={PRIORITY_OPTIONS} />
+              </Form.Item>
+              <Form.Item
+                name="dueDate"
+                label="截止日期"
+                rules={[{ required: true, message: "请选择截止日期" }]}
+                style={{ flex: 1, minWidth: 160 }}
+              >
+                <DatePicker style={{ width: "100%" }} />
+              </Form.Item>
+            </Flex>
           </Form>
         </Modal>
       ) : null}

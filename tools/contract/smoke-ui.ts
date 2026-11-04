@@ -492,11 +492,22 @@ async function main(): Promise<void> {
       memberTasksHtml.includes("我的处理") && memberTasksHtml.includes("本人已处理") && memberTasksHtml.includes("进度另行汇报"),
     );
     check("任务显示选项使用开关", (memberTasksHtml.match(/role="switch"/g) ?? []).length === 2);
-    check("筛选栏先下拉后搜索", memberTasksHtml.indexOf('aria-label="任务排序"') < memberTasksHtml.indexOf("搜索任务或负责人"));
+    check("筛选栏搜索在前、排序在后", memberTasksHtml.indexOf("搜索任务或负责人") < memberTasksHtml.indexOf('aria-label="任务排序"'));
     const checklistHtml = await pageHtml("/tasks?view=checklist", member.cookie);
     check("个人任务按维度分卡片展示", checklistHtml.includes("task-board") && checklistHtml.includes("未分类"));
     const calendarHtml = await pageHtml("/calendar?month=2026-09", member.cookie);
     check("日历按月汇总任务与待办", calendarHtml.includes("进行中任务") && calendarHtml.includes("跟进报价"));
+    check("日历同日任务按优先级排序", calendarHtml.indexOf("进行中任务") < calendarHtml.indexOf("待验收任务"));
+    check("日历任务按优先级着色", calendarHtml.includes("#fde2e1") && calendarHtml.includes("#fff0d1"));
+    // 日历里直接编辑任务：页面 action → updateTask → 任务详情回读
+    await pagePost(
+      "/calendar",
+      { intent: "update", taskId: IDS.taskDoing, title: "进行中任务（日历改名）", priority: "P2" },
+      manager.cookie,
+      true,
+    );
+    const calendarAfterEdit = await pageHtml("/calendar?month=2026-09", manager.cookie);
+    check("日历里可直接编辑任务", calendarAfterEdit.includes("进行中任务（日历改名）"));
     // 维度看板拖拽：SSR 无法模拟拖拽手势，这里覆盖页面 action 与落库结果
     const dragDimension = "拖拽维度-冒烟";
     await pagePost("/api/task-dimensions", { name: dragDimension }, member.cookie, true);

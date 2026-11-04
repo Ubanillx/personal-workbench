@@ -189,7 +189,7 @@ export default function DashboardRoute(): React.ReactElement {
                 type="dashboard"
                 percent={board.completionRate}
                 size={150}
-                strokeColor="#185fa5"
+                strokeColor="#4053a8"
                 format={(percent) => (
                   <Space orientation="vertical" size={0}>
                     <Typography.Text strong className="gauge-value">
