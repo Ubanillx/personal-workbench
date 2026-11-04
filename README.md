@@ -7,7 +7,7 @@
 ## 当前状态
 
 - 全栈由**单进程**提供：React Router 8 framework mode 同时负责 SSR 页面与 `/api/*` 资源路由，不再需要「后端 + 前端」两个进程。
-- UI 使用 React 19 + **antd v6**；样式与主题见 `app/root.tsx`（主色 `#4053a8` + `zh_CN`）。
+- UI 使用 React 19 + **antd v6**；样式与主题见 `app/root.tsx`（主色 `#1677ff` + `zh_CN`）。
 - 列表页（任务 / 待办 / 随手记 / 周报 / 重要文件与设置页的成员·组织·账号三张表）一律**服务端分页**：`?page=` / `?size=` / `?sort=` / `?order=` 是唯一真相，筛选、排序、`COUNT(*)` 与 `LIMIT/OFFSET` 都在 SQL 里做，loader 只回当前一页（`app/lib/paging.ts` + `app/lib/paging.server.ts`）。
 - 服务启动时会自动执行 SQLite migrations，并通过 HttpOnly Cookie 建立会话。
 - 正式数据库为 `data/workbench.sqlite`；应用新迁移前会自动在 `data/backups/` 生成快照。

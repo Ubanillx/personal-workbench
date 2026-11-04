@@ -116,7 +116,7 @@ npm run build         # 前端 + 后端产物
 
 ## 10. UI 组件规范（antd v6）
 
-UI 统一使用 **antd v6**（`antd@6.6.3` + `@ant-design/icons@6.3.4`），主题主色为靛蓝 `#4053a8`（页面底色 `#eef0f7`），在 `app/root.tsx` 的 `ConfigProvider` 里集中配置（`locale=zh_CN` + `theme.token`），反馈组件一律走 `AntdApp.useApp()`。
+UI 统一使用 **antd v6**（`antd@6.6.3` + `@ant-design/icons@6.3.4`），主题主色为阿里蓝 `#1677ff`（页面底色 `#fcfcfd`），在 `app/root.tsx` 的 `ConfigProvider` 里集中配置（`locale=zh_CN` + `theme.token`），反馈组件一律走 `AntdApp.useApp()`。
 
 ### 10.1 先查再写（强制）
 
