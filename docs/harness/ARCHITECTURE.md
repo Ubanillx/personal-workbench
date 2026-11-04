@@ -23,9 +23,9 @@
 
 | 文件 / 目录                        | 职责                                                                                                                                                                                                                                                    | 备注                                            |
 | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| `root.tsx`                         | antd 外壳：`ConfigProvider`(zh_CN + `#185fa5`) → `AntdApp` → Sider/Menu 导航 + Header 通知/退出；未入组普通账号不套工作台壳，直接渲染全屏页                                                                                                             | 导航开关 `MIGRATED_PATHS`，新页面在此登记       |
+| `root.tsx`                         | antd 外壳：`ConfigProvider`(zh_CN + `#4053a8`) → `AntdApp` → Sider/Menu 导航 + Header 通知/退出；未入组普通账号不套工作台壳，直接渲染全屏页                                                                                                             | 导航开关 `MIGRATED_PATHS`，新页面在此登记       |
 | `routes.ts`                        | 路由表：页面路由 + `api` 资源路由，按域展开片段文件                                                                                                                                                                                                     | 加路由只改这里与对应文件                        |
-| `routes/*.tsx`（12 个）            | 页面：`login`、`register`、`password`、`join`、`settings`、`dashboard`、`tasks`、`todos`、`notes`、`files`、`review`、`reports`                                                                                                                         | 每页导出 `loader`（取数）/ 可选 `action`（写）  |
+| `routes/*.tsx`（13 个）            | 页面：`login`、`register`、`password`、`join`、`settings`、`dashboard`、`tasks`、`calendar`、`todos`、`notes`、`files`、`review`、`reports`                                                                                                             | 每页导出 `loader`（取数）/ 可选 `action`（写）  |
 | `routes/logout.ts`                 | `POST /logout`：撤销会话并重定向回登录页                                                                                                                                                                                                                | 无 UI                                           |
 | `routes/api.*.ts`（54 个）         | **67 个端点**的全部实现（按域分组见「API 清单」）                                                                                                                                                                                                       | 每个都是共享服务的薄包装                        |
 | `routes.{tasks,people,reports}.ts` | 路由片段：按域声明各自的页面与 API 路由，由 `routes.ts` 展开                                                                                                                                                                                            | 分批迁移时避免争抢同一文件                      |
@@ -218,7 +218,9 @@ React Router 会将浏览器 `Origin: https://192.168.3.251` 与它比较，不�
 个人维度服务集中在 `app/lib/task-dimensions.server.ts`，页面 action 与 API 共用。
 `dimension=all`（缺省）不限制维度，`dimension=unclassified` 查询本人尚无任何关联的任务，其余值按本人维度 ID 过滤；未知或他人的维度 ID 不返回任务。
 `/tasks` 的维度筛选与个人处理筛选在服务端排序/分页前应用，统计复用同一 WHERE，用 EXISTS 防止多维度造成重复行。
-`view=checklist` 提供按当前维度查看的清单卡片，默认保留现有表格。所有筛选与视图状态保留在 URL，重置恢复默认。
+`view=checklist` 是「维度看板」：按本人维度铺卡片（含「未分类」），一个任务可同时出现在多张卡里。
+看板内可把任务拖到另一张维度卡完成移动：服务端 `moveTaskDimension()` 清空本人在该任务上的其他维度、只保留目标维度；
+「未分类」不是真实维度，不作为拖拽落点。所有筛选与视图状态保留在 URL，重置恢复默认。
 表格与清单通过 `useServerTable().onPaginationChange` / `paginationChanges()` 共用分页接线：只翻页保留目标页，修改每页条数回到第一页，维度、搜索与排序参数不丢失。
 
 `/api/tasks` 与 `/api/dashboard` 均应用普通成员本人发布/当前负责的范围；数组载荷和更新时间排序不变。
@@ -298,7 +300,7 @@ SSE 的 `notification` 事件重新鉴权并校验任务可见性；`resync` 事
 
 ## 前端结构
 
-UI 层统一使用 **antd v6**（`antd@6.6.3` + `@ant-design/icons@6.3.4`）：`app/root.tsx` 用 `ConfigProvider`（`locale=zh_CN`、`theme.token.colorPrimary=#185fa5`）与 `AntdApp` 包裹整棵树，反馈组件一律走 `AntdApp.useApp()`。组件 API 规范、v6 差异清单与 `antd lint` 门禁见 `CODE_STYLE.md` 第 10 节。
+UI 层统一使用 **antd v6**（`antd@6.6.3` + `@ant-design/icons@6.3.4`）：`app/root.tsx` 用 `ConfigProvider`（`locale=zh_CN`、`theme.token.colorPrimary=#4053a8`）与 `AntdApp` 包裹整棵树，反馈组件一律走 `AntdApp.useApp()`。组件 API 规范、v6 差异清单与 `antd lint` 门禁见 `CODE_STYLE.md` 第 10 节。
 
 | 文件                                       | 职责                                                                                                                         |
 | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |

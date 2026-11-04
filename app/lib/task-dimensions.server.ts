@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { db, now, one, rows, run, type User } from "./db.server";
 import { assertOrgAccess } from "./session.server";
 import { createTask, type ServiceResult } from "./task-service.server";
-import { canView, findTaskWithOrg } from "./tasks.server";
+import { canView, findTaskWithOrg, type TaskView } from "./tasks.server";
 
 export type TaskDimension = { id: string; name: string };
 export type PersonalTaskState = { dimensionIds: string[]; handled: boolean };
@@ -56,31 +56,64 @@ function taskAccess(user: User, taskId: string): ServiceResult<null> {
   return done(null);
 }
 
+/** SQLite 单条语句的占位符有上限，看板一次要查全量任务，按批取 */
+const PERSONAL_STATE_CHUNK = 400;
+
 /** Only enrich already-authorized tasks. The account+task key synchronizes every personal dimension. */
 export function personalTaskStates(user: User, taskIds: string[]): Record<string, PersonalTaskState> {
   const result: Record<string, PersonalTaskState> = {};
-  if (!taskIds.length) return result;
+  const ids = [...new Set(taskIds)];
+  if (!ids.length) return result;
   const database = db();
-  const placeholders = taskIds.map(() => "?").join(",");
-  for (const id of taskIds) result[id] = { dimensionIds: [], handled: false };
-  for (const row of rows<{ taskId: string; dimensionId: string }>(
-    database,
-    `SELECT task_id AS taskId,dimension_id AS dimensionId FROM task_dimension_links WHERE user_id=? AND task_id IN (${placeholders})`,
-    user.id,
-    ...taskIds,
-  )) {
-    result[row.taskId]?.dimensionIds.push(row.dimensionId);
-  }
-  for (const row of rows<{ taskId: string; handled: number }>(
-    database,
-    `SELECT task_id AS taskId,handled FROM personal_task_handling WHERE user_id=? AND task_id IN (${placeholders})`,
-    user.id,
-    ...taskIds,
-  )) {
-    const state = result[row.taskId];
-    if (state) state.handled = row.handled === 1;
+  for (const id of ids) result[id] = { dimensionIds: [], handled: false };
+  for (let start = 0; start < ids.length; start += PERSONAL_STATE_CHUNK) {
+    const chunk = ids.slice(start, start + PERSONAL_STATE_CHUNK);
+    const placeholders = chunk.map(() => "?").join(",");
+    for (const row of rows<{ taskId: string; dimensionId: string }>(
+      database,
+      `SELECT task_id AS taskId,dimension_id AS dimensionId FROM task_dimension_links WHERE user_id=? AND task_id IN (${placeholders})`,
+      user.id,
+      ...chunk,
+    )) {
+      result[row.taskId]?.dimensionIds.push(row.dimensionId);
+    }
+    for (const row of rows<{ taskId: string; handled: number }>(
+      database,
+      `SELECT task_id AS taskId,handled FROM personal_task_handling WHERE user_id=? AND task_id IN (${placeholders})`,
+      user.id,
+      ...chunk,
+    )) {
+      const state = result[row.taskId];
+      if (state) state.handled = row.handled === 1;
+    }
   }
   return result;
+}
+
+/** 维度看板的一格：一个维度（或「未分类」）加上归属它的任务 */
+export type DimensionBoardGroup = { id: string; name: string; tasks: TaskView[] };
+
+/**
+ * 按个人维度把任务分到卡片：一个维度一张卡，任务可同时出现在多个维度里，
+ * 没有任何维度的任务进「未分类」。`dimension` 是工具栏筛选器，选中某一项时只回那一格。
+ */
+export function buildDimensionBoard(
+  user: User,
+  tasks: TaskView[],
+  states: Record<string, PersonalTaskState>,
+  dimension: string,
+): DimensionBoardGroup[] {
+  const groups: DimensionBoardGroup[] = listTaskDimensions(user).map((item) => ({
+    id: item.id,
+    name: item.name,
+    tasks: tasks.filter((task) => states[task.id]?.dimensionIds.includes(item.id)),
+  }));
+  groups.push({
+    id: "unclassified",
+    name: "未分类",
+    tasks: tasks.filter((task) => !states[task.id]?.dimensionIds.length),
+  });
+  return !dimension || dimension === "all" ? groups : groups.filter((group) => group.id === dimension);
 }
 
 export function readPersonalTask(user: User, taskId: string): ServiceResult<PersonalTaskState> {
@@ -95,8 +128,7 @@ function replaceLinks(user: User, taskId: string, ids: string[]): void {
   for (const id of ids) run(database, "INSERT INTO task_dimension_links(user_id,task_id,dimension_id) VALUES(?,?,?)", user.id, taskId, id);
 }
 
-export function savePersonalTask(user: User, taskId: string, body: Record<string, unknown>): ServiceResult<PersonalTaskState> {
-  const access = taskAccess(user, taskId);
+export function savePersonalTask(user: User, taskId: string, body: Record<string, unknown>): ServiceResult<PersonalTaskState> {  const access = taskAccess(user, taskId);
   if (!access.ok) return access;
   const dimensions = body.dimensionIds === undefined ? null : validateDimensions(user, body.dimensionIds);
   if (dimensions && !dimensions.ok) return dimensions;
@@ -118,6 +150,27 @@ export function savePersonalTask(user: User, taskId: string, body: Record<string
     database.exec("RELEASE personal_task");
   } catch (error) {
     database.exec("ROLLBACK TO personal_task; RELEASE personal_task");
+    throw error;
+  }
+  return readPersonalTask(user, taskId);
+}
+
+/**
+ * 看板拖拽：把任务移动到某个个人维度 = 清空其他维度，只保留目标维度。
+ * 目标必须是本人创建的维度（「未分类」不是真实维度，拖进去会 404）；
+ * 不改任务本身，也不影响其他人的维度。
+ */
+export function moveTaskDimension(user: User, taskId: string, dimensionId: string): ServiceResult<PersonalTaskState> {
+  const access = taskAccess(user, taskId);
+  if (!access.ok) return access;
+  if (!one(db(), "SELECT id FROM task_dimensions WHERE id=? AND user_id=?", dimensionId, user.id)) return missing();
+  const database = db();
+  database.exec("SAVEPOINT move_dimension");
+  try {
+    replaceLinks(user, taskId, [dimensionId]);
+    database.exec("RELEASE move_dimension");
+  } catch (error) {
+    database.exec("ROLLBACK TO move_dimension; RELEASE move_dimension");
     throw error;
   }
   return readPersonalTask(user, taskId);

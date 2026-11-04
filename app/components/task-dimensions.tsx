@@ -1,11 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type React from "react";
 import { useFetcher } from "react-router";
-import { Alert, App as AntdApp, Button, Checkbox, Drawer, Empty, Flex, Form, Input, Select, Space, Tag, Typography } from "antd";
+import { Alert, App as AntdApp, Button, Checkbox, Drawer, Empty, Flex, Form, Input, Select, Space, Tag, Tooltip, Typography } from "antd";
 import { SettingOutlined } from "@ant-design/icons";
 import { FormDrawer } from "./crud-drawer";
 import { confirmDanger, IconActionButton } from "./crud-actions";
 import { useCrudFeedback } from "./crud-hooks";
+import { dimensionTones } from "../lib/dimension-tones";
 import type { PersonalTaskState, TaskDimension } from "../lib/task-dimensions.server";
 
 type Feedback = { ok: true; notice: string } | { error: string };
@@ -21,33 +22,51 @@ export function PersonalTaskControls({
   title: string;
   state: PersonalTaskState;
   dimensions: TaskDimension[];
-  mode?: "all" | "summary" | "dimension";
+  /** 表格里拆成两段渲染：handled 勾选框、tags 维度标签，避免每行堆三行 */
+  mode?: "all" | "summary" | "dimension" | "handled" | "tags";
 }): React.ReactElement {
   const fetcher = useFetcher<Feedback>();
   const [open, setOpen] = useState(false);
   const [form] = Form.useForm<{ dimensionIds: string[] }>();
   const { error } = useCrudFeedback(fetcher.data, () => setOpen(false));
   const busy = fetcher.state !== "idle";
+  // 与看板卡片标题同一份配色：同一维度在标题和行内标签里颜色一致
+  const tones = useMemo(() => dimensionTones(dimensions.map((item) => item.id)), [dimensions]);
+  const showHandled = mode === "all" || mode === "summary" || mode === "handled";
+  const showTags = mode === "all" || mode === "summary" || mode === "tags";
+  const showGear = mode === "all" || mode === "dimension";
   const post = (body: Record<string, unknown>): void => {
     void fetcher.submit({ intent: "personal-task", taskId, ...body }, { method: "post", action: "/tasks", encType: "application/json" });
   };
   return (
     <>
       <Flex align="center" gap="small" wrap>
-        {mode !== "dimension" ? (
-          <Checkbox
-            aria-label={`本人已处理：${title}`}
-            checked={state.handled}
-            disabled={busy}
-            onChange={(event) => post({ handled: event.target.checked })}
-          >
-            本人已处理
-          </Checkbox>
-        ) : null}
-        {mode !== "dimension"
-          ? dimensions.filter((item) => state.dimensionIds.includes(item.id)).map((item) => <Tag key={item.id}>{item.name}</Tag>)
+        {showHandled
+          ? (() => {
+              const checkbox = (
+                <Checkbox
+                  aria-label={`本人已处理：${title}`}
+                  checked={state.handled}
+                  disabled={busy}
+                  onChange={(event) => post({ handled: event.target.checked })}
+                >
+                  {mode === "handled" ? null : "本人已处理"}
+                </Checkbox>
+              );
+              // 表格里只留勾选框，靠悬停说明含义，避免每行重复四个字
+              return mode === "handled" ? <Tooltip title="本人已处理">{checkbox}</Tooltip> : checkbox;
+            })()
           : null}
-        {mode !== "summary" ? (
+        {showTags
+          ? dimensions
+              .filter((item) => state.dimensionIds.includes(item.id))
+              .map((item) => (
+                <Tag key={item.id} variant="filled" style={tones[item.id] ?? {}}>
+                  {item.name}
+                </Tag>
+              ))
+          : null}
+        {showGear ? (
           <IconActionButton label="设置维度" icon={<SettingOutlined />} disabled={busy} onClick={() => setOpen(true)} />
         ) : null}
       </Flex>

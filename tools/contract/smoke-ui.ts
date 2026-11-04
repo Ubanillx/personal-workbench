@@ -87,6 +87,7 @@ async function loginAs(base: string, account: { username: string; password: stri
 const PAGE_MARKERS: Record<string, string[]> = {
   // 「最近更新」列与「更新时间范围」筛选器一一对应（D-47）：筛选字段必须在列表里看得见。
   // 企微导入（粘贴解析 → 批量导入）已并入本页页头的抽屉，因此这里盯着它的入口按钮
+  "/calendar": ["周日", "点击日期空白处", "上个月"],
   "/tasks": [
     "逾期任务",
     "待验收任务",
@@ -111,7 +112,7 @@ const PAGE_MARKERS: Record<string, string[]> = {
   "/files": ["报价单模板", "添加文件", "搜索文件名称或路径", "所属组织"],
 };
 
-const DEFAULT_PAGES = "/tasks,/todos,/notes,/reports,/settings,/files";
+const DEFAULT_PAGES = "/tasks,/calendar,/todos,/notes,/reports,/settings,/files";
 
 async function main(): Promise<void> {
   const baseUrlArg = argValue("--base-url", "");
@@ -491,8 +492,76 @@ async function main(): Promise<void> {
       memberTasksHtml.includes("我的处理") && memberTasksHtml.includes("本人已处理") && memberTasksHtml.includes("进度另行汇报"),
     );
     check("任务显示选项使用开关", (memberTasksHtml.match(/role="switch"/g) ?? []).length === 2);
-    check("筛选栏先下拉后搜索", memberTasksHtml.indexOf('aria-label="任务排序"') < memberTasksHtml.indexOf("搜索任务或负责人"));
-    check("个人任务支持清单展示", (await pageHtml("/tasks?view=checklist", member.cookie)).includes("任务清单"));
+    check("筛选栏搜索在前、排序在后", memberTasksHtml.indexOf("搜索任务或负责人") < memberTasksHtml.indexOf('aria-label="任务排序"'));
+    const checklistHtml = await pageHtml("/tasks?view=checklist", member.cookie);
+    check("个人任务按维度分卡片展示", checklistHtml.includes("task-board") && checklistHtml.includes("未分类"));
+    const calendarHtml = await pageHtml("/calendar?month=2026-09", member.cookie);
+    check("日历按月汇总任务与待办", calendarHtml.includes("进行中任务") && calendarHtml.includes("跟进报价"));
+    check("日历同日任务按优先级排序", calendarHtml.indexOf("进行中任务") < calendarHtml.indexOf("待验收任务"));
+    check("日历任务按优先级着色", calendarHtml.includes("#fde2e1") && calendarHtml.includes("#fff0d1"));
+    // 日历里直接编辑任务：页面 action → updateTask → 任务详情回读
+    await pagePost(
+      "/calendar",
+      { intent: "update", taskId: IDS.taskDoing, title: "进行中任务（日历改名）", priority: "P2" },
+      manager.cookie,
+      true,
+    );
+    const calendarAfterEdit = await pageHtml("/calendar?month=2026-09", manager.cookie);
+    check("日历里可直接编辑任务", calendarAfterEdit.includes("进行中任务（日历改名）"));
+    // 维度看板拖拽：SSR 无法模拟拖拽手势，这里覆盖页面 action 与落库结果
+    const dragDimension = "拖拽维度-冒烟";
+    await pagePost("/api/task-dimensions", { name: dragDimension }, member.cookie, true);
+    const dimensionList = (await (await fetch(`${base}/api/task-dimensions`, { headers: { cookie: member.cookie } })).json()) as {
+      data?: Array<{ id: string; name: string }>;
+    };
+    const dragDimensionId = dimensionList.data?.find((item) => item.name === dragDimension)?.id ?? "";
+    await pagePost(
+      "/tasks",
+      { intent: "move-dimension", taskId: IDS.taskDoing, dimensionId: dragDimensionId },
+      member.cookie,
+      true,
+    );
+    const movedPersonal = (await (
+      await fetch(`${base}/api/tasks/${IDS.taskDoing}/personal`, { headers: { cookie: member.cookie } })
+    ).json()) as { data?: { dimensionIds: string[] } };
+    const movedIds = movedPersonal.data?.dimensionIds ?? [];
+    check("拖动任务到维度后只保留目标维度", movedIds.length === 1 && movedIds[0] === dragDimensionId);
+    const rejectedMove = await pagePost(
+      "/tasks",
+      { intent: "move-dimension", taskId: IDS.taskDoing, dimensionId: "unclassified" },
+      member.cookie,
+      true,
+    );
+    check("「未分类」不能作为拖拽目标", rejectedMove.includes("未找到该资源"));
+    // 评论编辑：只有作者能改；改完在协作时间线里标注「已编辑」
+    const memberEditAttempt = await pagePost(
+      "/tasks",
+      { intent: "edit-comment", taskId: IDS.taskDoing, commentId: "comment-1", content: "成员乙篡改的评论" },
+      member.cookie,
+      true,
+    );
+    const afterMemberAttempt = await pageHtml(`/tasks?task=${IDS.taskDoing}`, manager.cookie);
+    check(
+      "非作者不能修改他人评论",
+      memberEditAttempt.includes("只能修改自己发的评论") &&
+        afterMemberAttempt.includes("请补充报价单") &&
+        !afterMemberAttempt.includes("成员乙篡改的评论"),
+    );
+    await pagePost(
+      "/tasks",
+      { intent: "edit-comment", taskId: IDS.taskDoing, commentId: "comment-1", content: "请补充报价单（更正）" },
+      manager.cookie,
+      true,
+    );
+    // 详情抽屉是客户端 Portal，SSR 里没有时间线 DOM，所以用 activity 接口确认写入与编辑时间
+    const editedActivity = (await (
+      await fetch(`${base}/api/tasks/${IDS.taskDoing}/activity`, { headers: { cookie: manager.cookie } })
+    ).json()) as { data?: Array<{ id: string; content: string; editedAt: string | null }> };
+    const editedComment = editedActivity.data?.find((item) => item.id === "comment-1");
+    check(
+      "评论作者可以修改内容并记录编辑时间",
+      editedComment?.content === "请补充报价单（更正）" && Boolean(editedComment?.editedAt),
+    );
     check("普通成员列表不展示其他成员的任务", !memberTasksHtml.includes("成员乙的任务"));
     check(
       "组织管理者在逾期任务上看到「手动提醒」入口",

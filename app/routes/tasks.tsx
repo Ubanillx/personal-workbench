@@ -15,11 +15,9 @@ import {
   Form,
   Input,
   Progress,
-  Pagination,
   Select,
   Slider,
   Space,
-  Statistic,
   Switch,
   Table,
   Tag,
@@ -57,16 +55,19 @@ import { dataTable } from "../components/table-layout";
 import { WecomImportDrawer } from "../components/wecom-import-drawer";
 import { TaskDimensionManager, PersonalTaskControls } from "../components/task-dimensions";
 import {
+  buildDimensionBoard,
   createTaskWithDimensions,
   deleteTaskDimension,
   listTaskDimensions,
+  moveTaskDimension,
   personalTaskStates,
   savePersonalTask,
   saveTaskDimension,
 } from "../lib/task-dimensions.server";
-import { db, type User } from "../lib/db.server";
+import { db } from "../lib/db.server";
+import { dimensionTones } from "../lib/dimension-tones";
 import { readPayload } from "../lib/form.server";
-import { listAllAccounts, listMembers, listOrganizations } from "../lib/organization.server";
+import { listOrganizations, taskAssigneeCandidates, type AccountOption } from "../lib/organization.server";
 import { pagingOf, sortOf, type Paged } from "../lib/paging";
 import { sortableKeys } from "../lib/paging.server";
 import { assertOrgAccess } from "../lib/session.server";
@@ -83,6 +84,7 @@ import {
   restoreTask,
   returnTask,
   submitReview,
+  updateComment,
   updateTask,
   type ServiceResult,
 } from "../lib/task-service.server";
@@ -94,6 +96,7 @@ import {
   notifyOverdueTasks,
   TASK_SORTABLE,
   taskStats,
+  visibleAll,
   visiblePage,
   type TaskFilters,
 } from "../lib/tasks.server";
@@ -123,13 +126,15 @@ type TaskRow = {
 type ActivityRow = {
   id: string;
   kind: string;
+  authorId: string | null;
   authorName: string | null;
   content: string;
   progress: number | null;
   createdAt: string;
+  editedAt: string | null;
 };
 /** 指派下拉的候选：admin 是全部账号，manager 是本组织成员加全局管理员 */
-type Member = { id: string; name: string; role: UserRole; orgId: string | null; orgName: string | null; isActive: boolean };
+type Member = AccountOption;
 type Me = { id: string; name: string; role: UserRole; orgId: string | null; orgName: string | null };
 type OrgOption = { id: string; name: string; status: string };
 type TaskFormValues = {
@@ -149,6 +154,28 @@ type ActionResult = { ok: true; notice: string } | { error: string };
 const STATUS_LABEL: Record<string, string> = { todo: "待办", in_progress: "进行中", pending_review: "待验收", completed: "已完成" };
 const STATUS_COLOR: Record<string, string> = { todo: "default", in_progress: "processing", pending_review: "gold", completed: "green" };
 const PRIORITY_COLOR: Record<string, string> = { P0: "red", P1: "gold", P2: "default" };
+/**
+ * 「待办」是最常见的初始状态，默认灰底在表格里几乎看不见；给一档更饱和的靛蓝底 + 深靛字，
+ * 保持在白色行里清晰可辨，又不像主按钮那样抢层级。
+ */
+const TODO_STATUS_STYLE: React.CSSProperties = {
+  background: "#dce2f6",
+  color: "#26337a",
+  borderColor: "#aab8e6",
+};
+
+/** 状态标签的唯一渲染入口：表格、看板、详情抽屉共用，避免各写一份颜色 */
+function TaskStatusTag({ status }: { status: string }): React.ReactElement {
+  return (
+    <Tag
+      color={STATUS_COLOR[status] ?? "default"}
+      variant="filled"
+      {...(status === "todo" ? { style: TODO_STATUS_STYLE } : {})}
+    >
+      {STATUS_LABEL[status] ?? status}
+    </Tag>
+  );
+}
 const EVENT_LABEL: Record<string, string> = {
   task_created: "创建",
   task_reassigned: "改派",
@@ -178,6 +205,8 @@ const STATUS_OPTIONS = [
   { value: "completed", label: "已完成" },
 ];
 const RETURN_NOTE_DEFAULT = "请补充完成情况后重新提交";
+/** 维度看板拖拽用的私有 MIME，避免和浏览器默认的文本拖拽混淆 */
+const TASK_DRAG_TYPE = "application/x-workbench-task";
 const NOTICE: Record<string, string> = {
   create: "任务已创建",
   update: "任务已保存",
@@ -189,34 +218,10 @@ const NOTICE: Record<string, string> = {
   restore: "任务已恢复",
   delete: "任务已彻底删除",
   comment: "评论已发送",
+  "edit-comment": "评论已更新",
+  "move-dimension": "已移动到所选维度",
   remind: "已发送逾期提醒",
 };
-
-function toMember(row: Record<string, unknown>): Member {
-  return {
-    id: String(row.id),
-    name: String(row.name ?? ""),
-    role: String(row.role ?? "member") as UserRole,
-    orgId: row.orgId === null || row.orgId === undefined ? null : String(row.orgId),
-    orgName: row.orgName === null || row.orgName === undefined ? null : String(row.orgName),
-    isActive: Number(row.isActive) === 1,
-  };
-}
-
-/**
- * 负责人候选（§14.3 指派规则）：
- * - admin：全部账号（跨组织，界面上按组织筛选，服务端仍要求负责人属于任务所在组织）。
- * - manager：本组织成员，另加全局管理员（管理员可以当负责人）。
- * - member：只能建给自己的任务，没有可选名单。
- */
-function assigneeCandidates(user: User): Member[] {
-  if (user.role === "admin") return listAllAccounts().map(toMember);
-  if (user.role === "manager" && user.orgId) {
-    const admins = listAllAccounts().filter((row) => row.role === "admin");
-    return [...listMembers(user.orgId), ...admins].map(toMember);
-  }
-  return [];
-}
 
 /**
  * 多组织时用「姓名（管理员）」区分全局账号；同组织内只显示姓名。
@@ -298,16 +303,26 @@ export async function loader({ request }: { request: Request }) {
       markTaskNotificationsRead(user, taskId);
     }
   }
+  const checklist = url.searchParams.get("view") === "checklist";
   const page = visiblePage(database, user, filters, paging, sort) as Paged<TaskRow>;
+  /**
+   * 维度看板不翻页：在**同一套筛选条件**下取全量，再按个人维度分卡片。
+   * 维度筛选器只决定显示哪一格，分组仍按全部维度算——一个任务可以同时属于多个维度。
+   */
+  const boardTasks = checklist ? visibleAll(database, user, { ...filters, dimension: "all" }, sort) : [];
+  const personal = personalTaskStates(user, [
+    ...new Set([...page.rows.map((task) => task.id), ...boardTasks.map((task) => task.id), ...(selected ? [selected.id] : [])]),
+  ]);
   return {
     user: user as Me,
     canManage,
     tasks: page,
     dimensions: listTaskDimensions(user),
-    personal: personalTaskStates(user, [...new Set([...page.rows.map((task) => task.id), ...(selected ? [selected.id] : [])])]),
+    board: checklist ? buildDimensionBoard(user, boardTasks as TaskRow[], personal, filters.dimension ?? "all") : [],
+    personal,
     dimension: filters.dimension ?? "all",
     hideHandled: filters.hideHandled ?? false,
-    checklist: url.searchParams.get("view") === "checklist",
+    checklist,
     stats: taskStats(database, user, filters, today),
     range,
     from,
@@ -325,7 +340,7 @@ export async function loader({ request }: { request: Request }) {
       name: item.name,
       status: String(item.status),
     })) as OrgOption[],
-    members: assigneeCandidates(user),
+    members: taskAssigneeCandidates(user),
   };
 }
 
@@ -388,6 +403,10 @@ export async function action({ request }: { request: Request }): Promise<ActionR
         return deleteTask(user, taskId);
       case "comment":
         return addComment(user, taskId, payload);
+      case "edit-comment":
+        return updateComment(user, taskId, String(payload.commentId ?? ""), payload);
+      case "move-dimension":
+        return moveTaskDimension(user, taskId, String(payload.dimensionId ?? ""));
       default:
         return { ok: false, code: "UNKNOWN", message: "未知操作", status: 400 };
     }
@@ -419,6 +438,9 @@ export default function TasksRoute(): React.ReactElement {
   // 企微导入抽屉：它产出的就是任务，所以入口挂在**本页页头**，不再单开一个导航页面
   const [importOpen, setImportOpen] = useState(false);
   const [selectedKeys, setSelectedKeys] = useState<React.Key[]>([]);
+  // 维度看板拖拽：draggingTaskId 标记正在拖的任务，dropTargetId 给目标卡片加高亮
+  const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const { error } = useCrudFeedback(actionData, () => {
     setCreateOpen(false);
     setEditingTask(null);
@@ -474,6 +496,15 @@ export default function TasksRoute(): React.ReactElement {
   const openDetail = (task: TaskRow): void => list.patch({ task: task.id });
   const closeDetail = (): void => list.patch({ task: null });
   /**
+   * 拖到另一张维度卡 = 移动到该维度：服务端会清空本人其它维度只保留目标。
+   * 已经只属于这一格时不发请求，避免同卡内误拖产生无意义写入。
+   */
+  const moveTaskToDimension = (taskId: string, dimensionId: string): void => {
+    const state = data.personal[taskId];
+    if (state?.dimensionIds.length === 1 && state.dimensionIds[0] === dimensionId) return;
+    post({ intent: "move-dimension", taskId, dimensionId });
+  };
+  /**
    * 打开企微导入抽屉前先收起别的右侧抽屉（详情 / 编辑 / 改派）：
    * 同一时刻只挂一个右侧浮层，层级才可预期（见 CODE_STYLE §10.7 第 2 条）。
    */
@@ -516,7 +547,9 @@ export default function TasksRoute(): React.ReactElement {
     : data.members;
   const selectedTask = data.selected;
   const dimensionOptions = data.dimensions.map((item) => ({ value: item.id, label: item.name }));
-  const personalControls = (task: TaskRow, mode: "all" | "summary" | "dimension" = "all"): React.ReactElement => (
+  // 维度配色按列表顺序分配，「未分类」固定灰色；卡片标题与任务行内的维度标签共用同一份
+  const dimensionToneById = useMemo(() => dimensionTones(data.dimensions.map((item) => item.id)), [data.dimensions]);
+  const personalControls = (task: TaskRow, mode: "all" | "summary" | "dimension" | "handled" | "tags" = "all"): React.ReactElement => (
     <PersonalTaskControls
       taskId={task.id}
       title={task.title}
@@ -559,10 +592,11 @@ export default function TasksRoute(): React.ReactElement {
       render: (_value, task) => (
         // 这一列是表格里的「主内容列」：不写 width，吃掉剩余宽度（定宽布局会按比例分给它）。
         // 标题单行省略、说明两行省略，两者都带悬停全文——否则一条长说明会把整行撑高、把右边的列挤歪。
-        <Space orientation="vertical" size={2} style={{ width: "100%" }}>
-          <Flex align="center" gap={4} wrap style={{ width: "100%" }}>
+        <Space orientation="vertical" size={4} style={{ width: "100%" }}>
+          <Flex align="center" gap={6} wrap style={{ width: "100%" }}>
+            {personalControls(task, "handled")}
             <Tooltip title={task.title.length > 20 ? task.title : ""}>
-              <Button color="primary" variant="link" className="link-button" onClick={() => openDetail(task)}>
+              <Button color="primary" variant="link" className="link-button task-title-link" onClick={() => openDetail(task)}>
                 {task.title}
               </Button>
             </Tooltip>
@@ -580,6 +614,7 @@ export default function TasksRoute(): React.ReactElement {
               </Tag>
             ) : null}
             {task.archivedAt ? <Tag variant="filled">已归档</Tag> : null}
+            {personalControls(task, "tags")}
           </Flex>
           {task.description ? (
             // 说明是「副行」：单行省略 + 悬停全文（antd v6 的 `Text` 不再支持 rows，多行省略要用 Paragraph）
@@ -591,7 +626,6 @@ export default function TasksRoute(): React.ReactElement {
               {task.description}
             </Typography.Text>
           ) : null}
-          {personalControls(task, "summary")}
         </Space>
       ),
     },
@@ -600,11 +634,7 @@ export default function TasksRoute(): React.ReactElement {
       dataIndex: "status",
       key: "status",
       width: 110,
-      render: (_value, task) => (
-        <Tag color={STATUS_COLOR[task.status] ?? "default"} variant="filled">
-          {STATUS_LABEL[task.status] ?? task.status}
-        </Tag>
-      ),
+      render: (_value, task) => <TaskStatusTag status={task.status} />,
     },
     {
       title: "负责人",
@@ -655,9 +685,9 @@ export default function TasksRoute(): React.ReactElement {
     {
       title: "操作",
       key: "actions",
-      // 图标动作按钮每个约 36px（`size="small"` + `variant="text"`）。
-      // 设置维度与任务动作一起靠右展示。
-      width: canManage ? 376 : 156,
+      // 图标动作按钮每个约 36px（`size="small"` + `variant="text"`），最多 8 个；
+      // 普通成员只有「设置维度 + 详情」两个。
+      width: canManage ? 320 : 120,
       align: "right",
       ellipsis: false,
       render: (_value, task) => {
@@ -796,7 +826,7 @@ export default function TasksRoute(): React.ReactElement {
   const table = useMemo(() => dataTable<TaskRow>({ columns, selectable: canManage }), [columns, canManage]);
 
   return (
-    <Flex vertical gap="large" className="page-stack">
+    <Flex vertical gap="middle" className="page-stack">
       <PageHeader
         title="任务进展"
         eyebrow="TASKS"
@@ -809,12 +839,17 @@ export default function TasksRoute(): React.ReactElement {
             <Button icon={<ImportOutlined />} onClick={openImport}>
               从企微导入
             </Button>
-            <Button icon={<ReloadOutlined />} onClick={() => revalidator.revalidate()} loading={busy}>
-              刷新
-            </Button>
-            <Button color="primary" variant="solid" icon={<SettingOutlined />} onClick={() => setDimensionsOpen(true)}>
+            <Button icon={<SettingOutlined />} onClick={() => setDimensionsOpen(true)}>
               管理维度
             </Button>
+            <Tooltip title="刷新任务">
+              <Button
+                icon={<ReloadOutlined />}
+                aria-label="刷新任务"
+                onClick={() => revalidator.revalidate()}
+                loading={busy}
+              />
+            </Tooltip>
             <Button color="primary" variant="solid" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
               新建任务
             </Button>
@@ -826,28 +861,69 @@ export default function TasksRoute(): React.ReactElement {
       {list.get("task") && !selectedTask ? <Alert type="warning" showIcon title="该任务不存在，或你没有查看权限" /> : null}
 
       <Flex vertical gap="middle">
-        <TableToolbar
-          extra={
-            <Typography.Text type="secondary">
-              共 {data.tasks.total} 个任务{filtered ? "（已筛选）" : ""}
-            </Typography.Text>
-          }
-        >
-          {canManage ? (
-            <>
-              <Select
-                aria-label="更新时间范围"
-                value={data.range}
-                options={[
-                  { value: "all", label: "全部时间" },
-                  { value: "week", label: "最近 7 天" },
-                  { value: "month", label: "最近 30 天" },
-                  { value: "custom", label: "自定义范围" },
-                ]}
-                style={{ width: 150 }}
-                onChange={(value: string) => list.patch({ range: value === "all" ? null : value, from: null, to: null })}
+        <TableToolbar>
+          {/* 筛选分两行：第一行是常用的搜索与范围，第二行是排序、视图开关与重置 */}
+          <Flex vertical gap="small" className="task-filters">
+            <Flex align="center" gap="small" wrap>
+              <Input.Search
+                allowClear
+                placeholder="搜索任务或负责人"
+                style={{ width: 240 }}
+                value={draftKeyword}
+                loading={busy}
+                onChange={(event) => setDraftKeyword(event.target.value)}
+                onSearch={(value) => list.patch({ q: value.trim() })}
               />
-              {data.range === "custom" ? (
+              <Select
+                aria-label="任务维度"
+                value={data.dimension}
+                style={{ width: 170 }}
+                showSearch={{ optionFilterProp: "label" }}
+                options={[
+                  { value: "all", label: "全部维度" },
+                  { value: "unclassified", label: "未分类" },
+                  ...dimensionOptions,
+                  ...(!["all", "unclassified"].includes(data.dimension) && !dimensionOptions.some((option) => option.value === data.dimension)
+                    ? [{ value: data.dimension, label: "维度不存在或已删除" }]
+                    : []),
+                  { value: "__new__", label: "+ 新建维度" },
+                ]}
+                onChange={(value: string) =>
+                  value === "__new__" ? setDimensionsOpen(true) : list.patch({ dimension: value === "all" ? null : value })
+                }
+              />
+              <Select
+                value={data.status}
+                options={STATUS_OPTIONS}
+                style={{ width: 120 }}
+                onChange={(value: string) => list.patch({ status: value === "all" ? null : value })}
+              />
+              <Select
+                value={data.assignee}
+                style={{ width: 160 }}
+                options={[
+                  { value: "all", label: "全部负责人" },
+                  { value: "mine", label: "我负责的" },
+                  { value: "unassigned", label: "未分配" },
+                  ...data.members.filter((member) => member.isActive).map((member) => ({ value: member.id, label: memberLabel(member) })),
+                ]}
+                onChange={(value: string) => list.patch({ assignee: value === "all" ? null : value })}
+              />
+              {canManage ? (
+                <Select
+                  aria-label="更新时间范围"
+                  value={data.range}
+                  options={[
+                    { value: "all", label: "全部时间" },
+                    { value: "week", label: "最近 7 天" },
+                    { value: "month", label: "最近 30 天" },
+                    { value: "custom", label: "自定义范围" },
+                  ]}
+                  style={{ width: 140 }}
+                  onChange={(value: string) => list.patch({ range: value === "all" ? null : value, from: null, to: null })}
+                />
+              ) : null}
+              {canManage && data.range === "custom" ? (
                 <DatePicker.RangePicker
                   value={data.from && data.to ? [dayjs(data.from), dayjs(data.to)] : null}
                   style={{ maxWidth: "100%" }}
@@ -856,147 +932,109 @@ export default function TasksRoute(): React.ReactElement {
                   }
                 />
               ) : null}
-            </>
-          ) : null}
-          <Select
-            aria-label="任务维度"
-            value={data.dimension}
-            style={{ width: 190 }}
-            showSearch={{ optionFilterProp: "label" }}
-            options={[
-              { value: "all", label: "全部维度" },
-              { value: "unclassified", label: "未分类" },
-              ...dimensionOptions,
-              ...(!["all", "unclassified"].includes(data.dimension) && !dimensionOptions.some((option) => option.value === data.dimension)
-                ? [{ value: data.dimension, label: "维度不存在或已删除" }]
-                : []),
-              { value: "__new__", label: "+ 新建维度" },
-            ]}
-            onChange={(value: string) =>
-              value === "__new__" ? setDimensionsOpen(true) : list.patch({ dimension: value === "all" ? null : value })
-            }
-          />
-          <Select
-            value={data.status}
-            options={STATUS_OPTIONS}
-            style={{ width: 140 }}
-            onChange={(value: string) => list.patch({ status: value === "all" ? null : value })}
-          />
-          <Select
-            aria-label="任务排序"
-            value={`${data.tasks.sort.key}:${data.tasks.sort.direction}`}
-            style={{ width: 190 }}
-            options={[
-              { value: "priority:asc", label: "优先级：高优先在前" },
-              { value: "priority:desc", label: "优先级：低优先在前" },
-              { value: "updatedAt:desc", label: "更新时间：最近在前" },
-              { value: "updatedAt:asc", label: "更新时间：最早在前" },
-              { value: "dueDate:asc", label: "截止日期：最近在前" },
-              { value: "dueDate:desc", label: "截止日期：最晚在前" },
-              { value: "title:asc", label: "任务标题：升序" },
-              { value: "title:desc", label: "任务标题：降序" },
-              { value: "progress:asc", label: "进度：升序" },
-              { value: "progress:desc", label: "进度：降序" },
-            ]}
-            onChange={(value: string) => {
-              const [sort, order] = value.split(":");
-              list.patch({ sort: sort ?? null, order: order ?? null });
-            }}
-          />
-          <Select
-            value={data.assignee}
-            style={{ width: 170 }}
-            options={[
-              { value: "all", label: "全部负责人" },
-              { value: "mine", label: "我负责的" },
-              { value: "unassigned", label: "未分配" },
-              ...data.members.filter((member) => member.isActive).map((member) => ({ value: member.id, label: memberLabel(member) })),
-            ]}
-            onChange={(value: string) => list.patch({ assignee: value === "all" ? null : value })}
-          />
-          {isAdmin ? (
-            <Select
-              value={data.org || "all"}
-              style={{ width: 180 }}
-              options={[
-                { value: "all", label: "全部组织" },
-                ...data.organizations.map((org) => ({
-                  value: org.id,
-                  label: org.status === "archived" ? `${org.name}（已解散）` : org.name,
-                })),
-              ]}
-              onChange={(value: string) => list.patch({ org: value === "all" ? null : value })}
-            />
-          ) : null}
-          <Input.Search
-            allowClear
-            placeholder="搜索任务或负责人"
-            style={{ width: 240 }}
-            value={draftKeyword}
-            loading={busy}
-            onChange={(event) => setDraftKeyword(event.target.value)}
-            onSearch={(value) => list.patch({ q: value.trim() })}
-          />
-          <Flex align="center" gap="small" wrap className="task-toolbar-switches">
-            <Flex align="center" gap={6}>
-              <Switch
-                aria-label="隐藏本人已处理"
-                size="small"
-                checked={data.hideHandled}
-                onChange={(checked) => list.patch({ hideHandled: checked ? "1" : null })}
-              />
-              <Typography.Text>隐藏已处理</Typography.Text>
-            </Flex>
-            <Flex align="center" gap={6}>
-              <Switch
-                aria-label="清单视图"
-                size="small"
-                checked={data.checklist}
-                onChange={(checked) => list.patch({ view: checked ? "checklist" : null })}
-              />
-              <Typography.Text>清单视图</Typography.Text>
-            </Flex>
-            {canManage ? (
-              <Flex align="center" gap={6}>
-                <Switch
-                  aria-label="显示归档"
-                  size="small"
-                  checked={data.includeArchived}
-                  onChange={(checked) => list.patch({ archived: checked ? "1" : null })}
+              {isAdmin ? (
+                <Select
+                  value={data.org || "all"}
+                  style={{ width: 160 }}
+                  options={[
+                    { value: "all", label: "全部组织" },
+                    ...data.organizations.map((org) => ({
+                      value: org.id,
+                      label: org.status === "archived" ? `${org.name}（已解散）` : org.name,
+                    })),
+                  ]}
+                  onChange={(value: string) => list.patch({ org: value === "all" ? null : value })}
                 />
-                <Typography.Text>显示归档</Typography.Text>
+              ) : null}
+            </Flex>
+            <Flex align="center" gap="middle" wrap>
+              <Select
+                aria-label="任务排序"
+                value={`${data.tasks.sort.key}:${data.tasks.sort.direction}`}
+                style={{ width: 200 }}
+                options={[
+                  { value: "priority:asc", label: "优先级：高优先在前" },
+                  { value: "priority:desc", label: "优先级：低优先在前" },
+                  { value: "updatedAt:desc", label: "更新时间：最近在前" },
+                  { value: "updatedAt:asc", label: "更新时间：最早在前" },
+                  { value: "dueDate:asc", label: "截止日期：最近在前" },
+                  { value: "dueDate:desc", label: "截止日期：最晚在前" },
+                  { value: "title:asc", label: "任务标题：升序" },
+                  { value: "title:desc", label: "任务标题：降序" },
+                  { value: "progress:asc", label: "进度：升序" },
+                  { value: "progress:desc", label: "进度：降序" },
+                ]}
+                onChange={(value: string) => {
+                  const [sort, order] = value.split(":");
+                  list.patch({ sort: sort ?? null, order: order ?? null });
+                }}
+              />
+              <Flex align="center" gap="middle" wrap className="task-toolbar-switches">
+                <Flex align="center" gap={6}>
+                  <Switch
+                    aria-label="隐藏本人已处理"
+                    size="small"
+                    checked={data.hideHandled}
+                    onChange={(checked) => list.patch({ hideHandled: checked ? "1" : null })}
+                  />
+                  <Typography.Text type="secondary">隐藏已处理</Typography.Text>
+                </Flex>
+                <Flex align="center" gap={6}>
+                  <Switch
+                    aria-label="维度看板视图"
+                    size="small"
+                    checked={data.checklist}
+                    onChange={(checked) => list.patch({ view: checked ? "checklist" : null })}
+                  />
+                  <Typography.Text type="secondary">维度看板</Typography.Text>
+                </Flex>
+                {canManage ? (
+                  <Flex align="center" gap={6}>
+                    <Switch
+                      aria-label="显示归档"
+                      size="small"
+                      checked={data.includeArchived}
+                      onChange={(checked) => list.patch({ archived: checked ? "1" : null })}
+                    />
+                    <Typography.Text type="secondary">显示归档</Typography.Text>
+                  </Flex>
+                ) : null}
               </Flex>
-            ) : null}
+              {filtered || list.get("sort") || list.get("order") ? (
+                <Button color="default" variant="text" size="small" onClick={() => list.reset()}>
+                  重置筛选
+                </Button>
+              ) : null}
+              <Typography.Text type="secondary" className="task-filter-count">
+                共 {data.tasks.total} 个任务{filtered ? "（已筛选）" : ""}
+              </Typography.Text>
+            </Flex>
           </Flex>
-          {filtered || list.get("sort") || list.get("order") ? (
-            <Button color="default" variant="text" onClick={() => list.reset()}>
-              重置
-            </Button>
-          ) : null}
         </TableToolbar>
-        <Card variant="outlined" size="small">
-          <Flex align="center" gap="middle" wrap>
-            <Typography.Text strong>我的处理</Typography.Text>
-            <Typography.Text>
-              已处理 {data.stats.handled} / {data.stats.total}
+
+        <Card variant="outlined" size="small" className="task-overview">
+          <Flex align="center" justify="space-between" gap="middle" wrap>
+            <div className="task-metrics">
+              {canManage ? (
+                <>
+                  {/* 统计由服务端按同一套筛选条件算（页面手里只有一页，数 rows 会随翻页变化） */}
+                  <TaskMetric label="任务总数" value={data.stats.total} unit="个" />
+                  <TaskMetric
+                    label="完成率"
+                    value={data.stats.total ? Math.round((data.stats.completed / data.stats.total) * 100) : 0}
+                    unit="%"
+                  />
+                  <TaskMetric label="待验收" value={data.stats.pendingReview} unit="个" />
+                  <TaskMetric label="已逾期" value={data.stats.overdue} unit="个" tone="danger" />
+                </>
+              ) : null}
+              <TaskMetric label="我的处理" value={`已处理 ${data.stats.handled} / ${data.stats.total}`} />
+            </div>
+            <Typography.Text type="secondary" className="task-overview-note">
+              仅本人 · 进度另行汇报{data.checklist && data.dimensions.length ? " · 拖动任务可移动维度" : ""}
             </Typography.Text>
-            <Typography.Text type="secondary">仅本人 · 进度另行汇报</Typography.Text>
           </Flex>
         </Card>
-
-        {canManage ? (
-          <div className="task-summary" aria-label="任务统计">
-            {/* 统计由服务端按同一套筛选条件算（页面手里只有一页，数 rows 会随翻页变化） */}
-            <Statistic title="任务总数" value={data.stats.total} suffix="个" />
-            <Statistic
-              title="完成率"
-              value={data.stats.total ? Math.round((data.stats.completed / data.stats.total) * 100) : 0}
-              suffix="%"
-            />
-            <Statistic title="待验收" value={data.stats.pendingReview} suffix="个" />
-            <Statistic title="已逾期" value={data.stats.overdue} suffix="个" styles={{ content: { color: "#cf1322" } }} />
-          </div>
-        ) : null}
 
         {canManage ? (
           <SelectionAlert count={selectedKeys.length} noun="个任务" onClear={() => setSelectedKeys([])}>
@@ -1041,65 +1079,107 @@ export default function TasksRoute(): React.ReactElement {
         ) : null}
 
         {data.checklist ? (
-          <Card
-            variant="outlined"
-            title={
-              data.dimensions.find((item) => item.id === data.dimension)?.name ??
-              (data.dimension === "unclassified" ? "未分类" : "任务清单")
-            }
-          >
-            <Flex vertical gap="middle">
-              {rows.length ? (
-                rows.map((task) => (
-                  <Card key={task.id} size="small" variant="outlined">
-                    <Flex align="center" justify="space-between" gap="middle" wrap>
-                      <Flex vertical gap="small" className="task-checklist-copy">
-                        <Button
-                          color="primary"
-                          variant="link"
-                          style={{ height: "auto", whiteSpace: "normal", textAlign: "left", justifyContent: "flex-start" }}
-                          onClick={() => openDetail(task)}
-                        >
-                          {task.title}
-                        </Button>
-                        {personalControls(task, "summary")}
-                        <Space wrap size="small">
-                          <Tag>{task.priority}</Tag>
-                          <Tag color={STATUS_COLOR[task.status] ?? "default"}>{STATUS_LABEL[task.status]}</Tag>
-                          <Typography.Text type="secondary">
-                            进度 {task.progress}% · {task.ownerName ?? "未分配"}
-                            {task.dueDate ? ` · ${task.dueDate}` : ""}
-                          </Typography.Text>
-                        </Space>
-                      </Flex>
-                      <Space size="middle" className="task-checklist-actions">
-                        {personalControls(task, "dimension")}
-                        <IconActionButton
-                          label={
-                            task.ownerId === me.id && !task.archivedAt && !["completed", "pending_review"].includes(task.status)
-                              ? "汇报进度"
-                              : "查看详情"
-                          }
-                          icon={
-                            task.ownerId === me.id && !task.archivedAt && !["completed", "pending_review"].includes(task.status) ? (
-                              <RiseOutlined />
-                            ) : (
-                              <EyeOutlined />
-                            )
-                          }
-                          onClick={() => openDetail(task)}
-                          disabled={busy}
-                        />
-                      </Space>
-                    </Flex>
+          data.board.length ? (
+            <div className="task-board">
+              {data.board.map((group) => {
+                const tone = dimensionToneById[group.id];
+                const droppable = group.id !== "unclassified";
+                return (
+                  <Card
+                    key={group.id}
+                    variant="outlined"
+                    className={`task-board-card${dropTargetId === group.id ? " is-drop-target" : ""}`}
+                    styles={{ body: { padding: 0, display: "flex", flexDirection: "column", flex: 1, minHeight: 0 } }}
+                    // 拖到维度卡 = 移动；「未分类」不是真实维度，不作为落点
+                    onDragOver={(event) => {
+                      if (!droppable || !draggingTaskId) return;
+                      event.preventDefault();
+                      event.dataTransfer.dropEffect = "move";
+                      if (dropTargetId !== group.id) setDropTargetId(group.id);
+                    }}
+                    onDragLeave={(event) => {
+                      if (!(event.currentTarget as HTMLElement).contains(event.relatedTarget as Node | null)) setDropTargetId(null);
+                    }}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      const taskId = event.dataTransfer.getData(TASK_DRAG_TYPE) || draggingTaskId;
+                      setDraggingTaskId(null);
+                      setDropTargetId(null);
+                      if (droppable && taskId) moveTaskToDimension(taskId, group.id);
+                    }}
+                  >
+                    <div className="task-board-head">
+                      <span className="task-board-dimension" style={tone ?? {}}>
+                        {group.name}
+                      </span>
+                      <span className="task-board-count">{group.tasks.length}</span>
+                    </div>
+                    <div className="task-board-body">
+                      {group.tasks.length ? (
+                        group.tasks.map((task) => (
+                          <div
+                            className={`task-board-item${draggingTaskId === task.id ? " is-dragging" : ""}`}
+                            key={task.id}
+                            draggable={data.dimensions.length > 0}
+                            onDragStart={(event) => {
+                              event.dataTransfer.effectAllowed = "move";
+                              event.dataTransfer.setData(TASK_DRAG_TYPE, task.id);
+                              setDraggingTaskId(task.id);
+                            }}
+                            onDragEnd={() => {
+                              setDraggingTaskId(null);
+                              setDropTargetId(null);
+                            }}
+                          >
+                            <Flex align="flex-start" justify="space-between" gap="small">
+                              <Button color="primary" variant="link" className="task-board-title" onClick={() => openDetail(task)}>
+                                {task.title}
+                              </Button>
+                              <IconActionButton
+                                label={
+                                  task.ownerId === me.id && !task.archivedAt && !["completed", "pending_review"].includes(task.status)
+                                    ? "汇报进度"
+                                    : "查看详情"
+                                }
+                                icon={
+                                  task.ownerId === me.id && !task.archivedAt && !["completed", "pending_review"].includes(task.status) ? (
+                                    <RiseOutlined />
+                                  ) : (
+                                    <EyeOutlined />
+                                  )
+                                }
+                                onClick={() => openDetail(task)}
+                                disabled={busy}
+                              />
+                            </Flex>
+                            <div className="task-board-controls">{personalControls(task)}</div>
+                            <Space wrap size={8}>
+                              <Tag color={PRIORITY_COLOR[task.priority] ?? "default"} variant="filled">
+                                {task.priority}
+                              </Tag>
+                              <TaskStatusTag status={task.status} />
+                              <Typography.Text type="secondary" className="task-board-meta">
+                                进度 {task.progress}% · {task.ownerName ?? "未分配"}
+                                {task.dueDate ? ` · ${task.dueDate}` : ""}
+                              </Typography.Text>
+                            </Space>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="task-board-empty">
+                          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有任务" />
+                        </div>
+                      )}
+                    </div>
                   </Card>
-                ))
-              ) : (
-                <Empty description="没有符合条件的任务" />
-              )}
-              <Pagination {...paging.pagination} onChange={paging.onPaginationChange} />
-            </Flex>
-          </Card>
+                );
+              })}
+            </div>
+          ) : (
+            <Card variant="outlined">
+              <Empty description="没有符合条件的任务" />
+            </Card>
+          )
         ) : (
           <Table<TaskRow>
             {...table}
@@ -1418,17 +1498,30 @@ function TaskDetailDrawer({
 }): React.ReactElement {
   const { modal } = AntdApp.useApp();
   const today = dayjs().format("YYYY-MM-DD");
+  // 评论允许作者事后改错字：只改 content 并记录 edited_at，created_at 不变，时间线次序稳定
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [commentDraft, setCommentDraft] = useState("");
+  const startCommentEdit = (item: ActivityRow): void => {
+    setEditingCommentId(item.id);
+    setCommentDraft(item.content);
+  };
+  const cancelCommentEdit = (): void => {
+    setEditingCommentId(null);
+    setCommentDraft("");
+  };
+  const saveCommentEdit = (): void => {
+    const content = commentDraft.trim();
+    if (!content || !editingCommentId || busy) return;
+    onPost({ intent: "edit-comment", taskId: task.id, commentId: editingCommentId, content });
+    cancelCommentEdit();
+  };
 
   const items: DescriptionsProps["items"] = [
     { key: "owner", label: "负责人", children: task.ownerName ?? "未分配" },
     {
       key: "status",
       label: "状态",
-      children: (
-        <Tag color={STATUS_COLOR[task.status] ?? "default"} variant="filled">
-          {STATUS_LABEL[task.status] ?? task.status}
-        </Tag>
-      ),
+      children: <TaskStatusTag status={task.status} />,
     },
     {
       key: "priority",
@@ -1557,23 +1650,69 @@ function TaskDetailDrawer({
         <Card variant="outlined" size="small" title="协作时间线">
           {activity.length ? (
             <Timeline
-              items={activity.map((item) => ({
-                key: `${item.kind}-${item.id}`,
-                title: dayjs(item.createdAt).format("YYYY-MM-DD HH:mm"),
-                color: TIMELINE_COLOR[item.kind] ?? "blue",
-                content: (
-                  <Space orientation="vertical" size={2} className="list-block">
-                    <Typography.Text strong>
-                      {item.authorName ?? "系统"}
-                      {EVENT_LABEL[item.kind] ? ` · ${EVENT_LABEL[item.kind]}` : ""}
-                    </Typography.Text>
-                    <Typography.Text>
-                      {item.content}
-                      {item.progress !== null ? `（${item.progress}%）` : ""}
-                    </Typography.Text>
-                  </Space>
-                ),
-              }))}
+              items={activity.map((item) => {
+                const mine = item.kind === "comment" && item.authorId === me.id;
+                const editing = editingCommentId === item.id;
+                return {
+                  key: `${item.kind}-${item.id}`,
+                  title: dayjs(item.createdAt).format("YYYY-MM-DD HH:mm"),
+                  color: TIMELINE_COLOR[item.kind] ?? "blue",
+                  content: (
+                    <Space orientation="vertical" size={2} className="list-block">
+                      <Flex align="center" justify="space-between" gap="small">
+                        <Typography.Text strong>
+                          {item.authorName ?? "系统"}
+                          {EVENT_LABEL[item.kind] ? ` · ${EVENT_LABEL[item.kind]}` : ""}
+                        </Typography.Text>
+                        {mine && !editing ? (
+                          <Button
+                            size="small"
+                            color="default"
+                            variant="text"
+                            icon={<EditOutlined />}
+                            onClick={() => startCommentEdit(item)}
+                            disabled={busy}
+                          >
+                            修改
+                          </Button>
+                        ) : null}
+                      </Flex>
+                      {editing ? (
+                        <Flex vertical gap="small" className="timeline-comment-editor">
+                          <Input.TextArea
+                            value={commentDraft}
+                            onChange={(event) => setCommentDraft(event.target.value)}
+                            autoSize={{ minRows: 2, maxRows: 6 }}
+                            maxLength={500}
+                            showCount
+                            autoFocus
+                          />
+                          <Space>
+                            <Button
+                              size="small"
+                              color="primary"
+                              variant="solid"
+                              onClick={saveCommentEdit}
+                              disabled={busy || !commentDraft.trim()}
+                            >
+                              保存
+                            </Button>
+                            <Button size="small" onClick={cancelCommentEdit} disabled={busy}>
+                              取消
+                            </Button>
+                          </Space>
+                        </Flex>
+                      ) : (
+                        <Typography.Text>
+                          {item.content}
+                          {item.progress !== null ? `（${item.progress}%）` : ""}
+                          {item.editedAt ? <Typography.Text type="secondary">（已编辑）</Typography.Text> : null}
+                        </Typography.Text>
+                      )}
+                    </Space>
+                  ),
+                };
+              })}
             />
           ) : (
             <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无记录" />
@@ -1627,11 +1766,7 @@ function TaskProgressPanel({
               {
                 key: "status",
                 label: "状态",
-                children: (
-                  <Tag color={STATUS_COLOR[task.status] ?? "default"} variant="filled">
-                    {STATUS_LABEL[task.status] ?? task.status}
-                  </Tag>
-                ),
+                children: <TaskStatusTag status={task.status} />,
               },
               { key: "progress", label: "进度", children: `${task.progress}%` },
             ]}
@@ -1746,6 +1881,29 @@ function ProgressReporter({
         </Flex>
       </Form>
     </Card>
+  );
+}
+
+/** 概览条里的一项指标：小标签 + 大数字，用细分隔线分组，不单独占卡片 */
+function TaskMetric({
+  label,
+  value,
+  unit,
+  tone,
+}: {
+  label: string;
+  value: number | string;
+  unit?: string;
+  tone?: "danger";
+}): React.ReactElement {
+  return (
+    <div className="task-metric">
+      <span className="task-metric-label">{label}</span>
+      <span className={tone === "danger" ? "task-metric-value is-danger" : "task-metric-value"}>
+        {value}
+        {unit ? <span className="task-metric-unit">{unit}</span> : null}
+      </span>
+    </div>
   );
 }
 

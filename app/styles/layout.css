@@ -32,7 +32,7 @@ body {
 .app-sider {
   height: 100vh;
   overflow: auto;
-  border-right: 1px solid #dfe5ed;
+  border-right: 1px solid #dde2ee;
 }
 
 .brand {
@@ -43,7 +43,7 @@ body {
 }
 
 .brand-avatar {
-  background: #185fa5;
+  background: #4053a8;
   flex: none;
 }
 
@@ -74,7 +74,7 @@ body {
   justify-content: space-between;
   height: 60px;
   padding: 0 20px;
-  border-bottom: 1px solid #dfe5ed;
+  border-bottom: 1px solid #dde2ee;
 }
 
 .app-content {
@@ -184,7 +184,7 @@ body {
 .stat-icon {
   display: inline-flex;
   align-items: center;
-  color: #8c8c8c;
+  color: #7c8497;
 }
 
 .stat-icon-danger {
@@ -214,6 +214,10 @@ body {
 }
 
 .list-block {
+  width: 100%;
+}
+
+.timeline-comment-editor {
   width: 100%;
 }
 
@@ -290,7 +294,7 @@ body {
 }
 
 .notification-item:hover {
-  background: #f5f7fa;
+  background: #f4f6fb;
 }
 
 .notification-item-head {
@@ -317,7 +321,7 @@ body {
   align-items: center;
   min-height: 100vh;
   padding: 32px 24px 48px;
-  background: #f5f7fa;
+  background: #eef0f7;
 }
 
 .join-panel {
@@ -358,13 +362,182 @@ body {
   gap: 6px;
   margin-bottom: 16px;
 }
-.task-summary {
+.task-board {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
-  padding: 16px 0;
-  border-top: 1px solid #e5e7eb;
-  border-bottom: 1px solid #e5e7eb;
+  align-items: stretch;
+}
+
+.task-board-card {
+  min-height: 200px;
+}
+
+.task-board-card.is-drop-target {
+  outline: 2px dashed #4053a8;
+  outline-offset: -2px;
+  background: #f5f7fd;
+}
+
+.task-board-item[draggable="true"] {
+  cursor: grab;
+}
+
+.task-board-item.is-dragging {
+  opacity: 0.45;
+}
+
+.task-board-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid #e7ebf4;
+}
+
+.task-board-dimension {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 10px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 22px;
+}
+
+.task-board-count {
+  min-width: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: #f4f6fb;
+  color: #5c6478;
+  font-size: 12px;
+  line-height: 22px;
+  text-align: center;
+}
+
+.task-board-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  padding: 4px 16px 12px;
+}
+
+.task-board-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 0;
+}
+
+.task-board-item + .task-board-item {
+  border-top: 1px solid #e7ebf4;
+}
+
+.task-board-title {
+  height: auto;
+  padding: 0;
+  font-weight: 500;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  justify-content: flex-start;
+}
+
+.task-board-meta {
+  font-size: 12px;
+}
+
+.task-board-empty {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+}
+
+@media (max-width: 900px) {
+  .task-board {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* 任务页筛选区：两行——第一行搜索与范围，第二行排序、视图开关 */
+.task-filters {
+  width: 100%;
+  min-width: 0;
+}
+
+/* 概览条：四项统计 + 我的处理并成一条，替代原来两块独立区域 */
+.task-overview .ant-card-body {
+  padding: 10px 16px;
+}
+
+.task-metrics {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.task-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 20px;
+}
+
+.task-metric:first-child {
+  padding-inline-start: 0;
+}
+
+.task-metric + .task-metric {
+  border-inline-start: 1px solid #e7ebf4;
+}
+
+.task-metric-label {
+  color: #7c8497;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.task-metric-value {
+  color: #232838;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 26px;
+}
+
+.task-metric-value.is-danger {
+  color: #cf1322;
+}
+
+.task-metric-unit {
+  margin-inline-start: 2px;
+  color: #7c8497;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.task-overview-note {
+  font-size: 12px;
+}
+
+/* 任务总数放在第二行最右侧：窄屏换行时也跟随第二行，不会单独掉到最左边 */
+.task-filter-count {
+  margin-inline-start: auto;
+  font-size: 12px;
+}
+
+/* 任务标题是行内主角：默认深色，悬停才显示链接色，避免整列蓝色链接抢注意力 */
+.task-title-link.ant-btn {
+  color: #232838;
+  font-weight: 500;
+}
+
+.task-title-link.ant-btn:hover {
+  color: #4053a8;
 }
 
 .task-toolbar-switches {
@@ -375,18 +548,188 @@ body {
   white-space: nowrap;
 }
 
-.task-checklist-copy {
-  min-width: 0;
-  flex: 1 1 220px;
-}
-
-.task-checklist-actions {
-  flex: none;
-  margin-inline-start: auto;
-}
-
 @media (max-width: 600px) {
-  .task-summary {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .task-metric {
+    padding-inline: 12px;
   }
+}
+
+/* ------------------------------------------------ 日历（月视图） */
+.calendar-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 14px 16px;
+}
+
+.calendar-month {
+  margin: 0;
+  min-width: 120px;
+}
+
+.calendar-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #7c8497;
+  font-size: 12px;
+}
+
+.calendar-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: #4053a8;
+}
+
+.calendar-scroll {
+  overflow-x: auto;
+}
+
+.calendar-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  border-top: 1px solid #e7ebf4;
+  border-bottom: 1px solid #e7ebf4;
+  background: #f4f6fb;
+  min-width: 840px;
+}
+
+.calendar-weekday {
+  padding: 9px 12px;
+  color: #7c8497;
+  font-size: 12px;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  min-width: 840px;
+}
+
+.calendar-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  min-height: 132px;
+  padding: 8px;
+  border-right: 1px solid #e7ebf4;
+  border-bottom: 1px solid #e7ebf4;
+}
+
+.calendar-cell:nth-child(7n) {
+  border-right: none;
+}
+
+.calendar-cell.is-outside {
+  background: #f8f9fc;
+}
+
+.calendar-cell.is-outside .calendar-day-num {
+  color: #9aa2b3;
+}
+
+.calendar-cell.is-clickable {
+  cursor: pointer;
+}
+
+.calendar-cell.is-clickable:hover {
+  background: #f5f7fd;
+}
+
+.calendar-day-head {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.calendar-day-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  color: #5c6478;
+  font-size: 13px;
+}
+
+.calendar-day-num.is-today {
+  background: #4053a8;
+  color: #fff;
+  font-weight: 600;
+}
+
+.calendar-events {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.calendar-event {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  padding: 2px 6px;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 18px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.calendar-event:hover {
+  filter: brightness(0.96);
+}
+
+.calendar-event.is-done {
+  opacity: 0.55;
+}
+
+.calendar-event.is-done .calendar-event-title {
+  text-decoration: line-through;
+}
+
+.calendar-event-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.calendar-event-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calendar-more {
+  padding: 0 6px;
+  border: none;
+  background: transparent;
+  color: #7c8497;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.calendar-more:hover {
+  color: #4053a8;
+}
+
+.calendar-popover-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 280px;
+  overflow: auto;
+  min-width: 200px;
 }
