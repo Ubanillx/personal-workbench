@@ -650,6 +650,21 @@ export const CASES: ContractCase[] = [
     path: "/api/tasks/{{taskCreated}}",
     body: { title: "契约-成员改元信息" },
   },
+  // 普通成员可以改自己创建任务的元信息；负责人/组织/私密仍不可碰
+  {
+    name: "tasks.patch.memberA.own-created",
+    role: "memberA",
+    method: "PATCH",
+    path: "/api/tasks/{{taskByMember}}",
+    body: { title: "契约-成员改自己任务", description: "成员自改", priority: "P2", dueDate: "2026-12-30" },
+  },
+  {
+    name: "tasks.patch.memberA.own-created.reject-owner",
+    role: "memberA",
+    method: "PATCH",
+    path: "/api/tasks/{{taskByMember}}",
+    body: { ownerId: IDS.userMemberA2 },
+  },
   {
     name: "tasks.patch.managerB.cross-org",
     role: "managerB",

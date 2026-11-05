@@ -71,7 +71,7 @@ import { listOrganizations, taskAssigneeCandidates, type AccountOption } from ".
 import { pagingOf, sortOf, type Paged } from "../lib/paging";
 import { sortableKeys } from "../lib/paging.server";
 import { assertOrgAccess } from "../lib/session.server";
-import { canReviewTask } from "../lib/task-permissions";
+import { canEditTask, canReviewTask } from "../lib/task-permissions";
 import {
   addComment,
   approveTask,
@@ -705,9 +705,8 @@ export default function TasksRoute(): React.ReactElement {
             onClick: () => openDetail(task),
           },
         ];
-        // 编辑 / 改派仍是管理动作：普通成员即使是发布人/负责人也不因此获得编辑权限，
-        // 这一列必须跟着收，否则一屏都是点不动的灰按钮）
-        if (canManage) {
+        // 编辑权：管理角色，或任务发布人本人（普通成员只能改自己创建的任务；改派仍限管理角色）
+        if (canEditTask(me, task)) {
           actions.push({
             key: "edit",
             label: "编辑",
@@ -716,6 +715,8 @@ export default function TasksRoute(): React.ReactElement {
             // 只开表单抽屉，不顺手把详情挂到 URL：编辑/改派是独立动作，不该顺带弹一次任务详情
             onClick: () => openEdit(task),
           });
+        }
+        if (canManage) {
           actions.push({
             key: "reassign",
             label: "改派",
@@ -1336,7 +1337,8 @@ export default function TasksRoute(): React.ReactElement {
             description: values.description ?? "",
             priority: values.priority ?? editingTask.priority,
             dueDate: values.dueDate ? values.dueDate.format("YYYY-MM-DD") : null,
-            isPrivate: Boolean(values.isPrivate),
+            // 负责人/私密/组织是管理字段：普通成员只改自己创建任务的元信息
+            ...(canManage ? { isPrivate: Boolean(values.isPrivate) } : {}),
             // 负责人：与列表的「负责人」列对应（改派抽屉仍在，是同一件事的快捷入口）
             ...(canManage ? { ownerId: values.ownerId || "unassigned" } : {}),
             // 所属组织：与列表的「组织」列对应，只有管理员能改（组织管理者提交了服务端也会拒）
@@ -1384,14 +1386,16 @@ export default function TasksRoute(): React.ReactElement {
             />
           </Form.Item>
         ) : null}
-        <Form.Item
-          name="isPrivate"
-          label="私密任务"
-          valuePropName="checked"
-          tooltip="私密任务仅发布人、负责人与全局管理员可见；改这两项只限发布人或管理员"
-        >
-          <Checkbox>仅发布人、负责人与全局管理员可见</Checkbox>
-        </Form.Item>
+        {canManage ? (
+          <Form.Item
+            name="isPrivate"
+            label="私密任务"
+            valuePropName="checked"
+            tooltip="私密任务仅发布人、负责人与全局管理员可见；改这两项只限发布人或管理员"
+          >
+            <Checkbox>仅发布人、负责人与全局管理员可见</Checkbox>
+          </Form.Item>
+        ) : null}
         {editingTask ? (
           <Descriptions
             size="small"
@@ -1490,6 +1494,8 @@ function TaskDetailDrawer({
 }): React.ReactElement {
   const { modal } = AntdApp.useApp();
   const today = dayjs().format("YYYY-MM-DD");
+  // 详情抽屉里的「编辑」按钮与服务端共用同一判据：管理角色或任务发布人本人
+  const canEdit = canEditTask(me, task);
   // 评论允许作者事后改错字：只改 content 并记录 edited_at，created_at 不变，时间线次序稳定
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [commentDraft, setCommentDraft] = useState("");
@@ -1555,14 +1561,18 @@ function TaskDetailDrawer({
         </Space>
       }
       extra={
-        canManage && !task.archivedAt ? (
+        (canEdit || canManage) && !task.archivedAt ? (
           <Space size="small">
-            <Button icon={<EditOutlined />} onClick={onEdit} disabled={busy}>
-              编辑
-            </Button>
-            <Button icon={<UserSwitchOutlined />} onClick={onReassign} disabled={busy}>
-              改派
-            </Button>
+            {canEdit ? (
+              <Button icon={<EditOutlined />} onClick={onEdit} disabled={busy}>
+                编辑
+              </Button>
+            ) : null}
+            {canManage ? (
+              <Button icon={<UserSwitchOutlined />} onClick={onReassign} disabled={busy}>
+                改派
+              </Button>
+            ) : null}
           </Space>
         ) : null
       }

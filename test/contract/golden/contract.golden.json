@@ -1,9 +1,9 @@
 {
   "meta": {
-    "generatedAt": "2026-11-04T05:08:37.109Z",
+    "generatedAt": "2026-11-05T01:39:03.581Z",
     "entry": "npm run serve",
     "node": "22.22.2",
-    "caseCount": 406
+    "caseCount": 408
   },
   "responses": [
     {
@@ -7301,7 +7301,89 @@
         "ok": false,
         "error": {
           "code": "FORBIDDEN",
-          "message": "只有管理员或组织管理者可以执行此操作"
+          "message": "只有管理员、组织管理者或任务发布人可以修改任务"
+        }
+      }
+    },
+    {
+      "name": "tasks.patch.memberA.own-created",
+      "role": "memberA",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/tasks/<uuid>",
+        "body": {
+          "title": "契约-成员改自己任务",
+          "description": "成员自改",
+          "priority": "P2",
+          "dueDate": "2026-12-30"
+        }
+      },
+      "status": 200,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": true,
+        "data": {
+          "id": "<uuid>",
+          "title": "契约-成员改自己任务",
+          "description": "成员自改",
+          "priority": "P2",
+          "status": "todo",
+          "progress": 0,
+          "dueDate": "2026-12-30",
+          "ownerId": "user-member-a",
+          "createdBy": "user-member-a",
+          "source": "manual",
+          "isPrivate": false,
+          "createdAt": "<ts>",
+          "updatedAt": "<ts>",
+          "completedAt": null,
+          "archivedAt": null,
+          "orgId": "org-alpha",
+          "orgName": "阿尔法组",
+          "ownerName": "阿尔法成员甲",
+          "ownerRole": "member"
+        }
+      }
+    },
+    {
+      "name": "tasks.patch.memberA.own-created.reject-owner",
+      "role": "memberA",
+      "request": {
+        "method": "PATCH",
+        "path": "/api/tasks/<uuid>",
+        "body": {
+          "ownerId": "user-member-a2"
+        }
+      },
+      "status": 403,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "FORBIDDEN",
+          "message": "普通成员不能修改任务负责人"
         }
       }
     },
@@ -8161,12 +8243,12 @@
         "ok": true,
         "data": {
           "id": "<uuid>",
-          "title": "契约-成员甲建任务",
-          "description": "",
-          "priority": "P1",
+          "title": "契约-成员改自己任务",
+          "description": "成员自改",
+          "priority": "P2",
           "status": "completed",
           "progress": 100,
-          "dueDate": null,
+          "dueDate": "2026-12-30",
           "ownerId": "user-member-a",
           "createdBy": "user-member-a",
           "source": "manual",
@@ -8929,7 +9011,7 @@
         "ok": false,
         "error": {
           "code": "FORBIDDEN",
-          "message": "只有管理员或组织管理者可以执行此操作"
+          "message": "只有管理员、组织管理者或任务发布人可以修改任务"
         }
       }
     },
@@ -10263,12 +10345,12 @@
             },
             {
               "id": "<uuid>",
-              "title": "契约-成员甲建任务",
-              "description": "",
-              "priority": "P1",
+              "title": "契约-成员改自己任务",
+              "description": "成员自改",
+              "priority": "P2",
               "status": "completed",
               "progress": 100,
-              "dueDate": null,
+              "dueDate": "2026-12-30",
               "ownerId": "user-member-a",
               "createdBy": "user-member-a",
               "source": "manual",
@@ -10927,12 +11009,12 @@
             },
             {
               "id": "<uuid>",
-              "title": "契约-成员甲建任务",
-              "description": "",
-              "priority": "P1",
+              "title": "契约-成员改自己任务",
+              "description": "成员自改",
+              "priority": "P2",
               "status": "completed",
               "progress": 100,
-              "dueDate": null,
+              "dueDate": "2026-12-30",
               "ownerId": "user-member-a",
               "createdBy": "user-member-a",
               "source": "manual",
@@ -17506,12 +17588,12 @@
           },
           {
             "id": "<uuid>",
-            "title": "契约-成员甲建任务",
-            "description": "",
-            "priority": "P1",
+            "title": "契约-成员改自己任务",
+            "description": "成员自改",
+            "priority": "P2",
             "status": "completed",
             "progress": 100,
-            "dueDate": null,
+            "dueDate": "2026-12-30",
             "ownerId": "user-member-a",
             "createdBy": "user-member-a",
             "source": "manual",

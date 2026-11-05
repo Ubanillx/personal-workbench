@@ -17,6 +17,16 @@ export function canManageRole(role: UserRole): boolean {
 export type ReviewTarget = { createdBy: string; ownerId: string | null };
 
 /**
+ * 任务元信息编辑权（标题 / 说明 / 优先级 / 截止日期）：
+ * - admin / manager：可以改，组织边界由 `assertOrgAccess` 另判；
+ * - member：只能改**自己创建**的任务。负责人、所属组织、私密状态仍只归管理角色，
+ *   避免成员把自己被派的活改给别人，或把别人发布的任务改成对自己可见的形式。
+ */
+export function canEditTask(actor: { id: string; role: UserRole }, task: { createdBy: string }): boolean {
+  return canManageRole(actor.role) || task.createdBy === actor.id;
+}
+
+/**
  * 任务验收权（`approve` / `return`）：**组织管理者只能验收自己发布的任务**，全局管理员保留应急兜底。
  *
  * 正常业务链路是「组织管理者发布 → 成员完成 → 发布该任务的组织管理者验收」；
