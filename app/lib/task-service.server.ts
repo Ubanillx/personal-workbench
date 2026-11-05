@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { TaskStatus } from "../../shared/types/domain";
 import { clamp, date, db, flag, now, one, ownerIdOf, priority, rows, run, type User } from "./db.server";
 import { assertOrgAccess, orgIsActive } from "./session.server";
-import { canReviewTask } from "./task-permissions";
+import { canEditTask, canReviewTask } from "./task-permissions";
 import { invalidateTaskNotifications } from "./notifications.server";
 import {
   canManageTasks,
@@ -123,13 +123,31 @@ export function createTask(user: User, body: Record<string, unknown>): ServiceRe
 }
 
 export function updateTask(user: User, id: string, body: Record<string, unknown>): ServiceResult<TaskView> {
-  if (!canManageTasks(user)) return failed("FORBIDDEN", "只有管理员或组织管理者可以执行此操作", 403);
   const database = db();
   const located = viewable(user, id);
   if (!located.ok) return located.failure;
   const current = located.task;
+  // 管理角色可改权限内全部任务；普通成员只能改自己创建的任务
+  if (!canEditTask(user, current)) {
+    return failed("FORBIDDEN", "只有管理员、组织管理者或任务发布人可以修改任务", 403);
+  }
   if (current.archivedAt) return failed("ARCHIVED", "请先恢复归档任务", 400);
   if (body.progress !== undefined || body.status !== undefined) return failed("FIELD_FORBIDDEN", "请使用进度和验收接口变更任务状态", 400);
+  /**
+   * 普通成员自建任务只开放标题 / 说明 / 优先级 / 截止日期；
+   * 负责人、所属组织、私密状态仍归管理角色，避免越权改派或改变可见范围。
+   */
+  if (user.role === "member") {
+    if (body.ownerId !== undefined && ownerIdOf(body.ownerId, null) !== current.ownerId) {
+      return failed("FORBIDDEN", "普通成员不能修改任务负责人", 403);
+    }
+    if (body.orgId !== undefined && String(body.orgId ?? "").trim() !== located.orgId) {
+      return failed("FORBIDDEN", "普通成员不能修改任务所属组织", 403);
+    }
+    if (body.isPrivate !== undefined && flag(body.isPrivate) !== Boolean(current.isPrivate)) {
+      return failed("FORBIDDEN", "普通成员不能修改任务可见性", 403);
+    }
+  }
   const title = String(body.title ?? current.title).trim();
   if (!title) return failed("VALIDATION_ERROR", "任务标题不能为空", 400);
   /**

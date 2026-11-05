@@ -533,6 +533,31 @@ async function main(): Promise<void> {
       true,
     );
     check("「未分类」不能作为拖拽目标", rejectedMove.includes("未找到该资源"));
+    // 普通成员的编辑边界：自己建的任务可改元信息，管理角色发布的不行
+    await pagePost("/tasks", { intent: "create", title: "成员自建任务-冒烟", priority: "P1" }, member.cookie, true);
+    const memberTasks = (await (await fetch(`${base}/api/tasks`, { headers: { cookie: member.cookie } })).json()) as {
+      data?: Array<{ id: string; title: string }>;
+    };
+    const ownTask = memberTasks.data?.find((item) => item.title === "成员自建任务-冒烟");
+    check("普通成员可以创建自己的任务", Boolean(ownTask));
+    await pagePost(
+      "/tasks",
+      { intent: "update", taskId: ownTask?.id ?? "", title: "成员自建任务-已改", priority: "P2", dueDate: "2026-12-30" },
+      member.cookie,
+      true,
+    );
+    check("普通成员可以修改自己创建任务的元信息", (await pageHtml("/tasks", member.cookie)).includes("成员自建任务-已改"));
+    const memberEditManagerTask = await pagePost(
+      "/tasks",
+      { intent: "update", taskId: IDS.taskDoing, title: "成员不该改成功" },
+      member.cookie,
+      true,
+    );
+    check(
+      "普通成员不能修改管理角色发布的任务",
+      memberEditManagerTask.includes("只有管理员、组织管理者或任务发布人可以修改任务") &&
+        !(await pageHtml("/tasks", member.cookie)).includes("成员不该改成功"),
+    );
     // 评论编辑：只有作者能改；改完在协作时间线里标注「已编辑」
     const memberEditAttempt = await pagePost(
       "/tasks",
