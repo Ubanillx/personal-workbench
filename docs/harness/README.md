@@ -4,13 +4,13 @@
 
 > 维护规则：**任何改动完成时，先更新对应文档，再算这项改动完成。** 只改代码不改文档 = 未完成。
 
-## 最近门禁验证（2026-11-04）
+## 最近门禁验证（2026-11-05）
 
-Jenkins 在提交 `3b7ada9` 的静态检查阶段因 6 个文件存在 Prettier 格式漂移退出，尚未执行构建、打包和远端部署。本地使用锁文件中的 Prettier 3.9.6 复现后，按现有配置格式化这 6 个文件，`format:check` 恢复通过。
+Jenkins 在提交 `20bfb7a` 的静态检查阶段因 `ACCOUNTS_AND_ORGS.md` 和 `ARCHITECTURE.md` 的 Markdown 权限表存在格式漂移退出，尚未执行构建、打包和远端部署。本地使用锁文件中的 Prettier 3.9.6 复现后，按现有配置格式化这 2 个文件，`format:check` 恢复通过。
 
-本次验证环境为 Windows、Node.js 24.19.0 / npm 11.17.0。lint（176 文件，0 warning / 0 error）、四个配置的 typecheck、构建、Ant Design lint 和格式检查均通过；`npm test` 共 **637 项通过**：数据层 31、WebDAV 13、API 契约 406、认证与权限 26、SSR 冒烟 161。构建由 `npm test` 的 `pretest` 执行。
+本次验证环境为 Windows、Node.js 24.19.0 / npm 11.17.0。lint（176 文件，0 warning / 0 error）、四个配置的 typecheck、构建、Ant Design lint 和格式检查均通过；`npm test` 共 **642 项通过**：数据层 31、WebDAV 13、API 契约 408、认证与权限 26、SSR 冒烟 164。构建由 `npm test` 的 `pretest` 执行。
 
-详细复现与验证记录见 [Jenkins 格式门禁排障](../qa/2026-11-04/jenkins-format-verification.md)。
+详细复现与验证记录见 [本次 Jenkins 格式门禁排障](../qa/2026-11-05/jenkins-format-verification.md)；前次记录见 [2026-11-04 排障](../qa/2026-11-04/jenkins-format-verification.md)。
 
 ## 当前状态快照（2026-09-12，重要文件支持远端下载之后）
 
