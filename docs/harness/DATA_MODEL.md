@@ -34,13 +34,14 @@
 
 | 表                       | 关键字段                                                                                                                                                | 说明                                                                         |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `tasks`                  | `org_id`, `status`, `priority`, `progress`, `owner_id`, `created_by`, `source`, `is_private`, `archived_at`, `wecom_fingerprint`, `overdue_notified_at` | 主表，见下方状态机                                                           |
+| `tasks`                  | `org_id`, `status`, `priority`, `progress`, `owner_id`, `created_by`, `source`, `is_private`, `archived_at`, `wecom_fingerprint`, `order_key`, `order_factory`, `overdue_notified_at` | 主表，见下方状态机；`order_key = 合同号\|节点`，与 `order_factory` 一起按导入人唯一（订单导入去重） |
 | `task_progress_logs`     | `task_id`, `content`, `progress_snapshot`                                                                                                               | 进度汇报流水（经 `task_id` 归属组织）                                        |
 | `task_comments`          | `task_id`, `author_role(admin/manager/member)`, `content`, `edited_at`                                                                                  | 评论；作者可编辑正文，`edited_at` 记录最后修改时间（迁移 020）                |
 | `task_events`            | `task_id`, `event_type`, `content`                                                                                                                      | 时间线（创建/改派/提交/通过/退回/归档/恢复/调整组织）                        |
-| `task_dimensions`        | `id`, `user_id`, `name`, `created_at`, `updated_at`                                                                                                     | 个人维度，同一账号名称唯一（1-40 字符）；所有角色只管理本人的维度            |
+| `task_dimensions`        | `id`, `user_id`, `name`, `rule_key`, `created_at`, `updated_at`                                                                                         | 个人维度，同一账号名称唯一（1-40 字符）；`rule_key` 非空表示订单节点自动维度（唛头/验货） |
 | `task_dimension_links`   | `(user_id, task_id, dimension_id)` 复合主键                                                                                                             | 一条任务可归入本人多个维度；复合外键 `(dimension_id,user_id)` 防止跨账号关联 |
 | `personal_task_handling` | `(user_id,task_id)` 复合主键, `handled`, `updated_at`                                                                                                   | 本人已处理标记，同一账号跨维度共用；独立于任务进度与验收                     |
+| `order_step_rules`       | `(user_id,name)` 唯一, `anchor(customer/factory/earliest)`, `lead_days`, `day_type(calendar/workday)`                                                       | 订单节点规则（迁移 022/023）；没有自定义规则时用代码里的默认「唛头/验货」    |
 
 迁移 `019_personal_task_dimensions.sql` 只新增上述三张空表和索引，不回填、不复制、不改写历史任务。
 删除维度级联删除该维度的关联，不删除任务或个人处理标记；删除任务/账号时对应关联和处理标记级联清理。
@@ -48,6 +49,20 @@
 
 迁移 `020_task_comment_edits.sql` 只给 `task_comments` 增加可空的 `edited_at`：编辑评论时只更新 `content` 与
 `edited_at`，`created_at` 保持不变（时间线次序稳定）；未编辑的历史评论该列为 `NULL`，不回填。
+
+迁移 `021_order_tracking.sql` 给 `tasks` 增加可空的 `order_key`（部分唯一索引：按 `created_by` 去重），
+并给 `task_dimensions` 增加可空的 `rule_key`（节点名，如「唛头」/「验货」）。订单导入用它做幂等更新，
+看板用它识别「订单节点卡」并只显示未来 7 天内到期的订单任务；手动任务两列均为 `NULL`，不受影响。
+
+迁移 `022_order_step_rules.sql` 新增 `order_step_rules`：每个账号一份节点规则（节点名、基准交期、提前天数）。
+导入规则文件时整体替换本人规则；没有自定义规则时使用代码里的默认「唛头 / 验货」。
+
+迁移 `023_order_rule_day_type.sql` 给 `order_step_rules` 增加 `day_type`（默认 `calendar`，可设 `workday`）：
+工作日模式只跳过周六、周日，不处理法定节假日。
+
+迁移 `024_order_factory.sql` 给 `tasks` 增加可空的 `order_factory`（工厂名），并把订单去重索引改为
+`(created_by, order_key, COALESCE(order_factory, ''))`：同一合同号下不同工厂各自生成唛头/验货任务。
+历史订单任务该列为 `NULL`；重新导入时若工厂匹配，会补写该列并更新标题，而不是重复建任务。
 
 ### 协作（1）
 

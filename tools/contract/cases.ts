@@ -673,6 +673,15 @@ export const CASES: ContractCase[] = [
     body: { title: "契约-跨组织改任务" },
   },
   { name: "tasks.patch.missing", role: "managerA", method: "PATCH", path: "/api/tasks/no-such-task", body: { title: "x" } },
+  { name: "order-import.anon", role: "anon", method: "POST", path: "/api/order-import" },
+  { name: "order-import.template.anon", role: "anon", method: "GET", path: "/api/order-import/template?kind=rules" },
+  {
+    name: "order-import.manager.invalid-file",
+    role: "managerA",
+    method: "POST",
+    path: "/api/order-import",
+    upload: { fields: {}, filename: "bad.xlsx", content: "not-an-excel" },
+  },
 
   // ---------- 任务：进度与验收（含跨组织 404、同组织越权 403） ----------
   {

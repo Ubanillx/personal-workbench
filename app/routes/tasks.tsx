@@ -32,6 +32,7 @@ import {
   DeleteOutlined,
   EditOutlined,
   EyeOutlined,
+  FileExcelOutlined,
   BellOutlined,
   ImportOutlined,
   InboxOutlined,
@@ -53,6 +54,7 @@ import { SelectionAlert, TableToolbar } from "../components/crud-toolbar";
 import { PageHeader } from "../components/page-header";
 import { dataTable } from "../components/table-layout";
 import { WecomImportDrawer } from "../components/wecom-import-drawer";
+import { OrderImportDrawer } from "../components/order-import-drawer";
 import { TaskDimensionManager, PersonalTaskControls } from "../components/task-dimensions";
 import {
   buildDimensionBoard,
@@ -66,6 +68,7 @@ import {
 } from "../lib/task-dimensions.server";
 import { db } from "../lib/db.server";
 import { dimensionTones } from "../lib/dimension-tones";
+import { listOrderRules } from "../lib/order-rules.server";
 import { readPayload } from "../lib/form.server";
 import { listOrganizations, taskAssigneeCandidates, type AccountOption } from "../lib/organization.server";
 import { pagingOf, sortOf, type Paged } from "../lib/paging";
@@ -119,6 +122,10 @@ type TaskRow = {
   isPrivate: boolean;
   createdAt: string;
   updatedAt: string;
+  /** 订单导入任务的外部键（合同号|节点）；手动任务为 null */
+  orderKey?: string | null;
+  /** 订单导入任务的工厂名；同一合同多工厂时用来区分分支 */
+  orderFactory?: string | null;
   /** 组织归属（VIEW 新增字段）：管理员合并视图里显示每行属于哪个组织（D-28） */
   orgId: string | null;
   orgName: string | null;
@@ -318,7 +325,8 @@ export async function loader({ request }: { request: Request }) {
     canManage,
     tasks: page,
     dimensions: listTaskDimensions(user),
-    board: checklist ? buildDimensionBoard(user, boardTasks as TaskRow[], personal, filters.dimension ?? "all") : [],
+    orderRules: listOrderRules(user),
+    board: checklist ? buildDimensionBoard(user, boardTasks as TaskRow[], personal, filters.dimension ?? "all", today) : [],
     personal,
     dimension: filters.dimension ?? "all",
     hideHandled: filters.hideHandled ?? false,
@@ -437,6 +445,7 @@ export default function TasksRoute(): React.ReactElement {
   const [reassigningTask, setReassigningTask] = useState<TaskRow | null>(null);
   // 企微导入抽屉：它产出的就是任务，所以入口挂在**本页页头**，不再单开一个导航页面
   const [importOpen, setImportOpen] = useState(false);
+  const [orderImportOpen, setOrderImportOpen] = useState(false);
   const [selectedKeys, setSelectedKeys] = useState<React.Key[]>([]);
   // 维度看板拖拽：draggingTaskId 标记正在拖的任务，dropTargetId 给目标卡片加高亮
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
@@ -514,6 +523,12 @@ export default function TasksRoute(): React.ReactElement {
     if (list.get("task")) list.patch({ task: null });
     setImportOpen(true);
   };
+  const openOrderImport = (): void => {
+    setEditingTask(null);
+    setReassigningTask(null);
+    if (list.get("task")) list.patch({ task: null });
+    setOrderImportOpen(true);
+  };
   const filtered = Boolean(
     keyword ||
     data.status !== "all" ||
@@ -549,6 +564,78 @@ export default function TasksRoute(): React.ReactElement {
   const dimensionOptions = data.dimensions.map((item) => ({ value: item.id, label: item.name }));
   // 维度配色按列表顺序分配，「未分类」固定灰色；卡片标题与任务行内的维度标签共用同一份
   const dimensionToneById = useMemo(() => dimensionTones(data.dimensions.map((item) => item.id)), [data.dimensions]);
+  // 看板里同一合同多工厂的订单任务按合同号归组、组内按工厂分行；单工厂与手动任务平铺
+  const boardSections = data.board.map((group) => {
+    const orderGroups = new Map<string, TaskRow[]>();
+    const manualTasks: TaskRow[] = [];
+    for (const task of group.tasks as TaskRow[]) {
+      if (!task.orderKey) {
+        manualTasks.push(task);
+        continue;
+      }
+      const contract = task.orderKey.includes("|")
+        ? task.orderKey.slice(0, task.orderKey.lastIndexOf("|"))
+        : task.orderKey;
+      const bucket = orderGroups.get(contract);
+      if (bucket) bucket.push(task);
+      else orderGroups.set(contract, [task]);
+    }
+    const grouped: Array<{ contract: string; tasks: TaskRow[] }> = [];
+    for (const [contract, tasks] of orderGroups) {
+      if (tasks.length > 1) grouped.push({ contract, tasks });
+      else manualTasks.push(...tasks);
+    }
+    return { group, orderGroups: grouped, manualTasks };
+  });
+  const renderBoardTask = (task: TaskRow, label?: string): React.ReactElement => (
+    <div
+      className={`task-board-item${draggingTaskId === task.id ? " is-dragging" : ""}`}
+      key={task.id}
+      draggable={data.dimensions.length > 0}
+      onDragStart={(event) => {
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData(TASK_DRAG_TYPE, task.id);
+        setDraggingTaskId(task.id);
+      }}
+      onDragEnd={() => {
+        setDraggingTaskId(null);
+        setDropTargetId(null);
+      }}
+    >
+      <Flex align="flex-start" justify="space-between" gap="small">
+        <Button color="primary" variant="link" className="task-board-title" onClick={() => openDetail(task)}>
+          {label ?? task.title}
+        </Button>
+        <IconActionButton
+          label={
+            task.ownerId === me.id && !task.archivedAt && !["completed", "pending_review"].includes(task.status)
+              ? "汇报进度"
+              : "查看详情"
+          }
+          icon={
+            task.ownerId === me.id && !task.archivedAt && !["completed", "pending_review"].includes(task.status) ? (
+              <RiseOutlined />
+            ) : (
+              <EyeOutlined />
+            )
+          }
+          onClick={() => openDetail(task)}
+          disabled={busy}
+        />
+      </Flex>
+      <div className="task-board-controls">{personalControls(task)}</div>
+      <Space wrap size={8}>
+        <Tag color={PRIORITY_COLOR[task.priority] ?? "default"} variant="filled">
+          {task.priority}
+        </Tag>
+        <TaskStatusTag status={task.status} />
+        <Typography.Text type="secondary" className="task-board-meta">
+          进度 {task.progress}% · {task.ownerName ?? "未分配"}
+          {task.dueDate ? ` · ${task.dueDate}` : ""}
+        </Typography.Text>
+      </Space>
+    </div>
+  );
   const personalControls = (task: TaskRow, mode: "all" | "summary" | "dimension" | "handled" | "tags" = "all"): React.ReactElement => (
     <PersonalTaskControls
       taskId={task.id}
@@ -824,6 +911,7 @@ export default function TasksRoute(): React.ReactElement {
    * 表格排版方案（自动省略 + 定宽排版）：`dataTable` 会补 `ellipsis` 并按列宽算出 `scroll.x`。
    * 用 `useMemo` 固定引用——`Table` 会因为每次都是新数组而重算列宽。
    */
+  // oxlint-disable-next-line react/preserve-manual-memoization -- columns 只在渲染期读取，dataTable 内部复制列对象，不会回头修改
   const table = useMemo(() => dataTable<TaskRow>({ columns, selectable: canManage }), [columns, canManage]);
 
   return (
@@ -837,6 +925,9 @@ export default function TasksRoute(): React.ReactElement {
         help="普通成员仅能查看本组织内自己发布或当前负责的任务；组织管理者保留本组织非私密任务视图，私密任务仅发布人、负责人与全局管理员可见。普通成员默认按 P0 → P1 → P2 排序，同优先级最近更新在前；排序随当前地址保留。负责人只能汇报本人任务的进度，进度到 100% 后由发布任务的组织管理者通过 / 退回验收，管理员只作应急兜底。时间范围按最近更新时间筛选，统计与当前列表一致。企微导入的目标组织默认跟随下面的组织筛选器。"
         extra={
           <>
+            <Button icon={<FileExcelOutlined />} onClick={openOrderImport}>
+              导入订单
+            </Button>
             <Button icon={<ImportOutlined />} onClick={openImport}>
               从企微导入
             </Button>
@@ -1082,7 +1173,7 @@ export default function TasksRoute(): React.ReactElement {
         {data.checklist ? (
           data.board.length ? (
             <div className="task-board">
-              {data.board.map((group) => {
+              {boardSections.map(({ group, orderGroups, manualTasks }) => {
                 const tone = dimensionToneById[group.id];
                 const droppable = group.id !== "unclassified";
                 return (
@@ -1116,56 +1207,21 @@ export default function TasksRoute(): React.ReactElement {
                       <span className="task-board-count">{group.tasks.length}</span>
                     </div>
                     <div className="task-board-body">
-                      {group.tasks.length ? (
-                        group.tasks.map((task) => (
-                          <div
-                            className={`task-board-item${draggingTaskId === task.id ? " is-dragging" : ""}`}
-                            key={task.id}
-                            draggable={data.dimensions.length > 0}
-                            onDragStart={(event) => {
-                              event.dataTransfer.effectAllowed = "move";
-                              event.dataTransfer.setData(TASK_DRAG_TYPE, task.id);
-                              setDraggingTaskId(task.id);
-                            }}
-                            onDragEnd={() => {
-                              setDraggingTaskId(null);
-                              setDropTargetId(null);
-                            }}
-                          >
-                            <Flex align="flex-start" justify="space-between" gap="small">
-                              <Button color="primary" variant="link" className="task-board-title" onClick={() => openDetail(task)}>
-                                {task.title}
-                              </Button>
-                              <IconActionButton
-                                label={
-                                  task.ownerId === me.id && !task.archivedAt && !["completed", "pending_review"].includes(task.status)
-                                    ? "汇报进度"
-                                    : "查看详情"
-                                }
-                                icon={
-                                  task.ownerId === me.id && !task.archivedAt && !["completed", "pending_review"].includes(task.status) ? (
-                                    <RiseOutlined />
-                                  ) : (
-                                    <EyeOutlined />
-                                  )
-                                }
-                                onClick={() => openDetail(task)}
-                                disabled={busy}
-                              />
-                            </Flex>
-                            <div className="task-board-controls">{personalControls(task)}</div>
-                            <Space wrap size={8}>
-                              <Tag color={PRIORITY_COLOR[task.priority] ?? "default"} variant="filled">
-                                {task.priority}
-                              </Tag>
-                              <TaskStatusTag status={task.status} />
-                              <Typography.Text type="secondary" className="task-board-meta">
-                                进度 {task.progress}% · {task.ownerName ?? "未分配"}
-                                {task.dueDate ? ` · ${task.dueDate}` : ""}
-                              </Typography.Text>
-                            </Space>
-                          </div>
-                        ))
+                      {orderGroups.length || manualTasks.length ? (
+                        <>
+                          {orderGroups.map(({ contract, tasks }) => (
+                            <div className="task-board-contract-group" key={contract}>
+                              <div className="task-board-contract-head">
+                                <span className="task-board-contract-name">{contract}</span>
+                                <span className="task-board-count">{tasks.length}</span>
+                              </div>
+                              <div className="task-board-contract-items">
+                                {tasks.map((task) => renderBoardTask(task, `${contract} ${task.orderFactory ?? ""}`.trim()))}
+                              </div>
+                            </div>
+                          ))}
+                          {manualTasks.map((task) => renderBoardTask(task))}
+                        </>
                       ) : (
                         <div className="task-board-empty">
                           <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有任务" />
@@ -1220,7 +1276,7 @@ export default function TasksRoute(): React.ReactElement {
       </Flex>
 
       {/* 表单抽屉（编辑 / 改派）开着时不挂详情抽屉：两个同侧抽屉叠在一起会互相盖住，也让层级变得不可预期 */}
-      {selectedTask && !editingTask && !reassigningTask && !importOpen && !dimensionsOpen ? (
+      {selectedTask && !editingTask && !reassigningTask && !importOpen && !orderImportOpen && !dimensionsOpen ? (
         <TaskDetailDrawer
           task={selectedTask}
           activity={data.activity}
@@ -1463,6 +1519,15 @@ export default function TasksRoute(): React.ReactElement {
           void message.success(`已从企微导入 ${created} 条任务${skipped ? `，跳过 ${skipped} 条疑似重复` : ""}`);
           void revalidator.revalidate();
         }}
+      />
+
+      <OrderImportDrawer
+        open={orderImportOpen}
+        onClose={() => setOrderImportOpen(false)}
+        isAdmin={isAdmin}
+        organizations={isAdmin ? activeOrganizations.map((org) => ({ id: org.id, name: org.name })) : []}
+        rules={data.orderRules}
+        onImported={() => void revalidator.revalidate()}
       />
     </Flex>
   );

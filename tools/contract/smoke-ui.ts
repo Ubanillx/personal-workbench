@@ -2,6 +2,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { startFakeWebDav } from "../webdav/fake-server";
 import { ACCOUNTS, IDS, createFixture, removeFixture } from "./fixture";
+import ExcelJS from "exceljs";
+import dayjs from "dayjs";
+import { DatabaseSync } from "node:sqlite";
 import { findFreePort, startServer } from "./runner";
 
 /**
@@ -880,6 +883,241 @@ async function main(): Promise<void> {
       `status=${legacyInbox.status} location=${legacyInbox.headers.get("location")}`,
     );
     check("导航不再单独显示企微收件箱入口", !reviewAll.includes("企微收件箱"));
+
+    // 订单导入：放在页面文案断言之后，避免新增任务把夹具任务挤出第一页
+    const orderDay = (offset: number): string => dayjs().add(offset, "day").format("YYYY-MM-DD");
+    const orderMonth = (offset: number): string => dayjs().add(offset, "day").format("YYYY-MM");
+    const orderBook = new ExcelJS.Workbook();
+    const orderSheet = orderBook.addWorksheet("订单");
+    orderSheet.addRow(["合同号", "客户交期", "工厂交期", "工厂名"]);
+    orderSheet.addRow(["ORD-NEAR", orderDay(9), orderDay(20), "测试工厂"]);
+    orderSheet.addRow(["ORD-FAR", orderDay(40), orderDay(60), "测试工厂"]);
+    const orderBuffer = await orderBook.xlsx.writeBuffer();
+    const importOrderBook = async (): Promise<{ ok?: boolean; data?: { created: number; updated: number } }> => {
+      const form = new FormData();
+      form.append("file", new Blob([orderBuffer]), "orders.xlsx");
+      form.append("confirm", "1");
+      const response = await fetch(`${base}/api/order-import`, { method: "POST", headers: { cookie: manager.cookie }, body: form });
+      return (await response.json()) as { ok?: boolean; data?: { created: number; updated: number } };
+    };
+    const importedOrders = await importOrderBook();
+    check("订单导入生成唛头/验货任务", Boolean(importedOrders.ok) && (importedOrders.data?.created ?? 0) >= 2);
+    const reimportedOrders = await importOrderBook();
+    check(
+      "重复导入只更新不重复建",
+      Boolean(reimportedOrders.ok) && reimportedOrders.data?.created === 0 && (reimportedOrders.data?.updated ?? 0) >= 2,
+    );
+    const orderBoardHtml = await pageHtml("/tasks?view=checklist", manager.cookie);
+    // 只在渲染出来的卡片标题里找，避免命中同一页里的序列化数据（antd Button 会把文字包进 span）
+    const taskCardRendered = (html: string, title: string): boolean =>
+      new RegExp(`task-board-title[^>]*>(?:\\s*<span[^>]*>)?\\s*${title.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}`, "u").test(html);
+    check(
+      "看板订单节点卡显示近 7 天任务",
+      taskCardRendered(orderBoardHtml, "【ORD-NEAR 测试工厂】唛头") &&
+        taskCardRendered(orderBoardHtml, "【ORD-NEAR 测试工厂】验货"),
+    );
+    check("看板隐藏更远的订单任务", !taskCardRendered(orderBoardHtml, "【ORD-FAR 测试工厂】唛头"));
+    const nearMairCalendar = await pageHtml(`/calendar?month=${orderMonth(-10)}`, manager.cookie);
+    check("日历显示唛头 deadline", nearMairCalendar.includes("【ORD-NEAR 测试工厂】唛头"));
+    const nearInspectionCalendar = await pageHtml(`/calendar?month=${orderMonth(2)}`, manager.cookie);
+    check("日历显示验货 deadline", nearInspectionCalendar.includes("【ORD-NEAR 测试工厂】验货"));
+    const farCalendar = await pageHtml(`/calendar?month=${orderMonth(30)}`, manager.cookie);
+    check("日历保留更远订单的 deadline", farCalendar.includes("【ORD-FAR 测试工厂】唛头"));
+    // 自定义规则文件：节点名称 / 基准交期 / 提前天数，覆盖默认规则
+    const rulesBook = new ExcelJS.Workbook();
+    const rulesSheet = rulesBook.addWorksheet("规则");
+    rulesSheet.addRow(["节点名称", "基准交期", "提前天数"]);
+    rulesSheet.addRow(["订舱", "客户交期", 14]);
+    const rulesBuffer = await rulesBook.xlsx.writeBuffer();
+    const ruleOrderBook = new ExcelJS.Workbook();
+    const ruleOrderSheet = ruleOrderBook.addWorksheet("订单");
+    ruleOrderSheet.addRow(["合同号", "客户交期", "工厂交期", "工厂名"]);
+    ruleOrderSheet.addRow(["ORD-RULE", orderDay(5), orderDay(20), "测试工厂"]);
+    const ruleOrderBuffer = await ruleOrderBook.xlsx.writeBuffer();
+    const rulesForm = new FormData();
+    rulesForm.append("file", new Blob([ruleOrderBuffer]), "orders.xlsx");
+    rulesForm.append("rulesFile", new Blob([rulesBuffer]), "rules.xlsx");
+    rulesForm.append("confirm", "1");
+    const ruleImport = (await (
+      await fetch(`${base}/api/order-import`, { method: "POST", headers: { cookie: manager.cookie }, body: rulesForm })
+    ).json()) as { ok?: boolean; data?: { created: number; dimensions: string[] } };
+    check(
+      "规则文件可导入自定义节点",
+      Boolean(ruleImport.ok) && (ruleImport.data?.created ?? 0) >= 1 && (ruleImport.data?.dimensions ?? []).includes("订舱"),
+    );
+    check("自定义节点出现在看板", taskCardRendered(await pageHtml("/tasks?view=checklist", manager.cookie), "【ORD-RULE 测试工厂】订舱"));
+    // 管理员是全局角色：导入必须显式指定目标组织
+    const adminOrderBook = new ExcelJS.Workbook();
+    const adminOrderSheet = adminOrderBook.addWorksheet("订单");
+    adminOrderSheet.addRow(["合同号", "客户交期", "工厂交期", "工厂名"]);
+    adminOrderSheet.addRow(["ORD-ADMIN", orderDay(10), orderDay(20), "测试工厂"]);
+    const adminOrderBuffer = await adminOrderBook.xlsx.writeBuffer();
+    const adminNoOrgForm = new FormData();
+    adminNoOrgForm.append("file", new Blob([adminOrderBuffer]), "orders.xlsx");
+    adminNoOrgForm.append("confirm", "1");
+    const adminNoOrgResponse = await fetch(`${base}/api/order-import`, {
+      method: "POST",
+      headers: { cookie },
+      body: adminNoOrgForm,
+    });
+    const adminNoOrgPayload = (await adminNoOrgResponse.json()) as { ok?: boolean; error?: { message?: string } };
+    check(
+      "管理员导入必须指定组织",
+      adminNoOrgResponse.status === 403 && (adminNoOrgPayload.error?.message ?? "").includes("组织"),
+    );
+    const adminOrgForm = new FormData();
+    adminOrgForm.append("file", new Blob([adminOrderBuffer]), "orders.xlsx");
+    adminOrgForm.append("confirm", "1");
+    adminOrgForm.append("orgId", IDS.orgAlpha);
+    const adminImport = (await (
+      await fetch(`${base}/api/order-import`, { method: "POST", headers: { cookie }, body: adminOrgForm })
+    ).json()) as { ok?: boolean; data?: { created: number } };
+    check("管理员指定组织后可以导入", Boolean(adminImport.ok) && (adminImport.data?.created ?? 0) >= 1);
+    // 规则变化后重新导入：同一节点的 deadline 按新规则重算
+    if (fixture) {
+      const calcBook = new ExcelJS.Workbook();
+      const calcSheet = calcBook.addWorksheet("订单");
+      calcSheet.addRow(["合同号", "客户交期", "工厂交期", "工厂名"]);
+      calcSheet.addRow(["ORD-CALC", orderDay(30), orderDay(40), "测试工厂"]);
+      const calcBuffer = await calcBook.xlsx.writeBuffer();
+      const calcRulesBook = new ExcelJS.Workbook();
+      const calcRulesSheet = calcRulesBook.addWorksheet("规则");
+      calcRulesSheet.addRow(["节点名称", "基准交期", "提前天数"]);
+      calcRulesSheet.addRow(["唛头", "工厂交期", 20]);
+      calcRulesSheet.addRow(["验货", "较早者", 7]);
+      const calcRulesBuffer = await calcRulesBook.xlsx.writeBuffer();
+      const importCalc = async (withRules: boolean): Promise<void> => {
+        const form = new FormData();
+        form.append("file", new Blob([calcBuffer]), "orders.xlsx");
+        if (withRules) form.append("rulesFile", new Blob([calcRulesBuffer]), "rules.xlsx");
+        form.append("confirm", "1");
+        await fetch(`${base}/api/order-import`, { method: "POST", headers: { cookie: member.cookie }, body: form });
+      };
+      const dueOf = (orderKey: string): string | null => {
+        const database = new DatabaseSync(fixture.databasePath, { readOnly: true });
+        try {
+          const row = database
+            .prepare("SELECT due_date AS dueDate FROM tasks WHERE created_by=? AND order_key=?")
+            .get(IDS.userMemberA, orderKey) as { dueDate: string } | undefined;
+          return row?.dueDate ?? null;
+        } finally {
+          database.close();
+        }
+      };
+      await importCalc(false);
+      const firstDue = dueOf("ORD-CALC|唛头");
+      await importCalc(true);
+      const secondDue = dueOf("ORD-CALC|唛头");
+      check("规则变化后重新导入会重算 deadline", firstDue === orderDay(10) && secondDue === orderDay(20));
+      // 工作日倒推：2026-11-20（周五）前 5 个工作日 = 2026-11-13
+      const workdayBook = new ExcelJS.Workbook();
+      const workdaySheet = workdayBook.addWorksheet("订单");
+      workdaySheet.addRow(["合同号", "客户交期", "工厂交期", "工厂名"]);
+      workdaySheet.addRow(["ORD-WORK", "2026-11-20", "2026-12-10", "测试工厂"]);
+      const workdayBuffer = await workdayBook.xlsx.writeBuffer();
+      const workdayRulesBook = new ExcelJS.Workbook();
+      const workdayRulesSheet = workdayRulesBook.addWorksheet("规则");
+      workdayRulesSheet.addRow(["节点名称", "基准交期", "提前天数", "计算方式"]);
+      workdayRulesSheet.addRow(["验货", "较早者", 5, "工作日"]);
+      const workdayRulesBuffer = await workdayRulesBook.xlsx.writeBuffer();
+      const workdayForm = new FormData();
+      workdayForm.append("file", new Blob([workdayBuffer]), "orders.xlsx");
+      workdayForm.append("rulesFile", new Blob([workdayRulesBuffer]), "rules.xlsx");
+      workdayForm.append("confirm", "1");
+      await fetch(`${base}/api/order-import`, { method: "POST", headers: { cookie: member.cookie }, body: workdayForm });
+      check("规则支持按工作日倒推", dueOf("ORD-WORK|验货") === "2026-11-13");
+      // 表头无法识别时：先返回工作表预览，再按手动映射导入
+      const mapBook = new ExcelJS.Workbook();
+      const mapSheet = mapBook.addWorksheet("订单");
+      mapSheet.addRow(["编号", "客交", "厂交", "供应商"]);
+      mapSheet.addRow(["ORD-MAP", "2026-12-10", "2026-11-30", "测试工厂"]);
+      const mapBuffer = await mapBook.xlsx.writeBuffer();
+      const mapPreviewForm = new FormData();
+      mapPreviewForm.append("file", new Blob([mapBuffer]), "orders.xlsx");
+      const mapPreview = (await (
+        await fetch(`${base}/api/order-import`, { method: "POST", headers: { cookie: member.cookie }, body: mapPreviewForm })
+      ).json()) as { ok?: boolean; data?: { needsMapping?: boolean; sheets?: Array<{ name: string; rows: string[][] }> } };
+      check(
+        "表头无法识别时返回手动映射",
+        Boolean(mapPreview.ok) &&
+          mapPreview.data?.needsMapping === true &&
+          Boolean(mapPreview.data?.sheets?.[0]?.rows[0]?.includes("编号")),
+      );
+      const mapForm = new FormData();
+      mapForm.append("file", new Blob([mapBuffer]), "orders.xlsx");
+      mapForm.append("confirm", "1");
+      mapForm.append(
+        "mapping",
+        JSON.stringify({ sheetName: "订单", headerRow: 1, columns: { contract: 1, customerDue: 2, factoryDue: 3, factoryName: 4 } }),
+      );
+      const mappedImport = (await (
+        await fetch(`${base}/api/order-import`, { method: "POST", headers: { cookie: member.cookie }, body: mapForm })
+      ).json()) as { ok?: boolean; data?: { created: number } };
+      check("按手动映射导入成功", Boolean(mappedImport.ok) && (mappedImport.data?.created ?? 0) >= 1);
+      check("手动映射的 deadline 正确", dueOf("ORD-MAP|验货") === "2026-11-23");
+      // 同一合同号多个工厂：按合同+工厂分别生成唛头/验货任务
+      const multiBook = new ExcelJS.Workbook();
+      const multiSheet = multiBook.addWorksheet("订单");
+      multiSheet.addRow(["合同号", "客户交期", "工厂交期", "工厂名"]);
+      multiSheet.addRow(["ORD-MULTI", orderDay(9), orderDay(16), "华彪"]);
+      multiSheet.addRow(["ORD-MULTI", orderDay(10), orderDay(17), "拜博"]);
+      const multiBuffer = await multiBook.xlsx.writeBuffer();
+      const multiRulesBook = new ExcelJS.Workbook();
+      const multiRulesSheet = multiRulesBook.addWorksheet("规则");
+      multiRulesSheet.addRow(["节点名称", "基准交期", "提前天数"]);
+      multiRulesSheet.addRow(["唛头", "工厂交期", 30]);
+      multiRulesSheet.addRow(["验货", "较早者", 7]);
+      const multiRulesBuffer = await multiRulesBook.xlsx.writeBuffer();
+      const importMulti = async (confirm: boolean) => {
+        const form = new FormData();
+        form.append("file", new Blob([multiBuffer]), "orders.xlsx");
+        form.append("rulesFile", new Blob([multiRulesBuffer]), "rules.xlsx");
+        if (confirm) form.append("confirm", "1");
+        return (await (
+          await fetch(`${base}/api/order-import`, { method: "POST", headers: { cookie: member.cookie }, body: form })
+        ).json()) as { ok?: boolean; data?: { rows?: Array<{ issues: string[] }>; created: number; updated: number } };
+      };
+      const multiPreview = await importMulti(false);
+      check(
+        "同合同不同工厂不算重复",
+        Boolean(multiPreview.ok) &&
+          (multiPreview.data?.rows ?? []).length === 2 &&
+          (multiPreview.data?.rows ?? []).every((row) => !row.issues.some((issue) => issue.includes("重复"))),
+      );
+      const multiFirst = await importMulti(true);
+      check("同合同多工厂分别生成任务", Boolean(multiFirst.ok) && multiFirst.data?.created === 4);
+      const multiSecond = await importMulti(true);
+      check("同合同多工厂重复导入只更新", multiSecond.data?.created === 0 && multiSecond.data?.updated === 4);
+      const multiBoard = await pageHtml("/tasks?view=checklist", member.cookie);
+      check(
+        "看板按合同号归组并分行显示工厂",
+        taskCardRendered(multiBoard, "ORD-MULTI 华彪") &&
+          taskCardRendered(multiBoard, "ORD-MULTI 拜博") &&
+          /task-board-contract-name[^>]*>\s*ORD-MULTI\s*</u.test(multiBoard),
+      );
+      const multiDatabase = new DatabaseSync(fixture.databasePath, { readOnly: true });
+      try {
+        const multiTitles = (
+          multiDatabase
+            .prepare("SELECT title FROM tasks WHERE created_by=? AND order_key=? ORDER BY title")
+            .all(IDS.userMemberA, "ORD-MULTI|唛头") as Array<{ title: string }>
+        ).map((row) => row.title);
+        check("多工厂任务标题区分工厂", multiTitles.join("|") === "【ORD-MULTI 华彪】唛头|【ORD-MULTI 拜博】唛头");
+      } finally {
+        multiDatabase.close();
+      }
+    }
+    const templateResponse = await fetch(`${base}/api/order-import/template?kind=rules`, {
+      headers: { cookie: manager.cookie },
+    });
+    const templateBytes = new Uint8Array(await templateResponse.arrayBuffer());
+    check(
+      "订单规则模板可下载",
+      templateResponse.status === 200 &&
+        (templateResponse.headers.get("content-type") ?? "").includes("spreadsheetml") &&
+        templateBytes.byteLength > 1000,
+    );
+    check("未登录不能下载导入模板", (await fetch(`${base}/api/order-import/template?kind=orders`)).status === 401);
 
     // 7) 退出登录并确认会话失效
     const logout = await fetch(`${base}/logout`, { method: "POST", redirect: "manual", headers: { cookie } });
