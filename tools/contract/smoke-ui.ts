@@ -518,12 +518,7 @@ async function main(): Promise<void> {
       data?: Array<{ id: string; name: string }>;
     };
     const dragDimensionId = dimensionList.data?.find((item) => item.name === dragDimension)?.id ?? "";
-    await pagePost(
-      "/tasks",
-      { intent: "move-dimension", taskId: IDS.taskDoing, dimensionId: dragDimensionId },
-      member.cookie,
-      true,
-    );
+    await pagePost("/tasks", { intent: "move-dimension", taskId: IDS.taskDoing, dimensionId: dragDimensionId }, member.cookie, true);
     const movedPersonal = (await (
       await fetch(`${base}/api/tasks/${IDS.taskDoing}/personal`, { headers: { cookie: member.cookie } })
     ).json()) as { data?: { dimensionIds: string[] } };
@@ -586,10 +581,7 @@ async function main(): Promise<void> {
       await fetch(`${base}/api/tasks/${IDS.taskDoing}/activity`, { headers: { cookie: manager.cookie } })
     ).json()) as { data?: Array<{ id: string; content: string; editedAt: string | null }> };
     const editedComment = editedActivity.data?.find((item) => item.id === "comment-1");
-    check(
-      "评论作者可以修改内容并记录编辑时间",
-      editedComment?.content === "请补充报价单（更正）" && Boolean(editedComment?.editedAt),
-    );
+    check("评论作者可以修改内容并记录编辑时间", editedComment?.content === "请补充报价单（更正）" && Boolean(editedComment?.editedAt));
     check("普通成员列表不展示其他成员的任务", !memberTasksHtml.includes("成员乙的任务"));
     check(
       "组织管理者在逾期任务上看到「手动提醒」入口",
@@ -913,8 +905,7 @@ async function main(): Promise<void> {
       new RegExp(`task-board-title[^>]*>(?:\\s*<span[^>]*>)?\\s*${title.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}`, "u").test(html);
     check(
       "看板订单节点卡显示近 7 天任务",
-      taskCardRendered(orderBoardHtml, "【ORD-NEAR 测试工厂】唛头") &&
-        taskCardRendered(orderBoardHtml, "【ORD-NEAR 测试工厂】验货"),
+      taskCardRendered(orderBoardHtml, "【ORD-NEAR 测试工厂】唛头") && taskCardRendered(orderBoardHtml, "【ORD-NEAR 测试工厂】验货"),
     );
     check("看板隐藏更远的订单任务", !taskCardRendered(orderBoardHtml, "【ORD-FAR 测试工厂】唛头"));
     const nearMairCalendar = await pageHtml(`/calendar?month=${orderMonth(-10)}`, manager.cookie);
@@ -961,10 +952,7 @@ async function main(): Promise<void> {
       body: adminNoOrgForm,
     });
     const adminNoOrgPayload = (await adminNoOrgResponse.json()) as { ok?: boolean; error?: { message?: string } };
-    check(
-      "管理员导入必须指定组织",
-      adminNoOrgResponse.status === 403 && (adminNoOrgPayload.error?.message ?? "").includes("组织"),
-    );
+    check("管理员导入必须指定组织", adminNoOrgResponse.status === 403 && (adminNoOrgPayload.error?.message ?? "").includes("组织"));
     const adminOrgForm = new FormData();
     adminOrgForm.append("file", new Blob([adminOrderBuffer]), "orders.xlsx");
     adminOrgForm.append("confirm", "1");

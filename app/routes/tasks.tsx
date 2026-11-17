@@ -174,11 +174,7 @@ const TODO_STATUS_STYLE: React.CSSProperties = {
 /** 状态标签的唯一渲染入口：表格、看板、详情抽屉共用，避免各写一份颜色 */
 function TaskStatusTag({ status }: { status: string }): React.ReactElement {
   return (
-    <Tag
-      color={STATUS_COLOR[status] ?? "default"}
-      variant="filled"
-      {...(status === "todo" ? { style: TODO_STATUS_STYLE } : {})}
-    >
+    <Tag color={STATUS_COLOR[status] ?? "default"} variant="filled" {...(status === "todo" ? { style: TODO_STATUS_STYLE } : {})}>
       {STATUS_LABEL[status] ?? status}
     </Tag>
   );
@@ -573,9 +569,7 @@ export default function TasksRoute(): React.ReactElement {
         manualTasks.push(task);
         continue;
       }
-      const contract = task.orderKey.includes("|")
-        ? task.orderKey.slice(0, task.orderKey.lastIndexOf("|"))
-        : task.orderKey;
+      const contract = task.orderKey.includes("|") ? task.orderKey.slice(0, task.orderKey.lastIndexOf("|")) : task.orderKey;
       const bucket = orderGroups.get(contract);
       if (bucket) bucket.push(task);
       else orderGroups.set(contract, [task]);
@@ -608,9 +602,7 @@ export default function TasksRoute(): React.ReactElement {
         </Button>
         <IconActionButton
           label={
-            task.ownerId === me.id && !task.archivedAt && !["completed", "pending_review"].includes(task.status)
-              ? "汇报进度"
-              : "查看详情"
+            task.ownerId === me.id && !task.archivedAt && !["completed", "pending_review"].includes(task.status) ? "汇报进度" : "查看详情"
           }
           icon={
             task.ownerId === me.id && !task.archivedAt && !["completed", "pending_review"].includes(task.status) ? (
@@ -935,12 +927,7 @@ export default function TasksRoute(): React.ReactElement {
               管理维度
             </Button>
             <Tooltip title="刷新任务">
-              <Button
-                icon={<ReloadOutlined />}
-                aria-label="刷新任务"
-                onClick={() => revalidator.revalidate()}
-                loading={busy}
-              />
+              <Button icon={<ReloadOutlined />} aria-label="刷新任务" onClick={() => revalidator.revalidate()} loading={busy} />
             </Tooltip>
             <Button color="primary" variant="solid" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
               新建任务
@@ -975,7 +962,8 @@ export default function TasksRoute(): React.ReactElement {
                   { value: "all", label: "全部维度" },
                   { value: "unclassified", label: "未分类" },
                   ...dimensionOptions,
-                  ...(!["all", "unclassified"].includes(data.dimension) && !dimensionOptions.some((option) => option.value === data.dimension)
+                  ...(!["all", "unclassified"].includes(data.dimension) &&
+                  !dimensionOptions.some((option) => option.value === data.dimension)
                     ? [{ value: data.dimension, label: "维度不存在或已删除" }]
                     : []),
                   { value: "__new__", label: "+ 新建维度" },

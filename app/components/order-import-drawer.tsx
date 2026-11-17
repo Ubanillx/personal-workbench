@@ -162,9 +162,7 @@ export function OrderImportDrawer({
     value: index + 1,
     label: `${index + 1}. ${text || "（空）"}`,
   }));
-  const canPreviewMapping = Boolean(
-    mapping?.columns.contract && (mapping.columns.customerDue || mapping.columns.factoryDue),
-  );
+  const canPreviewMapping = Boolean(mapping?.columns.contract && (mapping.columns.customerDue || mapping.columns.factoryDue));
   const setColumn = (key: MappingField, value: number | undefined): void => {
     setMapping((previous) => (previous ? { ...previous, columns: { ...previous.columns, [key]: value } } : previous));
   };
