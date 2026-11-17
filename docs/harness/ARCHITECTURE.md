@@ -197,6 +197,8 @@ React Router 会将浏览器 `Origin: https://192.168.3.251` 与它比较，不�
 | GET    | `/api/dashboard`               | 概览统计（只读展板）                                                                |
 | GET    | `/api/tasks`                   | 任务列表（`includeArchived`、`org`、个人 `dimension`、`hideHandled=1`，按角色过滤） |
 | POST   | `/api/tasks`                   | 创建任务，可选本人 `dimensionIds` 数组，任务与关联原子写入                          |
+| POST   | `/api/order-import`            | 订单 Excel 导入（multipart：订单 + 可选节点规则 + 可选手动列映射；预览/确认）       |
+| GET    | `/api/order-import/template`   | 下载订单 / 规则导入模板（`?kind=orders                                              | rules`） |
 | PATCH  | `/api/tasks/:id`               | 修改元信息（管理角色，或任务发布人本人；状态字段禁止，走专用端点）                  |
 | DELETE | `/api/tasks/:id`               | 删除                                                                                |
 | POST   | `/api/tasks/:id/progress`      | 汇报进度                                                                            |
@@ -223,6 +225,12 @@ React Router 会将浏览器 `Origin: https://192.168.3.251` 与它比较，不�
 看板内可把任务拖到另一张维度卡完成移动：服务端 `moveTaskDimension()` 清空本人在该任务上的其他维度、只保留目标维度；
 「未分类」不是真实维度，不作为拖拽落点。所有筛选与视图状态保留在 URL，重置恢复默认。
 表格与清单通过 `useServerTable().onPaginationChange` / `paginationChanges()` 共用分页接线：只翻页保留目标页，修改每页条数回到第一页，维度、搜索与排序参数不丢失。
+
+**订单节点导入**见 `ORDER_IMPORT.md`：`POST /api/order-import` 解析亿星 `.xlsx`（合同号 / 客户交期 / 工厂交期 / 工厂名），
+按本人节点规则生成任务；规则可由第二个「规则文件」覆盖，默认「唛头 = 工厂交期前 30 天」「验货 = 客户/工厂交期较早者前 7 天」。
+任务以 `order_key = 合同号|节点` + `order_factory` 按导入人幂等更新（同一合同多工厂分别建任务），自动归入带 `rule_key` 的个人维度。
+表头认不出时接口返回 `needsMapping` 与各表前 20 行预览，抽屉里选好工作表 / 表头行 / 四列后以 `mapping` 重新提交。
+看板里同一合同多工厂的订单任务按合同号归组、组内按工厂分行（单工厂订单平铺）；订单节点卡只显示订单任务中未来 7 天内到期（含逾期未完成）的条目，日历仍显示全部 deadline。
 
 `/api/tasks` 与 `/api/dashboard` 均应用普通成员本人发布/当前负责的范围；数组载荷和更新时间排序不变。
 `/tasks` 页面通过 `defaultTaskSort()` 按角色选择默认排序，普通成员优先级升序，管理角色更新时间降序。

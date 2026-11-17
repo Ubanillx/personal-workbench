@@ -1,17 +1,22 @@
 import { randomUUID } from "node:crypto";
+import dayjs from "dayjs";
 import { db, now, one, rows, run, type User } from "./db.server";
 import { assertOrgAccess } from "./session.server";
 import { createTask, type ServiceResult } from "./task-service.server";
 import { canView, findTaskWithOrg, type TaskView } from "./tasks.server";
 
-export type TaskDimension = { id: string; name: string };
+export type TaskDimension = { id: string; name: string; ruleKey?: string | null };
 export type PersonalTaskState = { dimensionIds: string[]; handled: boolean };
 const done = <T>(data: T, status = 200): ServiceResult<T> => ({ ok: true, data, status });
 const fail = (code: string, message: string, status: number): ServiceResult<never> => ({ ok: false, code, message, status });
 const missing = (): ServiceResult<never> => fail("NOT_FOUND", "未找到该资源", 404);
 
 export function listTaskDimensions(user: User): TaskDimension[] {
-  return rows<TaskDimension>(db(), "SELECT id,name FROM task_dimensions WHERE user_id=? ORDER BY created_at,id", user.id);
+  return rows<TaskDimension>(
+    db(),
+    "SELECT id,name,rule_key AS ruleKey FROM task_dimensions WHERE user_id=? ORDER BY created_at,id",
+    user.id,
+  );
 }
 
 export function saveTaskDimension(user: User, id: string | null, body: Record<string, unknown>): ServiceResult<TaskDimension> {
@@ -90,27 +95,40 @@ export function personalTaskStates(user: User, taskIds: string[]): Record<string
   return result;
 }
 
-/** 维度看板的一格：一个维度（或「未分类」）加上归属它的任务 */
-export type DimensionBoardGroup = { id: string; name: string; tasks: TaskView[] };
+/** 维度看板的一格：一个维度（或「未分类」）加上归属它的任务；ruleKey 标记订单节点自动维度 */
+export type DimensionBoardGroup = { id: string; name: string; ruleKey: string | null; tasks: TaskView[] };
 
 /**
  * 按个人维度把任务分到卡片：一个维度一张卡，任务可同时出现在多个维度里，
  * 没有任何维度的任务进「未分类」。`dimension` 是工具栏筛选器，选中某一项时只回那一格。
+ *
+ * 订单节点维度（ruleKey 非空）只显示**订单任务**里未来 7 天内到期（含逾期未完成）的条目；
+ * 手动任务不参与这个窗口，避免把用户自己记在「唛头」下的活藏起来。
  */
 export function buildDimensionBoard(
   user: User,
   tasks: TaskView[],
   states: Record<string, PersonalTaskState>,
   dimension: string,
+  today: string,
 ): DimensionBoardGroup[] {
+  const windowEnd = dayjs(today).add(7, "day").format("YYYY-MM-DD");
+  const inOrderWindow = (task: TaskView): boolean => {
+    if (!task.orderKey) return true;
+    if (!task.dueDate) return true;
+    if (task.status === "completed") return task.dueDate >= today && task.dueDate <= windowEnd;
+    return task.dueDate <= windowEnd;
+  };
   const groups: DimensionBoardGroup[] = listTaskDimensions(user).map((item) => ({
     id: item.id,
     name: item.name,
-    tasks: tasks.filter((task) => states[task.id]?.dimensionIds.includes(item.id)),
+    ruleKey: item.ruleKey ?? null,
+    tasks: tasks.filter((task) => states[task.id]?.dimensionIds.includes(item.id)).filter((task) => !item.ruleKey || inOrderWindow(task)),
   }));
   groups.push({
     id: "unclassified",
     name: "未分类",
+    ruleKey: null,
     tasks: tasks.filter((task) => !states[task.id]?.dimensionIds.length),
   });
   return !dimension || dimension === "all" ? groups : groups.filter((group) => group.id === dimension);

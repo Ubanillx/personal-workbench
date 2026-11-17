@@ -30,7 +30,7 @@ export const TASK_SOURCE = `FROM tasks t LEFT JOIN users u ON u.id=t.owner_id LE
  * 与旧 server/src/routes/workbench.ts 第 11 行一致，补 `t.org_id AS orgId` 与组织名
  * （D-28 的合并视图要能看出每行属于哪个组织；组织名走 JOIN，不在 toTaskView 里逐行查库）。
  */
-export const SELECT_TASK = `SELECT t.id,t.title,t.description,t.priority,t.status,t.progress,t.due_date AS dueDate,t.owner_id AS ownerId,t.created_by AS createdBy,t.source,t.is_private AS isPrivate,t.created_at AS createdAt,t.updated_at AS updatedAt,t.completed_at AS completedAt,t.archived_at AS archivedAt,t.org_id AS orgId,o.name AS orgName,u.name AS ownerName,u.role AS ownerRole ${TASK_SOURCE}`;
+export const SELECT_TASK = `SELECT t.id,t.title,t.description,t.priority,t.status,t.progress,t.due_date AS dueDate,t.owner_id AS ownerId,t.created_by AS createdBy,t.source,t.is_private AS isPrivate,t.order_key AS orderKey,t.order_factory AS orderFactory,t.created_at AS createdAt,t.updated_at AS updatedAt,t.completed_at AS completedAt,t.archived_at AS archivedAt,t.org_id AS orgId,o.name AS orgName,u.name AS ownerName,u.role AS ownerRole ${TASK_SOURCE}`;
 
 /** 旧实现里 toTaskView 的返回类型就是 any（字段顺序与 undefined 行为都要保留），此处刻意保持 */
 export type TaskView = ReturnType<typeof toTaskView>;
@@ -48,6 +48,10 @@ export function toTaskView(row: Record<string, unknown>): any {
     createdBy: String(row.createdBy),
     source: String(row.source),
     isPrivate: Number(row.isPrivate) === 1,
+    /** 订单导入任务的外部键（合同号|节点）；手动任务为 null */
+    orderKey: row.orderKey == null ? null : String(row.orderKey),
+    /** 订单导入任务的工厂名；同一合同多工厂时用来区分分支 */
+    orderFactory: row.orderFactory == null ? null : String(row.orderFactory),
     createdAt: String(row.createdAt),
     updatedAt: String(row.updatedAt),
     completedAt: row.completedAt == null ? null : String(row.completedAt),

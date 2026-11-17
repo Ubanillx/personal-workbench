@@ -435,6 +435,47 @@ body {
   border-top: 1px solid #eff1f4;
 }
 
+/* 订单任务按合同号归组：组头显示合同号，组内按工厂分行 */
+.task-board-contract-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.task-board-contract-group + .task-board-contract-group,
+.task-board-contract-group + .task-board-item {
+  border-top: 1px solid #eff1f4;
+}
+
+.task-board-contract-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 0 2px;
+}
+
+.task-board-contract-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1f2329;
+}
+
+.task-board-contract-items {
+  display: flex;
+  flex-direction: column;
+  margin: 2px 0 4px;
+  padding-left: 12px;
+  border-left: 2px solid #e8f3ff;
+}
+
+.task-board-contract-items .task-board-item {
+  padding: 8px 0;
+}
+
+.task-board-contract-items .task-board-item + .task-board-item {
+  border-top: 1px solid #eff1f4;
+}
+
 .task-board-title {
   height: auto;
   padding: 0;

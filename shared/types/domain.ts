@@ -61,6 +61,10 @@ export interface Task {
   createdBy: string;
   source: TaskSource;
   isPrivate: boolean;
+  /** 订单导入任务的外部键（合同号|节点），手动任务为 null */
+  orderKey?: string | null;
+  /** 订单导入任务的工厂名；同一合同多工厂时用来区分分支 */
+  orderFactory?: string | null;
   createdAt: string;
   updatedAt: string;
   completedAt: string | null;
