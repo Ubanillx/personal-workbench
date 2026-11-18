@@ -32,6 +32,7 @@ import {
   ORG_SORTABLE,
   organizationsPage,
   removeMember,
+  resetUserPassword,
   restoreOrganization,
   setMemberActive,
   setMemberRole,
@@ -76,7 +77,11 @@ import { browseWithConfig, pingWebDav, sharedConnectionConfig, webDavErrorMessag
  * `browse` 那一支只给「目录选择器」用：它走 `useFetcher`（不进页面导航），
  * 所以既不会触发页面顶部的成功提示，也不会被 `useCrudFeedback` 当成写操作。
  */
-type ActionResult = { ok: true; notice: string } | { ok: true; browse: WebDavBrowseListing } | { error: string };
+type ActionResult =
+  | { ok: true; notice: string }
+  | { ok: true; browse: WebDavBrowseListing }
+  | { ok: true; notice: string; reset: { username: string; password: string } }
+  | { error: string };
 
 /** OrgFailure 的响应体里已经带好了 code/message，这里只把文案取出来给页面显示 */
 async function toActionResult(result: OrgSuccess<unknown> | OrgFailure, notice: string): Promise<ActionResult> {
@@ -197,6 +202,18 @@ export async function action({ request }: { request: Request }): Promise<ActionR
       return toActionResult(setMemberRole(user, memberId, "member"), "已降为普通用户");
     case "remove-member":
       return toActionResult(removeMember(user, memberId), "已移出组织：该账号回到「未加入」状态");
+    case "reset-password": {
+      if (!isAdmin) return { error: "只有管理员可以重置密码" };
+      const reset = await resetUserPassword(user, memberId, { password: payload.password, generate: payload.generate });
+      if (!reset.ok) {
+        const body = (await reset.response.json().catch(() => null)) as { error?: { message?: string } } | null;
+        return { error: body?.error?.message ?? "重置密码失败，请稍后重试" };
+      }
+      const { username, password } = reset.data;
+      return password
+        ? { ok: true, notice: `已重置 ${username} 的密码`, reset: { username, password } }
+        : { ok: true, notice: `已重置 ${username} 的密码` };
+    }
     case "invite":
       return toActionResult(inviteMember(user, orgId, String(payload.accountId ?? "")), "已把该账号拉入组织");
     case "decide":

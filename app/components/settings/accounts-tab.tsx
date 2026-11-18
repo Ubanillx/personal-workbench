@@ -1,13 +1,14 @@
 import type React from "react";
-import { useEffect, useMemo, useState } from "react";
-import { Button, Card, Empty, Flex, Input, Select, Space, Table, Tag, Typography, type TableProps } from "antd";
-import { UserAddOutlined } from "@ant-design/icons";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Button, Card, Empty, Flex, Input, Modal, Radio, Select, Space, Table, Tag, Typography, type TableProps } from "antd";
+import { KeyOutlined, UserAddOutlined } from "@ant-design/icons";
+import { useFetcher } from "react-router";
 import type { Organization } from "../../../shared/types/domain";
 import { TableToolbar } from "../crud-toolbar";
 import { useListParams, useServerTable } from "../crud-hooks";
 import { dataTable } from "../table-layout";
 import type { Paged } from "../../lib/paging";
-import { RowActions } from "../crud-actions";
+import { RowActions, type RowAction } from "../crud-actions";
 import { ACCOUNT_ROLE_FILTER_OPTIONS, FILTER_ALL, FILTER_NONE, ROLE_COLOR, ROLE_LABEL, STATE_FILTER_OPTIONS } from "./constants";
 import type { Me, MemberRow } from "./types";
 
@@ -30,6 +31,8 @@ type Props = {
   /** 跳到「组织与成员」Tab */
   onOpenMembers: () => void;
 };
+
+type ResetResult = { username: string; password: string | null };
 
 export function AccountsTab({
   me,
@@ -56,6 +59,53 @@ export function AccountsTab({
   /** 服务端分页：翻页、改条数与表头排序都只写回 URL，由 loader 决定这一页是谁 */
   const rows = accounts.rows;
   const paging = useServerTable<MemberRow>(accounts);
+
+  // 重置他人密码：仅管理员可到达本 Tab；服务端还会再校验一次角色
+  const resetFetcher = useFetcher<{ ok?: boolean; notice?: string; reset?: ResetResult; error?: string }>();
+  const [resetTarget, setResetTarget] = useState<MemberRow | null>(null);
+  const [resetMode, setResetMode] = useState<"generate" | "manual">("generate");
+  const [manualPassword, setManualPassword] = useState("");
+  const [resetSubmitting, setResetSubmitting] = useState(false);
+  const [resetResult, setResetResult] = useState<ResetResult | null>(null);
+  const [resetError, setResetError] = useState("");
+  // 提交时的 fetcher.data 基线：避免把上一次的结果当成本次的成功
+  const resetBaseline = useRef<unknown>(undefined);
+
+  const openReset = (account: MemberRow): void => {
+    setResetTarget(account);
+    setResetMode("generate");
+    setManualPassword("");
+    setResetSubmitting(false);
+    setResetResult(null);
+    setResetError("");
+  };
+  const closeReset = (): void => setResetTarget(null);
+  const submitReset = (): void => {
+    if (!resetTarget) return;
+    resetBaseline.current = resetFetcher.data;
+    setResetSubmitting(true);
+    setResetError("");
+    resetFetcher.submit(
+      {
+        intent: "reset-password",
+        memberId: resetTarget.id,
+        generate: resetMode === "generate",
+        ...(resetMode === "manual" ? { password: manualPassword } : {}),
+      },
+      { method: "post", encType: "application/json" },
+    );
+  };
+  useEffect(() => {
+    if (!resetSubmitting || resetFetcher.state !== "idle") return;
+    if (resetFetcher.data === resetBaseline.current) return;
+    setResetSubmitting(false);
+    const data = resetFetcher.data;
+    if (data?.error) {
+      setResetError(data.error);
+      return;
+    }
+    if (data?.ok) setResetResult(data.reset ?? { username: resetTarget?.username ?? "", password: null });
+  }, [resetFetcher.state, resetFetcher.data, resetSubmitting, resetTarget]);
 
   const scopeOptions = [
     { value: FILTER_ALL, label: `全部账号（${accountTotal}）` },
@@ -117,28 +167,26 @@ export function AccountsTab({
     {
       title: "操作",
       key: "actions",
-      // 「去加入组织」一个图标动作按钮，撑满一列的最小宽度
-      width: 120,
+      // 两个图标动作按钮（去加入组织 / 重置密码）的宽度
+      width: 160,
       align: "right",
       ellipsis: false,
-      render: (_value, account) =>
-        account.orgId === null && account.role !== "admin" ? (
-          <RowActions
-            disabled={busy}
-            actions={[
-              {
-                key: "join",
-                label: "去加入组织",
-                icon: <UserAddOutlined />,
-                tone: "primary",
-                disabled: organizations.length === 0,
-                onClick: onOpenMembers,
-              },
-            ]}
-          />
-        ) : (
-          <Typography.Text type="secondary">—</Typography.Text>
-        ),
+      render: (_value, account) => {
+        if (account.id === me.id) return <Typography.Text type="secondary">—</Typography.Text>;
+        const actions: RowAction[] = [];
+        if (account.orgId === null && account.role !== "admin") {
+          actions.push({
+            key: "join",
+            label: "去加入组织",
+            icon: <UserAddOutlined />,
+            tone: "primary",
+            disabled: organizations.length === 0,
+            onClick: onOpenMembers,
+          });
+        }
+        actions.push({ key: "reset-password", label: "重置密码", icon: <KeyOutlined />, onClick: () => openReset(account) });
+        return <RowActions disabled={busy} actions={actions} />;
+      },
     },
   ];
 
@@ -204,6 +252,51 @@ export function AccountsTab({
             emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有符合条件的账号" />,
           }}
         />
+
+        <Modal
+          open={resetTarget !== null}
+          title={resetResult ? "密码已重置" : `重置密码：${resetTarget?.name ?? ""}`}
+          okText={resetResult ? "完成" : "确认重置"}
+          onOk={resetResult ? closeReset : submitReset}
+          onCancel={closeReset}
+          confirmLoading={resetSubmitting}
+          okButtonProps={{ disabled: !resetResult && resetMode === "manual" && manualPassword.length < 8 }}
+        >
+          {resetResult ? (
+            <Flex vertical gap="small">
+              <Typography.Text type="secondary">
+                {resetResult.password ? "请把临时密码交给使用者（只显示这一次）。" : "新密码已生效。"}
+                该账号的现有登录已全部失效，下次登录必须先修改密码。
+              </Typography.Text>
+              {resetResult.password ? (
+                <Typography.Text code copyable>
+                  {resetResult.password}
+                </Typography.Text>
+              ) : null}
+            </Flex>
+          ) : (
+            <Flex vertical gap="middle">
+              <Typography.Text type="secondary">重置后该账号的现有登录会立即失效，且下次登录必须先修改密码。</Typography.Text>
+              <Radio.Group
+                value={resetMode}
+                onChange={(event) => setResetMode(event.target.value as "generate" | "manual")}
+                options={[
+                  { value: "generate", label: "随机生成密码" },
+                  { value: "manual", label: "手动输入新密码" },
+                ]}
+              />
+              {resetMode === "manual" ? (
+                <Input.Password
+                  value={manualPassword}
+                  autoComplete="new-password"
+                  placeholder="至少 8 位"
+                  onChange={(event) => setManualPassword(event.target.value)}
+                />
+              ) : null}
+              {resetError ? <Typography.Text type="danger">{resetError}</Typography.Text> : null}
+            </Flex>
+          )}
+        </Modal>
       </Flex>
     </Card>
   );

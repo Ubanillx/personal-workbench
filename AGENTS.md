@@ -48,7 +48,7 @@ npm run contract:capture   # 确认行为变更后重新录制 golden
 npm run contract:fixture   # 生成可直接当 DATABASE_PATH 的临时夹具库
 ```
 
-运维 CLI（仅限数据所在机器，网页端没有重置他人密码入口）：
+运维 CLI（仅限数据所在机器；网页端「设置 → 账号总览」也支持管理员重置他人密码）：
 
 ```bash
 npm run user:list                    # 账号 / 邮箱 / 角色 / 组织

@@ -1,9 +1,9 @@
 {
   "meta": {
-    "generatedAt": "2026-11-11T10:23:59.436Z",
+    "generatedAt": "2026-11-18T08:52:56.733Z",
     "entry": "npm run serve",
     "node": "22.22.2",
-    "caseCount": 411
+    "caseCount": 415
   },
   "responses": [
     {
@@ -2991,6 +2991,130 @@
       "body": {
         "ok": true,
         "data": []
+      }
+    },
+    {
+      "name": "members.password.anon",
+      "role": "anon",
+      "request": {
+        "method": "POST",
+        "path": "/api/members/user-member-b/password",
+        "body": {
+          "generate": true
+        }
+      },
+      "status": 401,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "UNAUTHENTICATED",
+          "message": "请先完成访问验证"
+        }
+      }
+    },
+    {
+      "name": "members.password.managerA",
+      "role": "managerA",
+      "request": {
+        "method": "POST",
+        "path": "/api/members/user-member-b/password",
+        "body": {
+          "generate": true
+        }
+      },
+      "status": 403,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "FORBIDDEN",
+          "message": "只有管理员可以访问此功能"
+        }
+      }
+    },
+    {
+      "name": "members.password.admin.self",
+      "role": "admin",
+      "request": {
+        "method": "POST",
+        "path": "/api/members/user-admin/password",
+        "body": {
+          "generate": true
+        }
+      },
+      "status": 400,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "SELF_PASSWORD_RESET",
+          "message": "请使用「修改密码」修改自己的密码"
+        }
+      }
+    },
+    {
+      "name": "members.password.admin.missing",
+      "role": "admin",
+      "request": {
+        "method": "POST",
+        "path": "/api/members/no-such-user/password",
+        "body": {
+          "generate": true
+        }
+      },
+      "status": 404,
+      "headers": {
+        "contentType": "application/json; charset=utf-8",
+        "contentDisposition": null,
+        "setCookie": false,
+        "csp": {
+          "present": true,
+          "upgradeInsecureRequests": false
+        },
+        "hsts": false,
+        "coop": false,
+        "xContentTypeOptions": true
+      },
+      "body": {
+        "ok": false,
+        "error": {
+          "code": "NOT_FOUND",
+          "message": "未找到该资源"
+        }
       }
     },
     {

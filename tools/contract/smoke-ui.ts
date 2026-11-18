@@ -274,7 +274,25 @@ async function main(): Promise<void> {
     const gateMe = await fetch(`${base}/api/auth/me`, { headers: { cookie: mustChange.cookie } });
     check("待改密账号仍能读 /api/auth/me（看自己不受门禁限制）", gateMe.status === 200, `status=${gateMe.status}`);
 
-    // 4d) 未加入组织（D-34）：只能待在 /join，其它页面一律重定向回来
+    // 4d) 管理员重置他人密码：随机生成 → 旧密码失效 → 新密码登录 → 强制改密门禁
+    const resetResponse = await fetch(`${base}/api/members/${IDS.userMemberB}/password`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/json" },
+      body: JSON.stringify({ generate: true }),
+    });
+    const resetPayload = (await resetResponse.json()) as { ok?: boolean; data?: { password?: string } };
+    const temporaryPassword = resetPayload.data?.password ?? "";
+    check("管理员重置他人密码返回一次性随机密码", resetResponse.status === 200 && temporaryPassword.length >= 8);
+    const accountsHtml = await pageHtml("/settings?tab=accounts", cookie);
+    check("账号总览提供「重置密码」入口", accountsHtml.includes('aria-label="重置密码"'));
+    const staleLogin = await loginAs(base, ACCOUNTS.memberB);
+    check("重置后旧密码不能登录", staleLogin.status !== 302 && staleLogin.cookie === "");
+    const resetLogin = await loginAs(base, { username: ACCOUNTS.memberB.username, password: temporaryPassword });
+    check("重置后的临时密码可以登录", resetLogin.status === 302 && resetLogin.cookie.includes("workbench_session="));
+    const resetGate = await fetch(`${base}/api/tasks`, { headers: { cookie: resetLogin.cookie } });
+    check("重置后的账号首次访问业务接口要求先改密", resetGate.status === 403, `status=${resetGate.status}`);
+
+    // 4e) 未加入组织（D-34）：只能待在 /join，其它页面一律重定向回来
     const noOrg = await loginAs(base, ACCOUNTS.noOrg);
     const noOrgHome = await fetch(`${base}/`, { headers: { cookie: noOrg.cookie }, redirect: "manual" });
     check(
