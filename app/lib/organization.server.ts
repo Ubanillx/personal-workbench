@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { JoinRequest, JoinRequestKind, Organization, UserRole } from "../../shared/types/domain";
+import { generatePassword, hashPassword, validatePassword } from "../../server/src/security/password";
 import { db, one, rows, run, now, type User } from "./db.server";
 import { fail } from "./http.server";
 import { createNotification } from "./notifications.server";
@@ -410,8 +411,41 @@ export function setMemberRole(user: User, memberId: string, role: unknown): OrgS
   return { ok: true, data: { id: memberId, role } };
 }
 
-/** 移出组织：退回「未加入」，并记一条已批准的 leave 台账 */
-export function removeMember(user: User, memberId: string): OrgSuccess<Record<string, unknown>> | OrgFailure {
+export type PasswordResetResult = { id: string; username: string; password: string | null };
+
+/**
+ * 管理员重置他人密码（D-23 调整）：设置 must_change_password=1 并撤销该账号全部会话。
+ * 随机生成时把明文随响应返回一次（管理员转告用户）；手动输入时不回显。
+ */
+export async function resetUserPassword(
+  user: User,
+  memberId: string,
+  input: { password?: unknown; generate?: unknown },
+): Promise<OrgSuccess<PasswordResetResult> | OrgFailure> {
+  if (user.role !== "admin") return forbidden("只有管理员可以重置密码");
+  const target = one<{ id: string; username: string }>(db(), "SELECT id,username FROM users WHERE id=?", memberId);
+  if (!target) return { ok: false, response: notFound() };
+  if (target.id === user.id) return badRequest("请使用「修改密码」修改自己的密码", "SELF_PASSWORD_RESET");
+  const generated = input.generate === true || input.generate === "true";
+  const password = generated ? generatePassword() : typeof input.password === "string" ? input.password : "";
+  const weak = validatePassword(password);
+  if (weak) return badRequest(weak);
+  const stamp = now();
+  run(
+    db(),
+    "UPDATE users SET password_hash=?, must_change_password=1, updated_at=? WHERE id=?",
+    await hashPassword(password),
+    stamp,
+    target.id,
+  );
+  run(db(), "UPDATE access_sessions SET revoked_at=? WHERE user_id=? AND revoked_at IS NULL", stamp, target.id);
+  return { ok: true, data: { id: target.id, username: target.username, password: generated ? password : null } };
+}
+
+/** 移出组织：退回「未加入」，并记一条已批准的 leave 台账 */ export function removeMember(
+  user: User,
+  memberId: string,
+): OrgSuccess<Record<string, unknown>> | OrgFailure {
   const member = one<Record<string, unknown>>(db(), `${MEMBER_SELECT} WHERE u.id=?`, memberId);
   if (!member) return { ok: false, response: notFound() };
   if (!checkManageTarget(user, member)) return { ok: false, response: notFound() };

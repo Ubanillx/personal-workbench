@@ -16,6 +16,7 @@ export const orgRoutes = [
 
   route("api/members", "routes/api.members.ts"),
   route("api/members/:id", "routes/api.members.$id.ts"),
+  route("api/members/:id/password", "routes/api.members.$id.password.ts"),
 
   route("api/join-requests", "routes/api.join-requests.ts"),
   route("api/join-requests/:id", "routes/api.join-requests.$id.ts"),

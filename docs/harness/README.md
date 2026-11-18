@@ -64,7 +64,7 @@ Jenkins 在提交 `20bfb7a` 的静态检查阶段因 `ACCOUNTS_AND_ORGS.md` 和 
 | 手动备份         | `npm run db:backup`                                                      | 写入 `data/backups/`，保留最近 5 份                                                                                                           |
 | 周报正文搬迁     | `npm run reports:migrate-webdav [-- --dry-run] [-- --purge]`             | 把本地老周报推到 NAS 并回写索引（幂等）；默认不删本地，`--purge` 才清                                                                         |
 | 账号清单         | `npm run user:list`                                                      | 用户名 / 邮箱 / 角色 / 组织 / 是否待改密                                                                                                      |
-| 重置账号密码     | `npm run user:passwd -- <用户名> [--generate]`                           | 本机唯一的重置途径；也可用 `WORKBENCH_PASSWORD` 环境变量或管道输入                                                                            |
+| 重置账号密码     | `npm run user:passwd -- <用户名> [--generate]`                           | 本机 CLI；网页端「设置 → 账号总览」也支持管理员重置（强制首登改密）；也可用 `WORKBENCH_PASSWORD` 环境变量或管道输入                           |
 | 初始化初始密码   | `npm run user:init -- --confirm`                                         | 给仍是 `locked$` 的账号生成初始密码并打印（幂等）。或者用环境变量 `WORKBENCH_ADMIN_PASSWORD`（D-51）：自举时直接给 `admin` 设密码，不用跑 CLI |
 | 迁移演练         | `npm run db:rehearse [-- --keep] [-- --source <路径>]`                   | 在库副本上试跑 `server/src/db/migrations/`，逐表核对（迁移前库 44 项；已迁移库自动跳过 6 项初始态断言）                                       |
 | 局域网放行端口   | 见根 README「局域网访问」                                                | 管理员 PowerShell 执行 `New-NetFirewallRule`                                                                                                  |
