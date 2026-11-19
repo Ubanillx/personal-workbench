@@ -11,6 +11,8 @@ type PreviewRow = {
   customerDue: string | null;
   factoryDue: string | null;
   factoryName: string;
+  customerName?: string;
+  poNumber?: string;
   deadlines: Record<string, string | null>;
   issues: string[];
 };
@@ -172,8 +174,13 @@ export function OrderImportDrawer({
     .map((rule) => `${rule.name}（${ANCHOR_LABELS[rule.anchor]}前 ${rule.leadDays} ${rule.dayType === "workday" ? "个工作日" : "天"}）`)
     .join("、");
 
+  // 「跟单跟进表」带客户名/PO 号时多显示两列；通用文件不显示空列
+  const hasCustomer = (preview?.rows ?? []).some((row) => row.customerName);
+  const hasPo = (preview?.rows ?? []).some((row) => row.poNumber);
   const baseColumns = [
     { title: "合同号", dataIndex: "contract", key: "contract", width: 120, ellipsis: true },
+    ...(hasCustomer ? [{ title: "客户", dataIndex: "customerName", key: "customerName", width: 110, ellipsis: true }] : []),
+    ...(hasPo ? [{ title: "PO号", dataIndex: "poNumber", key: "poNumber", width: 110, ellipsis: true }] : []),
     { title: "客户交期", dataIndex: "customerDue", key: "customerDue", width: 95, render: (value: string | null) => value ?? "—" },
     { title: "工厂交期", dataIndex: "factoryDue", key: "factoryDue", width: 95, render: (value: string | null) => value ?? "—" },
     { title: "工厂名", dataIndex: "factoryName", key: "factoryName", width: 110, ellipsis: true, render: (value: string) => value || "—" },
@@ -211,7 +218,8 @@ export function OrderImportDrawer({
     >
       <Flex vertical gap="middle">
         <Typography.Text type="secondary">
-          上传亿星导出的订单 Excel（.xlsx）。订单文件需要列：合同号、客户交期、工厂交期、工厂名（工厂名可选）。
+          上传亿星导出的订单 Excel（.xlsx）。支持「跟单跟进表」：一个客户一个工作表，表头含
+          客户合同号、工厂、工厂合同交货期、客户合同ETD；也兼容单表的 合同号 / 客户交期 / 工厂交期 / 工厂名。
           同一合同号由多个工厂生产时，请按「一行一个工厂」导出，会分别生成各自的唛头 / 验货任务。
           节点规则可在第二个文件里覆盖默认值；不传则沿用本人已保存的规则，没有则用默认「唛头 / 验货」。
         </Typography.Text>

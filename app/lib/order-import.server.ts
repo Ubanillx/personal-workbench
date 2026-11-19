@@ -20,6 +20,14 @@ export type ParsedOrder = {
   customerDue: string | null;
   factoryDue: string | null;
   factoryName: string;
+  /** 客户名（单元格「客户名」，没有时用所在工作表名） */
+  customerName: string;
+  /** PO 号 */
+  poNumber: string;
+  /** 工厂合同号 */
+  factoryContract: string;
+  /** 表里已填的计划验货日期（仅作说明，不参与 deadline 计算） */
+  inspectionDate: string | null;
   /** 节点名 → deadline（无法计算时为 null） */
   deadlines: Record<string, string | null>;
   issues: string[];
@@ -32,11 +40,22 @@ export type ParsedWorkbook = {
   errors: string[];
 };
 
-const ORDER_HEADER_ALIASES: Record<"contract" | "customerDue" | "factoryDue" | "factoryName", string[]> = {
-  contract: ["合同号", "合同编号", "订单号", "订单编号", "contract", "contractno"],
-  customerDue: ["客户交期", "客人交期", "客户交货期", "客交期", "客户交货日期"],
-  factoryDue: ["工厂交期", "工厂货期", "工厂交货期", "厂交期", "工厂交货日期"],
+type OrderHeaderKey =
+  "contract" | "customerDue" | "factoryDue" | "factoryName" | "customerName" | "poNumber" | "factoryContract" | "inspectionDate";
+
+/**
+ * 「跟单跟进表」的列名（客户合同号 / 工厂 / 工厂合同交货期 / 客户合同ETD）与通用叫法都收进来；
+ * 匹配时忽略空白与标点，所以「工厂合同交货期」也能命中「工厂交货期」。
+ */
+const ORDER_HEADER_ALIASES: Record<OrderHeaderKey, string[]> = {
+  contract: ["合同号", "合同编号", "订单号", "订单编号", "客户合同号", "contract", "contractno"],
+  customerDue: ["客户交期", "客人交期", "客户交货期", "客交期", "客户交货日期", "客户合同etd", "etd"],
+  factoryDue: ["工厂交期", "工厂货期", "工厂交货期", "厂交期", "工厂交货日期", "工厂合同交货期", "工厂合同交期"],
   factoryName: ["工厂名", "工厂名称", "工厂", "供应商", "factory", "factoryname"],
+  customerName: ["客户名", "客户名称", "客户", "customer", "customername"],
+  poNumber: ["po号", "po", "客户po", "pono", "ponumber"],
+  factoryContract: ["工厂合同号", "工厂合同编号", "工厂订单号", "factorycontract"],
+  inspectionDate: ["验货日期", "验货时间", "计划验货日期", "inspectiondate"],
 };
 
 const RULE_HEADER_ALIASES: Record<"name" | "anchor" | "leadDays" | "dayType", string[]> = {
@@ -121,17 +140,19 @@ export type OrderColumnMapping = {
 
 export type WorkbookSheetPreview = { name: string; rows: string[][] };
 
+type SeenOrders = Map<string, { sheet: string; row: number }>;
+
 function parseSheet(
   sheet: ExcelJS.Worksheet,
   header: { rowNumber: number; columns: Map<string, number> },
   rules: readonly OrderStepRule[],
+  seen: SeenOrders,
 ): ParsedWorkbook {
   const rowsResult: ParsedOrder[] = [];
   const errors: string[] = [];
-  const firstSeen = new Map<string, number>();
   for (let rowNumber = header.rowNumber + 1; rowNumber <= sheet.rowCount; rowNumber += 1) {
     const row = sheet.getRow(rowNumber);
-    const container = (key: keyof typeof ORDER_HEADER_ALIASES): ExcelJS.Cell | undefined => {
+    const container = (key: OrderHeaderKey): ExcelJS.Cell | undefined => {
       const column = header.columns.get(key);
       return column ? row.getCell(column) : undefined;
     };
@@ -140,15 +161,22 @@ function parseSheet(
     const customerDue = toDateString(container("customerDue")?.value ?? null);
     const factoryDue = toDateString(container("factoryDue")?.value ?? null);
     const factoryName = cellText(container("factoryName"));
+    const customerName = cellText(container("customerName")) || sheet.name;
+    const oneLine = (cell: ExcelJS.Cell | undefined): string => cellText(cell).replace(/\s+/gu, " ").trim();
+    const poNumber = oneLine(container("poNumber"));
+    const factoryContract = oneLine(container("factoryContract"));
+    const inspectionDate = toDateString(container("inspectionDate")?.value ?? null);
     const issues: string[] = [];
     if (!customerDue) issues.push("缺少客户交期");
     if (!factoryDue) issues.push("缺少工厂交期");
+    if (!factoryName) issues.push("缺少工厂名");
     const seenKey = `${contract}\u0000${factoryName}`;
-    if (firstSeen.has(seenKey)) {
+    const previous = seen.get(seenKey);
+    if (previous) {
       const label = factoryName ? "合同号+工厂重复" : "合同号重复";
-      issues.push(`${label}（首次在第 ${firstSeen.get(seenKey)} 行），后一行会覆盖前一行`);
+      issues.push(`${label}（首次在「${previous.sheet}」第 ${previous.row} 行），后一行会覆盖前一行`);
     } else {
-      firstSeen.set(seenKey, rowNumber);
+      seen.set(seenKey, { sheet: sheet.name, row: rowNumber });
     }
     const dates: OrderDates = { customerDue, factoryDue };
     const deadlines: Record<string, string | null> = {};
@@ -157,8 +185,18 @@ function parseSheet(
       deadlines[rule.name] = deadline;
       if (!deadline) issues.push(`${rule.name}缺少基准日期，无法计算`);
     }
-    if (customerDue && factoryDue && customerDue > factoryDue) issues.push("客户交期晚于工厂交期，请人工核对");
-    rowsResult.push({ contract, customerDue, factoryDue, factoryName, deadlines, issues });
+    rowsResult.push({
+      contract,
+      customerDue,
+      factoryDue,
+      factoryName,
+      customerName,
+      poNumber,
+      factoryContract,
+      inspectionDate,
+      deadlines,
+      issues,
+    });
   }
   return { sheetName: sheet.name, headers: Array.from(header.columns.keys()), rows: rowsResult, errors };
 }
@@ -182,12 +220,25 @@ export async function parseOrderWorkbook(
     if (!columns.has("customerDue") && !columns.has("factoryDue")) {
       return { sheetName: sheet.name, headers: [], rows: [], errors: ["请至少映射客户交期或工厂交期"] };
     }
-    return parseSheet(sheet, { rowNumber: mapping.headerRow, columns }, rules);
+    return parseSheet(sheet, { rowNumber: mapping.headerRow, columns }, rules, new Map());
   }
+  // 「跟单跟进表」一个工作簿按客户分多个工作表：找出所有带订单表头的工作表，合在一起预览与导入
+  const merged: ParsedWorkbook = { sheetName: "", headers: [], rows: [], errors: [] };
+  const matchedSheets: string[] = [];
+  const seen: SeenOrders = new Map();
   for (const sheet of workbook.worksheets) {
     const header = findHeader(sheet, ORDER_HEADER_ALIASES, ["contract"]);
     if (!header || (!header.columns.has("factoryDue") && !header.columns.has("customerDue"))) continue;
-    return parseSheet(sheet, header, rules);
+    const parsedSheet = parseSheet(sheet, header, rules, seen);
+    matchedSheets.push(sheet.name);
+    if (!merged.headers.length) merged.headers = parsedSheet.headers;
+    merged.rows.push(...parsedSheet.rows);
+    merged.errors.push(...parsedSheet.errors);
+  }
+  if (matchedSheets.length) {
+    merged.sheetName =
+      matchedSheets.length === 1 ? matchedSheets[0]! : `${matchedSheets.join("、")}（共 ${matchedSheets.length} 个工作表）`;
+    return merged;
   }
   return {
     sheetName: "",
@@ -366,9 +417,13 @@ export function importOrders(
         const factory = order.factoryName.trim();
         const title = `【${factory ? `${order.contract} ${factory}` : order.contract}】${rule.name}`.slice(0, 240);
         const description = [
+          `客户：${order.customerName || "—"}`,
           `客户交期：${order.customerDue ?? "—"}`,
           `工厂交期：${order.factoryDue ?? "—"}`,
           `工厂：${factory || "—"}`,
+          ...(order.poNumber ? [`PO号：${order.poNumber}`] : []),
+          ...(order.factoryContract ? [`工厂合同号：${order.factoryContract}`] : []),
+          ...(order.inspectionDate ? [`计划验货日期：${order.inspectionDate}`] : []),
           `${rule.name}要求：${ruleAnchorLabel(rule)}前 ${ruleLeadLabel(rule)}完成（截止 ${deadline}）`,
         ].join("\n");
         const sameKey = rows<{ id: string; archivedAt: string | null; orderFactory: string | null }>(

@@ -926,6 +926,10 @@ async function main(): Promise<void> {
       taskCardRendered(orderBoardHtml, "【ORD-NEAR 测试工厂】唛头") && taskCardRendered(orderBoardHtml, "【ORD-NEAR 测试工厂】验货"),
     );
     check("看板隐藏更远的订单任务", !taskCardRendered(orderBoardHtml, "【ORD-FAR 测试工厂】唛头"));
+    check(
+      "看板订单卡显示客户交期与工厂交期",
+      orderBoardHtml.includes(`客户交期 ${orderDay(9)}`) && orderBoardHtml.includes(`工厂交期 ${orderDay(20)}`),
+    );
     const nearMairCalendar = await pageHtml(`/calendar?month=${orderMonth(-10)}`, manager.cookie);
     check("日历显示唛头 deadline", nearMairCalendar.includes("【ORD-NEAR 测试工厂】唛头"));
     const nearInspectionCalendar = await pageHtml(`/calendar?month=${orderMonth(2)}`, manager.cookie);
@@ -1111,6 +1115,71 @@ async function main(): Promise<void> {
         check("多工厂任务标题区分工厂", multiTitles.join("|") === "【ORD-MULTI 华彪】唛头|【ORD-MULTI 拜博】唛头");
       } finally {
         multiDatabase.close();
+      }
+      // 「跟单跟进表」：一个客户一个工作表，第 2 行才是表头（客户合同号 / 工厂 / 工厂合同交货期 / 客户合同ETD）
+      const followBook = new ExcelJS.Workbook();
+      const addFollowSheet = (
+        sheetName: string,
+        contract: string,
+        po: string,
+        factory: string,
+        factoryContract: string,
+        offset: number,
+      ) => {
+        const sheet = followBook.addWorksheet(sheetName);
+        sheet.addRow(["订单信息", "订单信息", "订单信息", "订单信息", "订单信息", "订单信息", "订单信息", "订单信息", "订单信息"]);
+        sheet.addRow(["客户合同号", "PO号", "销售员", "客户名", "付款方式", "工厂", "工厂合同号", "工厂合同交货期", "客户合同ETD"]);
+        sheet.addRow([contract, po, "销售甲", sheetName, "TT", factory, factoryContract, orderDay(offset + 15), orderDay(offset + 30)]);
+      };
+      addFollowSheet("客户甲", "ORD-FOLLOW-A", "PO-1", "工厂甲", "FC-1", 5);
+      addFollowSheet("客户乙", "ORD-FOLLOW-B", "PO-2", "工厂乙", "FC-2", 8);
+      const followBuffer = await followBook.xlsx.writeBuffer();
+      const followPreviewForm = new FormData();
+      followPreviewForm.append("file", new Blob([followBuffer]), "follow.xlsx");
+      const followPreview = (await (
+        await fetch(`${base}/api/order-import`, { method: "POST", headers: { cookie: member.cookie }, body: followPreviewForm })
+      ).json()) as {
+        ok?: boolean;
+        data?: {
+          sheet?: string;
+          rows?: Array<{ issues: string[]; customerName: string; poNumber: string }>;
+        };
+      };
+      const followRows = followPreview.data?.rows ?? [];
+      check(
+        "跟单跟进表按客户工作表整本解析",
+        Boolean(followPreview.ok) &&
+          followRows.length === 2 &&
+          (followPreview.data?.sheet ?? "").includes("客户甲") &&
+          (followPreview.data?.sheet ?? "").includes("客户乙"),
+      );
+      check(
+        "跟单跟进表识别客户名与 PO 号",
+        followRows.length === 2 && followRows.every((row) => Boolean(row.customerName) && Boolean(row.poNumber)),
+      );
+      check(
+        "跟单跟进表不再误报客户交期晚于工厂交期",
+        followRows.length === 2 && followRows.every((row) => !row.issues.some((issue) => issue.includes("晚于"))),
+      );
+      const followForm = new FormData();
+      followForm.append("file", new Blob([followBuffer]), "follow.xlsx");
+      followForm.append("rulesFile", new Blob([multiRulesBuffer]), "rules.xlsx");
+      followForm.append("confirm", "1");
+      const followImport = (await (
+        await fetch(`${base}/api/order-import`, { method: "POST", headers: { cookie: member.cookie }, body: followForm })
+      ).json()) as { ok?: boolean; data?: { created: number } };
+      check("跟单跟进表两个客户都会生成任务", Boolean(followImport.ok) && followImport.data?.created === 4);
+      const followDatabase = new DatabaseSync(fixture.databasePath, { readOnly: true });
+      try {
+        const followTask = followDatabase
+          .prepare("SELECT description FROM tasks WHERE created_by=? AND order_key=?")
+          .get(IDS.userMemberA, "ORD-FOLLOW-A|唛头") as { description?: string } | undefined;
+        check(
+          "跟单跟进表的客户与 PO 号写入任务说明",
+          Boolean(followTask?.description?.includes("客户：客户甲") && followTask?.description?.includes("PO号：PO-1")),
+        );
+      } finally {
+        followDatabase.close();
       }
     }
     const templateResponse = await fetch(`${base}/api/order-import/template?kind=rules`, {

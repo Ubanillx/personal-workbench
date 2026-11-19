@@ -68,6 +68,7 @@ import {
 } from "../lib/task-dimensions.server";
 import { db } from "../lib/db.server";
 import { dimensionTones } from "../lib/dimension-tones";
+import { orderDatesFromDescription } from "../lib/order-rules";
 import { listOrderRules } from "../lib/order-rules.server";
 import { readPayload } from "../lib/form.server";
 import { listOrganizations, taskAssigneeCandidates, type AccountOption } from "../lib/organization.server";
@@ -581,53 +582,70 @@ export default function TasksRoute(): React.ReactElement {
     }
     return { group, orderGroups: grouped, manualTasks };
   });
-  const renderBoardTask = (task: TaskRow, label?: string): React.ReactElement => (
-    <div
-      className={`task-board-item${draggingTaskId === task.id ? " is-dragging" : ""}`}
-      key={task.id}
-      draggable={data.dimensions.length > 0}
-      onDragStart={(event) => {
-        event.dataTransfer.effectAllowed = "move";
-        event.dataTransfer.setData(TASK_DRAG_TYPE, task.id);
-        setDraggingTaskId(task.id);
-      }}
-      onDragEnd={() => {
-        setDraggingTaskId(null);
-        setDropTargetId(null);
-      }}
-    >
-      <Flex align="flex-start" justify="space-between" gap="small">
-        <Button color="primary" variant="link" className="task-board-title" onClick={() => openDetail(task)}>
-          {label ?? task.title}
-        </Button>
-        <IconActionButton
-          label={
-            task.ownerId === me.id && !task.archivedAt && !["completed", "pending_review"].includes(task.status) ? "汇报进度" : "查看详情"
-          }
-          icon={
-            task.ownerId === me.id && !task.archivedAt && !["completed", "pending_review"].includes(task.status) ? (
-              <RiseOutlined />
-            ) : (
-              <EyeOutlined />
-            )
-          }
-          onClick={() => openDetail(task)}
-          disabled={busy}
-        />
-      </Flex>
-      <div className="task-board-controls">{personalControls(task)}</div>
-      <Space wrap size={8}>
-        <Tag color={PRIORITY_COLOR[task.priority] ?? "default"} variant="filled">
-          {task.priority}
-        </Tag>
-        <TaskStatusTag status={task.status} />
-        <Typography.Text type="secondary" className="task-board-meta">
-          进度 {task.progress}% · {task.ownerName ?? "未分配"}
-          {task.dueDate ? ` · ${task.dueDate}` : ""}
-        </Typography.Text>
-      </Space>
-    </div>
-  );
+  const renderBoardTask = (task: TaskRow, label?: string): React.ReactElement => {
+    // 订单节点卡补一行「客户交期 / 工厂交期」（来自任务说明），一眼看到交期
+    const orderDates = orderDatesFromDescription(task.description);
+    const dateLine = task.orderKey
+      ? [
+          orderDates.customerDue ? `客户交期 ${orderDates.customerDue}` : "",
+          orderDates.factoryDue ? `工厂交期 ${orderDates.factoryDue}` : "",
+        ]
+          .filter(Boolean)
+          .join(" · ")
+      : "";
+    return (
+      <div
+        className={`task-board-item${draggingTaskId === task.id ? " is-dragging" : ""}`}
+        key={task.id}
+        draggable={data.dimensions.length > 0}
+        onDragStart={(event) => {
+          event.dataTransfer.effectAllowed = "move";
+          event.dataTransfer.setData(TASK_DRAG_TYPE, task.id);
+          setDraggingTaskId(task.id);
+        }}
+        onDragEnd={() => {
+          setDraggingTaskId(null);
+          setDropTargetId(null);
+        }}
+      >
+        <Flex align="flex-start" justify="space-between" gap="small">
+          <Button color="primary" variant="link" className="task-board-title" onClick={() => openDetail(task)}>
+            {label ?? task.title}
+          </Button>
+          <IconActionButton
+            label={
+              task.ownerId === me.id && !task.archivedAt && !["completed", "pending_review"].includes(task.status) ? "汇报进度" : "查看详情"
+            }
+            icon={
+              task.ownerId === me.id && !task.archivedAt && !["completed", "pending_review"].includes(task.status) ? (
+                <RiseOutlined />
+              ) : (
+                <EyeOutlined />
+              )
+            }
+            onClick={() => openDetail(task)}
+            disabled={busy}
+          />
+        </Flex>
+        <div className="task-board-controls">{personalControls(task)}</div>
+        <Space wrap size={8}>
+          <Tag color={PRIORITY_COLOR[task.priority] ?? "default"} variant="filled">
+            {task.priority}
+          </Tag>
+          <TaskStatusTag status={task.status} />
+          <Typography.Text type="secondary" className="task-board-meta">
+            进度 {task.progress}% · {task.ownerName ?? "未分配"}
+            {task.dueDate ? ` · ${task.dueDate}` : ""}
+          </Typography.Text>
+        </Space>
+        {dateLine ? (
+          <Typography.Text type="secondary" className="task-board-meta">
+            {dateLine}
+          </Typography.Text>
+        ) : null}
+      </div>
+    );
+  };
   const personalControls = (task: TaskRow, mode: "all" | "summary" | "dimension" | "handled" | "tags" = "all"): React.ReactElement => (
     <PersonalTaskControls
       taskId={task.id}

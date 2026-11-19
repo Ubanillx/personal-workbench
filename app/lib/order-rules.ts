@@ -70,3 +70,13 @@ export function ruleAnchorLabel(rule: OrderStepRule): string {
 export function ruleLeadLabel(rule: OrderStepRule): string {
   return rule.dayType === "workday" ? `${rule.leadDays} 个工作日` : `${rule.leadDays} 天`;
 }
+
+export type OrderTaskDates = { customerDue: string | null; factoryDue: string | null };
+
+/** 从订单任务的说明里取回客户/工厂交期（说明由导入时写入；被手动改掉时返回 null） */
+export function orderDatesFromDescription(description: string): OrderTaskDates {
+  return {
+    customerDue: description.match(/客户交期：(\d{4}-\d{2}-\d{2})/u)?.[1] ?? null,
+    factoryDue: description.match(/工厂交期：(\d{4}-\d{2}-\d{2})/u)?.[1] ?? null,
+  };
+}
